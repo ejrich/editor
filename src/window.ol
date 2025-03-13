@@ -54,7 +54,7 @@ create_window() {
         XStringListToTextProperty(&application_name.data, 1, &name);
 
         size_hints: XSizeHints = {
-            flags = 0x31;
+            flags = 0x1;
             min_width = settings.window_width; max_width = settings.window_width;
             min_height = settings.window_height; max_height = settings.window_height;
         }
@@ -377,17 +377,9 @@ else #if os == OS.Windows {
                 handle_mouse_move(x_pos, y_pos);
             }
             case MessageType.WM_SIZE; {
-                // foorbar(lParam);
                 width: u32 = lParam & 0xFFFF;
                 height: u32 = (lParam & 0xFFFF0000) >> 16;
-                if width == settings.window_width && height == settings.window_height {
-                    // Resized to the desired size
-                    resize_window(width, height);
-                }
-                else if width > 0 && height > 0 {
-                    // Prevent resizing and revert to the desired size
-                    SetWindowPos(window.handle, null, 0, 0, settings.window_width, settings.window_height, SWPFlags.SWP_FRAMECHANGED | SWPFlags.SWP_NOOWNERZORDER);
-                }
+                resize_window(width, height);
             }
             default;
                 result = DefWindowProcA(handle, message, wParam, lParam);
