@@ -1,0 +1,15 @@
+# Binary folders
+bin
+obj
+
+# Compiled shader files
+*.spv
+*.shader
+
+# Blender files
+*.blend1
+
+# Executable files
+editor
+editor.exe
+editor.pdb
