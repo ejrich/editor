@@ -154,6 +154,38 @@ float clamp(float value, float min, float max) {
     return value;
 }
 
+string get_program_directory() {
+    if program_directory.length == 0 {
+        path_length := 4096; #const
+        executable_path: CArray<u8>[path_length];
+        #if os == OS.Linux {
+            self_path := "/proc/self/exe"; #const
+            bytes := readlink(self_path.data, &executable_path, path_length - 1);
+
+            each i in 1..bytes-1 {
+                if executable_path[i] == '/' {
+                    program_directory.length = i;
+                }
+            }
+        }
+        else #if os == OS.Windows {
+            bytes := GetModuleFileNameA(null, &executable_path, path_length);
+
+            length := 0;
+            each i in 1..bytes-1 {
+                if executable_path[i] == '\\' {
+                    program_directory.length = i;
+                }
+            }
+        }
+
+        program_directory.data = &executable_path;
+        allocate_strings(&program_directory);
+    }
+
+    return program_directory;
+}
+
 #private
 
 running := true;
@@ -161,11 +193,11 @@ running := true;
 show_performance_stats := false;
 show_profiling_data := false;
 
-init_subsystems() {
-    set_working_directory();
+program_directory: string;
 
-    init_logging();
+init_subsystems() {
     init_memory();
+    init_logging();
     init_display();
     load_settings();
     load_keybinds();
@@ -188,36 +220,4 @@ deinit_subsystems() {
     deallocate_arenas();
 
     deinit_logging();
-}
-
-set_working_directory() {
-    path_length := 4096; #const
-    executable_path: CArray<u8>[path_length];
-    #if os == OS.Linux {
-        self_path := "/proc/self/exe"; #const
-        bytes := readlink(self_path.data, &executable_path, path_length - 1);
-
-        length := 0;
-        each i in 1..bytes-1 {
-            if executable_path[i] == '/' {
-                length = i;
-            }
-        }
-
-        executable_path[length] = 0;
-        chdir(&executable_path);
-    }
-    else #if os == OS.Windows {
-        bytes := GetModuleFileNameA(null, &executable_path, path_length);
-
-        length := 0;
-        each i in 1..bytes-1 {
-            if executable_path[i] == '\\' {
-                length = i;
-            }
-        }
-
-        executable_path[length] = 0;
-        SetCurrentDirectoryA(&executable_path);
-    }
 }

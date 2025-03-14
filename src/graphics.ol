@@ -1317,7 +1317,7 @@ submit_frame() {
 #if DEVELOPER {
     compile_shader(ShaderName shader) {
         shader_name := get_enum_name(shader);
-        file_name := temp_string("../src/shaders/", shader_name, ".glsl", "\0");
+        file_name := temp_string(get_program_directory(), "/../src/shaders/", shader_name, ".glsl", "\0");
         compile_shader(shader_name, file_name, file_name, "shaders", allocate, free_allocation);
     }
 
