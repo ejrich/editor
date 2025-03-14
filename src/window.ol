@@ -89,8 +89,15 @@ create_window() {
         RegisterClassExA(&window_class);
 
         window.handle = CreateWindowExA(0, application_name, application_name, WindowStyle.WS_OVERLAPPEDWINDOW | WindowStyle.WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, settings.window_width, settings.window_height, null, null, hinstance, null);
-        SetWindowLongA(window.handle, -16, cast(int, WindowStyle.WS_VISIBLE));
-        SetWindowPos(window.handle, null, 0, 0, settings.window_width, settings.window_height, SWPFlags.SWP_FRAMECHANGED | SWPFlags.SWP_NOOWNERZORDER);
+        SetWindowPos(window.handle, null, 0, 0, settings.window_width, settings.window_height, SWPFlags.SWP_FRAMECHANGED);
+
+        margins: MARGINS = {
+            cxLeftWidth = -1;
+            cxRightWidth = -1;
+            cyTopHeight = -1;
+            cyBottomHeight = -1;
+        }
+        hr := DwmExtendFrameIntoClientArea(window.handle, &margins);
     }
 
     log("Opened window of size %x% with handle %\n", settings.window_width, settings.window_height, window.handle);
@@ -213,27 +220,6 @@ handle_inputs() {
     }
 }
 
-change_window_size(u32 width, u32 height) {
-    if width == settings.window_width && height == settings.window_height {
-        return;
-    }
-
-    #if os == OS.Linux {
-        size_hints: XSizeHints = {
-            flags = 0x31;
-            min_width = width; max_width = width;
-            min_height = height; max_height = height;
-        }
-        XSetWMNormalHints(window.handle, window.window, &size_hints);
-        XResizeWindow(window.handle, window.window, width, height);
-    }
-    else #if os == OS.Windows {
-        SetWindowPos(window.handle, null, 0, 0, width, height, SWPFlags.SWP_NOMOVE | SWPFlags.SWP_NOZORDER);
-    }
-
-    resize_window(width, height);
-}
-
 float, float get_cursor_position() {
     x, y: float;
     #if os == OS.Linux {
@@ -321,6 +307,16 @@ else #if os == OS.Windows {
 
         switch message {
             case MessageType.WM_CLOSE; signal_shutdown();
+            case MessageType.WM_NCCALCSIZE; {
+                if wParam != 0 {
+                    size_params := cast(NCCALCSIZE_PARAMS*, *cast(void**, &lParam));
+                    rect := &size_params.rgrc[0];
+                    rect.left = rect.left + 1;
+                    rect.top = rect.top + 1;
+                    rect.right = rect.right - 1;
+                    rect.bottom = rect.bottom - 1;
+                }
+            }
             case MessageType.WM_KEYDOWN;
             case MessageType.WM_SYSKEYDOWN; {
                 state := PressState.Down;

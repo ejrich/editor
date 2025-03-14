@@ -21,7 +21,6 @@ application_name := "Editor";
     #if os == OS.Windows {
         set_windows_subsystem(WindowsSubsystem.Windows);
         if DEVELOPER {
-            copy_to_output_directory("lib/stb/stb_image.dll");
             copy_to_output_directory("lib/shaderc/shaderc_shared.dll");
         }
     }
