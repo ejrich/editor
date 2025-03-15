@@ -1,15 +1,30 @@
 #import freetype
 
+default_font := "SourceCodePro"; #const
+
 init_text() {
     error := FT_Init_FreeType(&library);
     if error {
         log("Unable to init FreeType with error code: %\n", error);
         exit_program(1);
     }
+
+    if string_is_empty(settings.font) {
+        settings.font = default_font;
+    }
+
+    set_font(settings.font);
 }
 
 deinit_text() {
+    deinit_font();
     FT_Done_FreeType(library);
+}
+
+set_font(string font_name) {
+    if font.handle deinit_font();
+
+    load_font(font_name);
 }
 
 enum TextAlignment {
@@ -18,16 +33,16 @@ enum TextAlignment {
     Right;
 }
 
-render_text(u32 font, u32 size, Vector3 position, Vector4 color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
+render_text(u32 size, Vector3 position, Vector4 color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
     text := format_string(format, temp_allocate, args);
-    render_text(font, text, size, position, color, alignment);
+    render_text(text, size, position, color, alignment);
 }
 
-render_text(u32 font, string text, u32 size, Vector3 position, Vector4 color, TextAlignment alignment = TextAlignment.Left) {
+render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignment alignment = TextAlignment.Left) {
     if text.length == 0 return;
 
     // Load the font and texture
-    font_texture := load_font_texture(font, size);
+    font_texture := load_font_texture(size);
     if font_texture == null return;
 
     // Create the glyphs for the text string
@@ -44,24 +59,24 @@ render_text(u32 font, string text, u32 size, Vector3 position, Vector4 color, Te
             line_start = length;
             line_length = 0;
             x = position.x;
-            y -= font_texture.y_adjust;
+            y -= font_texture.y_adjust / settings.window_height;
             continue;
         }
 
         glyph := glyphs[char];
         if glyph.width > 0 && glyph.height > 0 {
             line_length++;
-            x_pos := x + (glyph.width / 2 + glyph.bearing.x);
-            y_pos := y - (glyph.height / 2 - glyph.bearing.y);
+            x_pos := x + (glyph.width / 2 + glyph.bearing.x) / settings.window_width;
+            y_pos := y - (glyph.height / 2 - glyph.bearing.y) / settings.window_height;
 
             quad_data[length++] = {
                 color = color; position = { x = x_pos; y = y_pos; z = position.z; } single_channel = 1;
-                width = glyph.width; height = glyph.height;
+                width = glyph.width / settings.window_height; height = glyph.height / settings.window_height;
                 bottom_left_texture_coord = glyph.bottom_left_texture_coord; top_right_texture_coord = glyph.top_right_texture_coord;
             }
         }
 
-        x += glyph.advance;
+        x += glyph.advance / settings.window_width;
     }
 
     if length == 0 return;
@@ -72,11 +87,11 @@ render_text(u32 font, string text, u32 size, Vector3 position, Vector4 color, Te
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-render_text_box(u32 font, string text, u32 size, Vector3 position, Vector4 color, float max_width) {
+render_text_box(string text, u32 size, Vector3 position, Vector4 color, float max_width) {
     if text.length == 0 return;
 
     // Load the font and texture
-    font_texture := load_font_texture(font, size);
+    font_texture := load_font_texture(size);
     if font_texture == null return;
 
     // Create the glyphs for the text string
@@ -94,18 +109,19 @@ render_text_box(u32 font, string text, u32 size, Vector3 position, Vector4 color
 
         glyph := glyphs[char];
         if glyph.width > 0 && glyph.height > 0 {
-            x_pos := x + (glyph.width / 2 + glyph.bearing.x);
-            y_pos := y - (glyph.height / 2 - glyph.bearing.y);
+            x_pos := x + (glyph.width / 2 + glyph.bearing.x) / settings.window_width;
+            y_pos := y - (glyph.height / 2 - glyph.bearing.y) / settings.window_height;
 
             quad_data[length++] = {
                 color = color; position = { x = x_pos; y = y_pos; z = position.z; } single_channel = 1;
-                width = glyph.width; height = glyph.height;
+                width = glyph.width / settings.window_width; height = glyph.height / settings.window_height;
                 bottom_left_texture_coord = glyph.bottom_left_texture_coord; top_right_texture_coord = glyph.top_right_texture_coord;
             }
         }
 
-        x += glyph.advance;
-        width += glyph.advance;
+        advance := glyph.advance / settings.window_width;
+        x += advance;
+        width += advance;
         if width > max_width {
             first_rendered_char++;
             width -= quad_data[first_rendered_char].position.x - quad_data[first_rendered_char - 1].position.x;
@@ -126,15 +142,15 @@ render_text_box(u32 font, string text, u32 size, Vector3 position, Vector4 color
 }
 
 struct Font {
-    name: string;
     handle: FT_Face*;
     handle_mutex: Semaphore;
     char_count: int;
     font_texture_start: FontTexture*;
 }
 
+font: Font;
+
 struct FontTexture {
-    font_index: u8;
     loaded: bool;
     size: u32;
     y_adjust: float;
@@ -172,11 +188,9 @@ adjust_line(Array<QuadInstanceData> array, int start_index, int length, TextAlig
     }
 }
 
-FontTexture* load_font_texture(u32 font_index, u32 size) {
-    font: Font*; // TODO Fix this
+FontTexture* load_font_texture(u32 size) {
     if font.font_texture_start == null {
         new_font_texture := new<FontTexture>();
-        new_font_texture.font_index = font_index;
         new_font_texture.size = size;
 
         if compare_exchange(&font.font_texture_start, new_font_texture, null) == null {
@@ -200,7 +214,6 @@ FontTexture* load_font_texture(u32 font_index, u32 size) {
         }
         if font_texture.next == null {
             new_font_texture := new<FontTexture>();
-            new_font_texture.font_index = font_index;
             new_font_texture.size = size;
 
             if compare_exchange(&font_texture.next, new_font_texture, null) == null {
@@ -219,17 +232,17 @@ FontTexture* load_font_texture(u32 font_index, u32 size) {
     return null;
 }
 
-load_font(Font* font) {
-    font_path := temp_string("data/fonts/", font.name, ".ttf");
+load_font(string name) {
+    font_path := temp_string(get_program_directory(), "/fonts/", name, ".ttf");
     success, font_file := read_file(font_path, allocate);
     if !success {
-        log("Font '%' at path '%' not found\n", font.name, font_path);
+        log("Font '%' at path '%' not found\n", name, font_path);
         exit_program(1);
     }
 
     error := FT_New_Memory_Face(library, font_file.data, font_file.length, 0, &font.handle);
     if error {
-        log("Error creating font face '%', code '%'\n", font.name, error);
+        log("Error creating font face '%', code '%'\n", name, error);
         exit_program(1);
     }
 
@@ -244,31 +257,34 @@ load_font(Font* font) {
     create_semaphore(&font.handle_mutex, initial_value = 1);
 }
 
+deinit_font() {
+    FT_Done_Face(font.handle);
+
+    texture := font.font_texture_start;
+    while texture {
+        destroy_texture(texture.texture);
+        destroy_descriptor_set(texture.descriptor_set);
+        texture = texture.next;
+    }
+}
+
 load_font_texture_job(int index, JobData data) {
     texture: FontTexture* = data.pointer;
 
     size := texture.size;
-    texture.y_adjust = size * 0.75;
+    texture.y_adjust = size * 0.001875 * display_height;
 
     // Load the data for each glyph
-    font: Font*; // TODO Fix this
     texture_width, texture_height, char_index: u32;
     array_resize(&texture.glyphs, font.char_count, allocate, reallocate);
 
     font_handle := font.handle;
     semaphore_wait(&font.handle_mutex);
 
-    // Standard aspect ratio is 16/9, so adjust if different
-    aspect_ratio_adjustment := 9.0 / 16.0 * settings.window_width / settings.window_height;
-    FONT_SCALE_FACTOR := 540.0; #const
+    char_height := size * 2;
+    FONT_ADJUSTMENT := 1.5; #const
 
-    char_width := size * settings.window_height / FONT_SCALE_FACTOR * aspect_ratio_adjustment;
-    char_height := size * settings.window_height / FONT_SCALE_FACTOR;
-
-    FT_Set_Pixel_Sizes(font_handle, cast(u32, char_width), cast(u32, char_height));
-
-    scale_width  := cast(float, settings.window_width);
-    scale_height := cast(float, settings.window_height);
+    FT_Set_Pixel_Sizes(font_handle, 0, char_height);
 
     character := FT_Get_First_Char(font_handle, &char_index);
     while char_index != 0 && character < 128 {
@@ -276,8 +292,8 @@ load_font_texture_job(int index, JobData data) {
 
         glyph_slot := *font_handle.glyph;
         glyph: Glyph = {
-            bearing = { x = glyph_slot.bitmap_left / scale_width; y = glyph_slot.bitmap_top / scale_height; }
-            advance = (glyph_slot.advance.x >> 6) / scale_width; x_offset = texture_width;
+            bearing = { x = cast(float, glyph_slot.bitmap_left); y = glyph_slot.bitmap_top * FONT_ADJUSTMENT; }
+            advance = (glyph_slot.advance.x >> 6) * FONT_ADJUSTMENT; x_offset = texture_width;
         }
 
         texture_width += glyph_slot.bitmap.width + 2;
@@ -306,7 +322,7 @@ load_font_texture_job(int index, JobData data) {
 
         // Adjust glyph dimensions
         texture.glyphs[character] = {
-            width = glyph_bitmap.width / scale_width; height = glyph_bitmap.rows / scale_height;
+            width = cast(float, glyph_bitmap.width); height = glyph_bitmap.rows * FONT_ADJUSTMENT;
             bottom_left_texture_coord = { x = 1.0 * glyph.x_offset / texture_width; y = 0.0; }
             top_right_texture_coord = { x = cast(float, glyph_bitmap.width + glyph.x_offset) / texture_width; y = cast(float, glyph_bitmap.rows) / texture_height; }
         }

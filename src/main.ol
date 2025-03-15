@@ -16,6 +16,9 @@
 main() {
     init_subsystems();
 
+    // TODO Remove
+    open_file_buffer("src/first.ol");
+
     frequency := cast(float, get_performance_frequency());
     start := get_performance_counter();
     frame, frames_accumulated := 0;
@@ -65,11 +68,11 @@ draw_performance_stats(float average_frame_time, float frequency) {
         buffer: Array<u8>[10];
         string_buffer: StringBuffer = { buffer = buffer; }
         write_float(&string_buffer, float_format(fps, 1));
-        add_to_string_buffer(&string_buffer, " FPS");
+        add_to_string_buffer(&string_buffer, " FPS\nS");
         fps_string: string = { length = string_buffer.length; data = buffer.data; }
 
         text_color: Vector4 = { x = 1.0; y = 1.0; z = 1.0; w = 1.0; }
-        // render_text(__Roboto, fps_string, 20, vec3(0.99, 0.95), text_color, TextAlignment.Right);
+        render_text(fps_string, 20, vec3(0.99, 0.95), text_color, TextAlignment.Right);
 
         #if PROFILE {
             if show_profiling_data return;
@@ -101,7 +104,7 @@ draw_performance_stats(float average_frame_time, float frequency) {
 
                 data := profiling_data[t];
                 s := format_string("% - % times, % seconds", temp_allocate, function_names[t], data.times_called, data.execution_time / frequency);
-                // render_text(__Roboto, s, 20, p, text_color, TextAlignment.Right);
+                render_text(s, 20, p, text_color, TextAlignment.Right);
             }
         }
     }

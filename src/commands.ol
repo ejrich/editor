@@ -8,16 +8,16 @@ draw_command_prompt() {
 
     color := vec4(1.0, 1.0, 1.0, 1.0);
     position := vec3(-0.9675, 0.95);
-    // render_text(__Roboto, "~", 20, position, color);
+    render_text("~", 20, position, color);
 
     position.x = -0.95;
     command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-    // render_text(__Roboto, command_prompt_buffer_str, 20, position, color);
+    render_text(command_prompt_buffer_str, 20, position, color);
 
     if command_prompt_buffer.result != CommandResult.None {
         result_string := format_string("Result = %", temp_allocate, command_prompt_buffer.result);
         position.y = 0.9;
-        // render_text(__Roboto, result_string, 20, position, color);
+        render_text(result_string, 20, position, color);
     }
 }
 
