@@ -102,7 +102,7 @@ struct QuadInstanceData {
 // General functions for initialization and deinitialization
 init_graphics() {
     #if DEVELOPER {
-        shader_directory := "shaders"; #const
+        shader_directory := temp_string(get_program_directory(), "/shaders");
         if !file_exists(shader_directory) {
             create_directory(shader_directory);
         }
@@ -698,7 +698,7 @@ create_graphics_pipeline(GraphicsPipelineLayout layout) {
 
         #if SHADER_HOT_RELOADING {
             shader_name := get_enum_name(layout.shader);
-            source_file := format_string("../src/shaders/%.glsl", allocate, shader_name);
+            source_file := format_string("%/../src/shaders/%.glsl", allocate, get_program_directory(), shader_name);
             shader: ShaderDefinition = {
                 source = source_file;
                 last_updated = file_get_last_modified(source_file);
@@ -1317,8 +1317,11 @@ submit_frame() {
 #if DEVELOPER {
     compile_shader(ShaderName shader) {
         shader_name := get_enum_name(shader);
-        file_name := temp_string(get_program_directory(), "/../src/shaders/", shader_name, ".glsl", "\0");
-        compile_shader(shader_name, file_name, file_name, "shaders", allocate, free_allocation);
+
+        program_directory := get_program_directory();
+        file_name := temp_string(program_directory, "/../src/shaders/", shader_name, ".glsl", "\0");
+        output_directory := temp_string(program_directory, "/shaders");
+        compile_shader(shader_name, file_name, file_name, output_directory, allocate, free_allocation);
     }
 
     #if SHADER_HOT_RELOADING {
@@ -1483,7 +1486,7 @@ create_graphics_pipeline(ShaderName shader, bool use_existing = false) {
     }
     else {
         shader_name := get_enum_name(shader);
-        shader_file_path := temp_string("shaders/", shader_name, ".shader");
+        shader_file_path := temp_string(get_program_directory(), "/shaders/", shader_name, ".shader");
         found, shader_file := read_file(shader_file_path, allocate);
         if !found {
             assert(false, temp_string("Shader ", shader_name, " not found\n"));
