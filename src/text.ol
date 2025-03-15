@@ -27,6 +27,16 @@ set_font(string font_name) {
     load_font(font_name);
 }
 
+resize_font_glyphs() {
+    texture := font.font_texture_start;
+    while texture {
+        each glyph in texture.glyphs {
+            adjust_glyph_to_window(&glyph);
+        }
+        texture = texture.next;
+    }
+}
+
 enum TextAlignment {
     Left;
     Center;
@@ -59,24 +69,26 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
             line_start = length;
             line_length = 0;
             x = position.x;
-            y -= font_texture.y_adjust / settings.window_height;
+            y -= font_texture.line_y_adjust;
             continue;
         }
 
         glyph := glyphs[char];
-        if glyph.width > 0 && glyph.height > 0 {
+        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
             line_length++;
-            x_pos := x + (glyph.width / 2 + glyph.bearing.x) / settings.window_width;
-            y_pos := y - (glyph.height / 2 - glyph.bearing.y) / settings.window_height;
+            x_pos := x + glyph.quad_adjust.x;
+            y_pos := y - glyph.quad_adjust.y;
 
             quad_data[length++] = {
-                color = color; position = { x = x_pos; y = y_pos; z = position.z; } single_channel = 1;
-                width = glyph.width / settings.window_height; height = glyph.height / settings.window_height;
-                bottom_left_texture_coord = glyph.bottom_left_texture_coord; top_right_texture_coord = glyph.top_right_texture_coord;
+                color = color; position = { x = x_pos; y = y_pos; z = 0.0; } single_channel = 1;
+                width = glyph.quad_dimensions.x;
+                height = glyph.quad_dimensions.y;
+                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                top_right_texture_coord = glyph.top_right_texture_coord;
             }
         }
 
-        x += glyph.advance / settings.window_width;
+        x += glyph.quad_advance;
     }
 
     if length == 0 return;
@@ -108,20 +120,21 @@ render_text_box(string text, u32 size, Vector3 position, Vector4 color, float ma
             break; // @Future allow multi-line text boxes
 
         glyph := glyphs[char];
-        if glyph.width > 0 && glyph.height > 0 {
-            x_pos := x + (glyph.width / 2 + glyph.bearing.x) / settings.window_width;
-            y_pos := y - (glyph.height / 2 - glyph.bearing.y) / settings.window_height;
+        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+            x_pos := x + glyph.quad_adjust.x;
+            y_pos := y - glyph.quad_adjust.y;
 
             quad_data[length++] = {
-                color = color; position = { x = x_pos; y = y_pos; z = position.z; } single_channel = 1;
-                width = glyph.width / settings.window_width; height = glyph.height / settings.window_height;
-                bottom_left_texture_coord = glyph.bottom_left_texture_coord; top_right_texture_coord = glyph.top_right_texture_coord;
+                color = color; position = { x = x_pos; y = y_pos; z = 0.0; } single_channel = 1;
+                width = glyph.quad_dimensions.x;
+                height = glyph.quad_dimensions.y;
+                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                top_right_texture_coord = glyph.top_right_texture_coord;
             }
         }
 
-        advance := glyph.advance / settings.window_width;
-        x += advance;
-        width += advance;
+        x += glyph.quad_advance;
+        width += glyph.quad_advance;
         if width > max_width {
             first_rendered_char++;
             width -= quad_data[first_rendered_char].position.x - quad_data[first_rendered_char - 1].position.x;
@@ -153,7 +166,8 @@ font: Font;
 struct FontTexture {
     loaded: bool;
     size: u32;
-    y_adjust: float;
+    pixel_y_adjust: float;
+    line_y_adjust: float;
     texture: Texture;
     descriptor_set: DescriptorSet;
     glyphs: Array<Glyph>;
@@ -161,10 +175,15 @@ struct FontTexture {
 }
 
 struct Glyph {
-    width: float;
-    height: float;
-    bearing: Vector2;
-    advance: float;
+    // Base dimensions, saved for changes in window size
+    pixel_dimensions: Vector2;
+    pixel_bearing: Vector2;
+    pixel_advance: float;
+    // Dimensions used for rendering
+    quad_dimensions: Vector2;
+    quad_adjust: Vector2;
+    quad_advance: float;
+    // Measurements for addressing the texture
     x_offset: u32;
     bottom_left_texture_coord: Vector2;
     top_right_texture_coord: Vector2;
@@ -272,7 +291,8 @@ load_font_texture_job(int index, JobData data) {
     texture: FontTexture* = data.pointer;
 
     size := texture.size;
-    texture.y_adjust = size * 0.001875 * display_height;
+    texture.pixel_y_adjust = size * 0.001875 * display_height;
+    texture.line_y_adjust = texture.pixel_y_adjust / settings.window_height;// size * 0.001875 * display_height;
 
     // Load the data for each glyph
     texture_width, texture_height, char_index: u32;
@@ -281,8 +301,7 @@ load_font_texture_job(int index, JobData data) {
     font_handle := font.handle;
     semaphore_wait(&font.handle_mutex);
 
-    char_height := size * 2;
-    FONT_ADJUSTMENT := 1.5; #const
+    char_height := size * 3;
 
     FT_Set_Pixel_Sizes(font_handle, 0, char_height);
 
@@ -292,9 +311,11 @@ load_font_texture_job(int index, JobData data) {
 
         glyph_slot := *font_handle.glyph;
         glyph: Glyph = {
-            bearing = { x = cast(float, glyph_slot.bitmap_left); y = glyph_slot.bitmap_top * FONT_ADJUSTMENT; }
-            advance = (glyph_slot.advance.x >> 6) * FONT_ADJUSTMENT; x_offset = texture_width;
+            pixel_dimensions = { x = cast(float, glyph_slot.bitmap.width); y = cast(float, glyph_slot.bitmap.rows); }
+            pixel_bearing = { x = cast(float, glyph_slot.bitmap_left); y = cast(float, glyph_slot.bitmap_top); }
+            pixel_advance = cast(float, glyph_slot.advance.x >> 6); x_offset = texture_width;
         }
+        adjust_glyph_to_window(&glyph);
 
         texture_width += glyph_slot.bitmap.width + 2;
         if texture_height < glyph_slot.bitmap.rows
@@ -315,16 +336,18 @@ load_font_texture_job(int index, JobData data) {
         glyph_bitmap := font_handle.glyph.bitmap;
         glyph := texture.glyphs[character];
 
-        each i in 0..glyph_bitmap.rows - 1 {
+        each i in glyph_bitmap.rows {
             offset := cast(u32, glyph.x_offset) + i * texture_width;
             memory_copy(image_buffer + offset, glyph_bitmap.buffer + i * glyph_bitmap.width, glyph_bitmap.width);
         }
 
         // Adjust glyph dimensions
         texture.glyphs[character] = {
-            width = cast(float, glyph_bitmap.width); height = glyph_bitmap.rows * FONT_ADJUSTMENT;
             bottom_left_texture_coord = { x = 1.0 * glyph.x_offset / texture_width; y = 0.0; }
-            top_right_texture_coord = { x = cast(float, glyph_bitmap.width + glyph.x_offset) / texture_width; y = cast(float, glyph_bitmap.rows) / texture_height; }
+            top_right_texture_coord = {
+                x = (glyph.pixel_dimensions.x + glyph.x_offset) / texture_width;
+                y = glyph.pixel_dimensions.y / texture_height;
+            }
         }
 
         character = FT_Get_Next_Char(font_handle, character, &char_index);
@@ -335,4 +358,16 @@ load_font_texture_job(int index, JobData data) {
     texture.texture = create_texture(image_buffer, texture_width, texture_height, 1, index, 1);
     texture.descriptor_set = create_quad_descriptor_set(texture.texture);
     texture.loaded = true;
+}
+
+adjust_glyph_to_window(Glyph* glyph) {
+    glyph.quad_dimensions = {
+        x = glyph.pixel_dimensions.x / settings.window_width;
+        y = glyph.pixel_dimensions.y / settings.window_height;
+    }
+    glyph.quad_adjust = {
+        x = (glyph.pixel_dimensions.x / 2 + glyph.pixel_bearing.x) / settings.window_width;
+        y = (glyph.pixel_dimensions.y / 2 - glyph.pixel_bearing.y) / settings.window_height;
+    }
+    glyph.quad_advance = glyph.pixel_advance / settings.window_width;
 }

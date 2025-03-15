@@ -3,6 +3,7 @@ handle_window_resize() {
     if !graphics_initialized return;
 
     recreate_swap_chain();
+    resize_font_glyphs();
 }
 
 handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
