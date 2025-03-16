@@ -109,8 +109,6 @@ draw_performance_stats(float average_frame_time, float frequency) {
         }
     }
 
-    finish_quads();
-
     #if PROFILE reset_profiling_data();
 }
 

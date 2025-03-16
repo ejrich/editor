@@ -83,7 +83,6 @@ create_window() {
             lpfnWndProc = handle_window_inputs;
             hInstance = hinstance;
             hCursor = LoadCursorA(null, 32512);
-            hbrBackground = CreateSolidBrush(0);
             lpszClassName = application_name.data;
         }
         RegisterClassExA(&window_class);

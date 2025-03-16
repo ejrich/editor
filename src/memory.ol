@@ -134,27 +134,34 @@ print_arenas() {
 }
 
 void* temp_allocate(u64 size) {
-    cursor := temp_buffer_cursor;
+    cursor := temporary_buffer_cursor;
     assert(cursor + size < temp_buffer_size);
 
-    while compare_exchange(&temp_buffer_cursor, cursor + size, cursor) != cursor {
-        cursor = temp_buffer_cursor;
+    while compare_exchange(&temporary_buffer_cursor, cursor + size, cursor) != cursor {
+        cursor = temporary_buffer_cursor;
+        assert(cursor + size < temp_buffer_size);
     }
 
     return &temporary_buffer[cursor];
 }
 
-reset_temp_buffer() #inline {
-    temp_buffer_cursor = 0;
+Array<T> temp_allocate_array<T>(u32 length) {
+    array: Array<T>;
+    array.length = length;
+    array.data = temp_allocate(length * size_of(T));
+    return array;
 }
 
+reset_temp_buffer() #inline {
+    temporary_buffer_cursor = 0;
+}
 
 #private
 
 
-temp_buffer_size := 1000; #const
+temp_buffer_size := 50 * 1024 * 1024; #const
 temporary_buffer: CArray<u8>[temp_buffer_size];
-temp_buffer_cursor := 0;
+temporary_buffer_cursor := 0;
 
 struct Arena {
     first_block: MemoryBlock*;

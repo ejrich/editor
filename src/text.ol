@@ -56,7 +56,8 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
     if font_texture == null return;
 
     // Create the glyphs for the text string
-    quad_data: Array<QuadInstanceData>[text.length];
+    quad_data := temp_allocate_array<QuadInstanceData>(text.length);
+
     i, length, line_start, line_length := 0;
     x := position.x;
     y := position.y;
@@ -107,7 +108,8 @@ render_text_box(string text, u32 size, Vector3 position, Vector4 color, float ma
     if font_texture == null return;
 
     // Create the glyphs for the text string
-    quad_data: Array<QuadInstanceData>[text.length];
+    quad_data := temp_allocate_array<QuadInstanceData>(text.length);
+
     index, length, first_rendered_char := 0;
     x := position.x;
     y := position.y;

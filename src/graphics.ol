@@ -1093,9 +1093,8 @@ bool set_current_command_buffer() {
 }
 
 begin_ui_render_pass() {
-    clear_values: Array<VkClearValue>[2];
-    clear_values[0].color.float32 = [0.0, 0.0, 0.0, 0.0]
-    clear_values[1].depthStencil = { depth = 1.0; stencil = 0; }
+    clear_values: Array<VkClearValue>[1];
+    clear_values[0].color.float32 = [0.0, 0.0, 0.0, 1.0]
 
     render_pass_info: VkRenderPassBeginInfo = {
         renderPass = ui_render_pass;
@@ -1273,6 +1272,8 @@ draw_indexed(u32 length, u32 instance_count = 1, u32 start_index = 0, u32 first_
 }
 
 submit_frame() {
+    finish_quads();
+
     vkCmdEndRenderPass(current_command_buffer);
 
     result := vkEndCommandBuffer(current_command_buffer);
@@ -1435,7 +1436,7 @@ depth_image_view: VkImageView*;
 quad_default_texture_descriptor_set: DescriptorSet;
 current_quad_texture: DescriptorSet;
 
-MAX_QUADS_PER_DRAW := 1000; #const
+MAX_QUADS_PER_DRAW := 10000; #const
 struct QuadDataBuffer {
     objects: CArray<QuadInstanceData>[MAX_QUADS_PER_DRAW];
 }
@@ -2018,7 +2019,7 @@ create_swap_chain() {
             format = swap_chain_format.format;
             samples = VkSampleCountFlagBits.VK_SAMPLE_COUNT_1_BIT;
             loadOp = VkAttachmentLoadOp.VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-            storeOp = VkAttachmentStoreOp.VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            storeOp = VkAttachmentStoreOp.VK_ATTACHMENT_STORE_OP_STORE;
             stencilLoadOp = VkAttachmentLoadOp.VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             stencilStoreOp = VkAttachmentStoreOp.VK_ATTACHMENT_STORE_OP_DONT_CARE;
             initialLayout = VkImageLayout.VK_IMAGE_LAYOUT_UNDEFINED;
