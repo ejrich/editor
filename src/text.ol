@@ -43,6 +43,11 @@ enum TextAlignment {
     Right;
 }
 
+bool is_font_ready(u32 size) {
+    font_texture := load_font_texture(size);
+    return font_texture != null;
+}
+
 render_text(u32 size, Vector3 position, Vector4 color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
     text := format_string(format, temp_allocate, args);
     render_text(text, size, position, color, alignment);
@@ -98,6 +103,56 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
 
     // Issue the draw call(s) for the characters
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+}
+
+Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
+    // Load the font and texture
+    font_texture := load_font_texture(size);
+    if font_texture == null return position;
+
+    if text.length == 0 {
+        position.y -= font_texture.line_y_adjust;
+        return position;
+    }
+
+    // Create the glyphs for the text string
+    quad_data: Array<QuadInstanceData>[text.length];
+
+    i, length, line_start, line_length := 0;
+    x := position.x;
+    y := position.y;
+    glyphs := font_texture.glyphs;
+
+    while i < text.length {
+        char := text[i++];
+        glyph := glyphs[char];
+        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+            if x + glyph.quad_dimensions.x > 1.0 {
+                position.y -= font_texture.line_y_adjust;
+                x = position.x;
+                y = position.y;
+            }
+
+            x_pos := x + glyph.quad_adjust.x;
+            y_pos := y - glyph.quad_adjust.y;
+
+            quad_data[length++] = {
+                color = color; position = { x = x_pos; y = y_pos; z = 0.0; } single_channel = 1;
+                width = glyph.quad_dimensions.x;
+                height = glyph.quad_dimensions.y;
+                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                top_right_texture_coord = glyph.top_right_texture_coord;
+            }
+        }
+
+        x += glyph.quad_advance;
+    }
+
+    // Issue the draw call(s) for the characters
+    draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+
+    position.y -= font_texture.line_y_adjust;
+    return position;
 }
 
 render_text_box(string text, u32 size, Vector3 position, Vector4 color, float max_width) {

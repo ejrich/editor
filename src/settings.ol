@@ -2,6 +2,7 @@ struct Settings {
     window_width: u32;
     window_height: u32;
     font: string;
+    font_size: u8;
 }
 
 #run {
@@ -327,5 +328,6 @@ get_default_settings() {
         window_width = display_width;
         window_height = display_height;
         font = default_font;
+        font_size = 18;
     }
 }
