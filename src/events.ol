@@ -46,6 +46,7 @@ handle_mouse_move(float x, float y) {
 
 handle_mouse_scroll(ScrollDirection direction, ModCode mod) {
     // log("Scrolling % with mod %\n", direction, mod);
+    handle_buffer_scroll(direction);
 }
 
 handle_mouse_button(PressState state, MouseButton button, ModCode mod, float x, float y) {
