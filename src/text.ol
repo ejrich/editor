@@ -34,6 +34,9 @@ resize_font_glyphs() {
         each glyph in texture.glyphs {
             adjust_glyph_to_window(&glyph);
         }
+
+        set_line_height(texture);
+
         texture = texture.next;
     }
 }
@@ -44,13 +47,9 @@ enum TextAlignment {
     Right;
 }
 
-bool is_font_ready(u32 size, float* line_height) {
+bool is_font_ready(u32 size) {
     font_texture := load_font_texture(size);
-
-    if font_texture == null return false;
-
-    *line_height = font_texture.line_height;
-    return true;
+    return font_texture != null;
 }
 
 render_text(u32 size, Vector3 position, Vector4 color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
@@ -110,7 +109,7 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
+Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color, float max_x) {
     // Load the font and texture
     font_texture := load_font_texture(size);
     if font_texture == null return position;
@@ -132,7 +131,7 @@ Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
         char := text[i++];
         glyph := glyphs[char];
         if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
-            if x + glyph.quad_dimensions.x > 1.0 {
+            if x + glyph.quad_dimensions.x > max_x {
                 position.y -= font_texture.line_height;
                 x = position.x;
                 y = position.y;
@@ -249,6 +248,16 @@ struct Glyph {
     x_offset: u32;
     bottom_left_texture_coord: Vector2;
     top_right_texture_coord: Vector2;
+}
+
+line_height: float;
+max_lines: u32;
+
+set_line_height(FontTexture* texture) {
+    if texture.size == settings.font_size {
+        line_height = texture.line_height;
+        max_lines = cast(u32, 2.0 / line_height);
+    }
 }
 
 
@@ -387,6 +396,8 @@ load_font_texture_job(int index, JobData data) {
 
     texture.pixel_height = texture_height + 5;
     texture.line_height = cast(float, texture.pixel_height) / settings.window_height;
+
+    set_line_height(texture);
 
     // Create the buffer for the texture
     image_buffer := allocate(texture_width * texture_height);

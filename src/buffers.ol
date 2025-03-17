@@ -1,7 +1,6 @@
 // Buffer rendering
 draw_buffers() {
-    line_height: float;
-    if !is_font_ready(settings.font_size, &line_height) return;
+    if !is_font_ready(settings.font_size) return;
 
     if left_window.displayed {
         // TODO Reserve space and draw boundaries
@@ -24,14 +23,18 @@ draw_buffers() {
 }
 
 draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
+    line_max_x := position.x + 0.98;
+    if full_width line_max_x += 1.0;
+
     buffer := buffers[window.buffer_index];
-    start_line := clamp(window.start_line, 0, buffer.line_count);
+    start_line := clamp(window.start_line, 0, buffer.line_count - 1);
+
     line := buffer.lines;
     line_number := 1;
     while line != null && position.y > -1.0 {
         if line_number > start_line {
             line_string: string = { length = line.length; data = line.data.data; }
-            position = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0));
+            position = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0), line_max_x);
         }
         line = line.next;
         line_number++;
@@ -81,10 +84,19 @@ handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
 
     if left_window.displayed && (!right_window.displayed || x < 0.0) {
-        move_buffer_line(&left_window, direction == ScrollDirection.Up);
+        scroll_buffer(&left_window, direction == ScrollDirection.Up);
     }
     else if right_window.displayed && (!left_window.displayed || x > 0.0) {
-        move_buffer_line(&right_window, direction == ScrollDirection.Up);
+        scroll_buffer(&right_window, direction == ScrollDirection.Up);
+    }
+}
+
+move_line(bool up, u32 line_changes = 1) {
+    switch current_window {
+        case SelectedWindow.Left;
+            move_buffer_line(&left_window, up, line_changes);
+        case SelectedWindow.Right;
+            move_buffer_line(&right_window, up, line_changes);
     }
 }
 
@@ -132,16 +144,52 @@ BufferLine* allocate_line() {
     return line;
 }
 
-move_buffer_line(BufferWindow* window, bool up) {
+scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;
     }
     else {
-        if up window.start_line -= 1;
-        else  window.start_line += 1;
+        if up {
+            window.start_line -= line_changes;
+            if window.line - window.start_line + settings.scroll_offset > max_lines {
+                window.line = window.start_line + max_lines - settings.scroll_offset;
+            }
+        }
+        else {
+            window.start_line += line_changes;
+            if window.start_line + settings.scroll_offset > window.line {
+                window.line = window.start_line + settings.scroll_offset;
+            }
+        }
 
         buffer := buffers[window.buffer_index];
-        window.start_line = clamp(window.start_line, 0, buffer.line_count);
+        window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
+        window.line = clamp(window.line, 0, buffer.line_count - 1);
+    }
+}
+
+move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
+    if window.buffer_index < 0 {
+        window.line = 0;
+        window.start_line = 0;
+    }
+    else {
+        if up {
+            window.line -= line_changes;
+            if window.start_line + settings.scroll_offset > window.line {
+                window.start_line = window.line - settings.scroll_offset;
+            }
+        }
+        else {
+            window.line += line_changes;
+            if window.line - window.start_line + settings.scroll_offset > max_lines {
+                window.start_line = window.line + settings.scroll_offset - max_lines;
+            }
+        }
+
+        buffer := buffers[window.buffer_index];
+        window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
+        window.line = clamp(window.line, 0, buffer.line_count - 1);
     }
 }

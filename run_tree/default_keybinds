@@ -3,3 +3,7 @@ visual_mode=V
 insert=I
 append=A
 substitute=S
+move_up=K
+move_down=J
+move_left=H
+move_right=L

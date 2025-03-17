@@ -31,9 +31,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                 }
             }
         }
-    }
 
-    handle_keybind_event(code, state, mod);
+        handle_keybind_event(code, state, mod);
+    }
 }
 
 handle_mouse_move(float x, float y) {

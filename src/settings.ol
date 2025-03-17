@@ -3,6 +3,7 @@ struct Settings {
     window_height: u32;
     font: string;
     font_size: u8;
+    scroll_offset: u8;
 }
 
 #run {
@@ -329,5 +330,6 @@ get_default_settings() {
         window_height = display_height;
         font = default_font;
         font_size = 18;
+        scroll_offset = 10;
     }
 }

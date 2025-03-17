@@ -63,7 +63,7 @@ draw_performance_stats(float average_frame_time, float frequency) {
     if show_performance_stats {
         fps := 1 / average_frame_time;
 
-        buffer: Array<u8>[10];
+        buffer: Array<u8>[50];
         string_buffer: StringBuffer = { buffer = buffer; }
         write_float(&string_buffer, float_format(fps, 1));
         add_to_string_buffer(&string_buffer, " FPS");

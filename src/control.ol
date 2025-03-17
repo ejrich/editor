@@ -47,3 +47,29 @@ bool substitute(PressState state, ModCode mod) {
     edit_mode = EditMode.Insert;
     return true;
 }
+
+[keybind]
+bool move_up(PressState state, ModCode mod) {
+    // TODO Properly implement with visual mode
+    move_line(true);
+    return true;
+}
+
+[keybind]
+bool move_down(PressState state, ModCode mod) {
+    // TODO Properly implement with visual mode
+    move_line(false);
+    return true;
+}
+
+[keybind]
+bool move_left(PressState state, ModCode mod) {
+    // TODO Properly implement with visual mode
+    return true;
+}
+
+[keybind]
+bool move_right(PressState state, ModCode mod) {
+    // TODO Properly implement with visual mode
+    return true;
+}
