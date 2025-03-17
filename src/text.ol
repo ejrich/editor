@@ -30,6 +30,7 @@ set_font(string font_name) {
 resize_font_glyphs() {
     texture := font.font_texture_start;
     while texture {
+        texture.line_height = cast(float, texture.pixel_height) / settings.window_height;
         each glyph in texture.glyphs {
             adjust_glyph_to_window(&glyph);
         }
@@ -43,9 +44,13 @@ enum TextAlignment {
     Right;
 }
 
-bool is_font_ready(u32 size) {
+bool is_font_ready(u32 size, float* line_height) {
     font_texture := load_font_texture(size);
-    return font_texture != null;
+
+    if font_texture == null return false;
+
+    *line_height = font_texture.line_height;
+    return true;
 }
 
 render_text(u32 size, Vector3 position, Vector4 color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
@@ -75,7 +80,7 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
             line_start = length;
             line_length = 0;
             x = position.x;
-            y -= font_texture.line_y_adjust;
+            y -= font_texture.line_height;
             continue;
         }
 
@@ -111,7 +116,7 @@ Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
     if font_texture == null return position;
 
     if text.length == 0 {
-        position.y -= font_texture.line_y_adjust;
+        position.y -= font_texture.line_height;
         return position;
     }
 
@@ -128,7 +133,7 @@ Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
         glyph := glyphs[char];
         if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
             if x + glyph.quad_dimensions.x > 1.0 {
-                position.y -= font_texture.line_y_adjust;
+                position.y -= font_texture.line_height;
                 x = position.x;
                 y = position.y;
             }
@@ -151,7 +156,7 @@ Vector3 render_line(string text, u32 size, Vector3 position, Vector4 color) {
     // Issue the draw call(s) for the characters
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
-    position.y -= font_texture.line_y_adjust;
+    position.y -= font_texture.line_height;
     return position;
 }
 
@@ -223,8 +228,8 @@ font: Font;
 struct FontTexture {
     loaded: bool;
     size: u32;
-    pixel_y_adjust: float;
-    line_y_adjust: float;
+    pixel_height: u32;
+    line_height: float;
     texture: Texture;
     descriptor_set: DescriptorSet;
     glyphs: Array<Glyph>;
@@ -348,8 +353,6 @@ load_font_texture_job(int index, JobData data) {
     texture: FontTexture* = data.pointer;
 
     size := texture.size;
-    texture.pixel_y_adjust = size * 0.001875 * display_height;
-    texture.line_y_adjust = texture.pixel_y_adjust / settings.window_height;// size * 0.001875 * display_height;
 
     // Load the data for each glyph
     texture_width, texture_height, char_index: u32;
@@ -381,6 +384,9 @@ load_font_texture_job(int index, JobData data) {
         texture.glyphs[character] = glyph;
         character = FT_Get_Next_Char(font_handle, character, &char_index);
     }
+
+    texture.pixel_height = texture_height + 5;
+    texture.line_height = cast(float, texture.pixel_height) / settings.window_height;
 
     // Create the buffer for the texture
     image_buffer := allocate(texture_width * texture_height);

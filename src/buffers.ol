@@ -1,9 +1,12 @@
 // Buffer rendering
 draw_buffers() {
+    line_height: float;
+    if !is_font_ready(settings.font_size, &line_height) return;
+
     if left_window.displayed {
         // TODO Reserve space and draw boundaries
         if left_window.buffer_index >= 0 {
-            position := vec3(-0.99, 0.96);
+            position := vec3(-0.99, 1.0 - line_height);
             draw_buffer_window(&left_window, position, !right_window.displayed);
         }
     }
@@ -11,7 +14,7 @@ draw_buffers() {
     if right_window.displayed {
         // TODO Reserve space and draw boundaries
         if right_window.buffer_index >= 0 {
-            position := vec3(0.01, 0.96);
+            position := vec3(0.01, 1.0 - line_height);
             if !left_window.displayed {
                 position.x = -0.99;
             }
@@ -21,8 +24,6 @@ draw_buffers() {
 }
 
 draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
-    if !is_font_ready(settings.font_size) return;
-
     buffer := buffers[window.buffer_index];
     start_line := clamp(window.start_line, 0, buffer.line_count);
     line := buffer.lines;

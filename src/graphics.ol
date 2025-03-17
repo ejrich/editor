@@ -1919,9 +1919,6 @@ create_swap_chain() {
     vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &present_mode_count, present_modes.data);
 
     present_mode := VkPresentModeKHR.VK_PRESENT_MODE_FIFO_KHR;
-    each mode in present_modes {
-        if mode == VkPresentModeKHR.VK_PRESENT_MODE_MAILBOX_KHR present_mode = mode;
-    }
 
     capabilities: VkSurfaceCapabilitiesKHR;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &capabilities);
