@@ -256,11 +256,7 @@ float, float convert_coordinates(int x, int y) {
     #import X11
 
     KeyCode, ModCode convert_codes(u64 keysym, ModState mod) {
-        mod_code: ModCode;
-
-        if mod & ModState.ShiftMask   mod_code |= ModCode.Shift;
-        if mod & ModState.ControlMask mod_code |= ModCode.Control;
-        if mod & ModState.Mod1Mask    mod_code |= ModCode.Alt;
+        mod_code := convert_modcode(mod);
 
         if (keysym & 0xFF00) == 0 {
             if keysym >= 'a' && keysym <= 'z'
@@ -322,7 +318,7 @@ float, float convert_coordinates(int x, int y) {
             case XK_Delete;    return KeyCode.Delete, mod_code;
         }
 
-        return KeyCode.Unhandled;
+        return KeyCode.Unhandled, mod_code;
     }
 
     ModCode convert_modcode(ModState mod) {
