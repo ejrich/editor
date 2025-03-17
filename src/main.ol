@@ -1,5 +1,7 @@
 #import atomic
 #import "buffers.ol"
+#import "control.ol"
+#import "commands.ol"
 #import "events.ol"
 #import "graphics.ol"
 #import "keybinds.ol"
@@ -8,10 +10,6 @@
 #import "text.ol"
 #import "thread_pool.ol"
 #import "window.ol"
-
-#if DEVELOPER {
-    #import "commands.ol"
-}
 
 main() {
     init_subsystems();

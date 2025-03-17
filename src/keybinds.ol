@@ -4,7 +4,8 @@ load_keybinds() {
     found, keybinds_file := read_file(keybinds_file_path, allocate);
 
     if !found {
-        found, keybinds_file = read_file("default_keybinds", allocate);
+        default_keybinds_file := temp_string(get_program_directory(), "/default_keybinds");
+        found, keybinds_file = read_file(default_keybinds_file, allocate);
     }
 
     if found {

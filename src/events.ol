@@ -10,9 +10,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     // log("Key % is % with mod %!\n", code, state, mod);
 
     if state & PressState.Down {
-        #if DEVELOPER {
-            if handle_command_prompt_press(state, code, mod, char) return;
-        }
+        if handle_command_prompt_press(state, code, mod, char) return;
 
         if code == KeyCode.Escape {
             if mod & ModCode.Shift signal_shutdown();
@@ -27,11 +25,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                 }
             }
             case KeyCode.Tick; {
-                #if DEVELOPER {
-                    if (state & PressState.Held) != PressState.Held {
-                        toggle_command_prompt();
-                        return;
-                    }
+                if (state & PressState.Held) != PressState.Held {
+                    toggle_command_prompt();
+                    return;
                 }
             }
         }
@@ -116,17 +112,38 @@ enum KeyCode {
     Z = 0x7A;
 
     // Characters
+    Exclamation  = 0x21;
+    Quotation    = 0x22;
+    Pound        = 0x23;
+    Dollar       = 0x24;
+    Percent      = 0x25;
+    Ampersand    = 0x26;
     Apostrophe   = 0x27;
+    OpenParen    = 0x28;
+    CloseParen   = 0x29;
+    Star         = 0x2A;
+    Plus         = 0x2B;
     Comma        = 0x2C;
     Minus        = 0x2D;
     Period       = 0x2E;
     ForwardSlash = 0x2F;
+    Colon        = 0x3A;
     Semicolon    = 0x3B;
+    LessThan     = 0x3C;
     Equals       = 0x3D;
+    GreaterThan  = 0x3E;
+    Question     = 0x3F;
+    At           = 0x40;
     OpenBracket  = 0x5B;
     BackSlash    = 0x5C;
     CloseBracket = 0x5D;
+    Caret        = 0x5E;
+    Underscore   = 0x5F;
     Tick         = 0x60;
+    OpenBrace    = 0x7B;
+    Pipe         = 0x7C;
+    CloseBrace   = 0x7D;
+    Tilde        = 0x7E;
 
     // Function Row
     Escape = 0x1B;

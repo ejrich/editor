@@ -1,0 +1,5 @@
+normal_mode=Escape
+visual_mode=V
+insert=I
+append=A
+substitute=S

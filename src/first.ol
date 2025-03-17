@@ -42,9 +42,9 @@ application_name := "Editor";
     create_shader_library();
 
     if intercept_compiler_messages() {
-        profiling_data_variable, function_names_variable, keybind_definitions_variable, console_commands_variable: GlobalVariableAst*;
-        profiled_function_names, keybind_function_names, console_command_names: Array<string>;
-        function_index, function_names_length, keybind_definitions_length, console_commands_length: int;
+        profiling_data_variable, function_names_variable, keybind_definitions_variable, commands_variable: GlobalVariableAst*;
+        profiled_function_names, keybind_function_names, command_names: Array<string>;
+        function_index, function_names_length, keybind_definitions_length, commands_length: int;
 
         message: CompilerMessage;
         while get_next_compiler_message(&message) {
@@ -69,8 +69,8 @@ application_name := "Editor";
                         if global.name == "keybind_definitions" {
                             keybind_definitions_variable = global;
                         }
-                        if global.name == "console_commands" {
-                            console_commands_variable = global;
+                        if global.name == "commands" {
+                            commands_variable = global;
                         }
                     }
                 }
@@ -81,15 +81,15 @@ application_name := "Editor";
                             keybind_definitions_length += function.name.length * 2 + 25;
                             array_insert(&keybind_function_names, function.name);
                         }
-                        else if array_contains(function.attributes, "console_command") {
-                            if verify_console_command_arguments(function) {
-                                generate_console_command(function);
-                                console_commands_length += function.name.length * 2 + 27;
-                                array_insert(&console_command_names, function.name);
+                        else if array_contains(function.attributes, "command") {
+                            if verify_command_arguments(function) {
+                                generate_command(function);
+                                commands_length += function.name.length * 2 + 27;
+                                array_insert(&command_names, function.name);
                             }
                             else
                             {
-                                error_string := format_string("Function '%' has the incorrect arguments/return type for a console command. The return type needs to be 'bool' and the arguments can only be bool, integer, float, or string types", function.name);
+                                error_string := format_string("Function '%' has the incorrect arguments/return type for a command. The return type needs to be 'bool' and the arguments can only be bool, integer, float, or string types", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);
                             }
@@ -180,39 +180,39 @@ application_name := "Editor";
                         set_global_variable_value(keybind_definitions_variable, keybind_definitions_initial_value);
                     }
 
-                    // Set the console command array initial values
-                    if console_commands_length > 0 && console_commands_variable != null {
-                        console_commands_length++;
-                        console_commands_initial_value: string = { length = console_commands_length; data = default_allocator(console_commands_length); }
-                        defer default_free(console_commands_initial_value.data);
+                    // Set the command array initial values
+                    if commands_length > 0 && commands_variable != null {
+                        commands_length++;
+                        commands_initial_value: string = { length = commands_length; data = default_allocator(commands_length); }
+                        defer default_free(commands_initial_value.data);
 
-                        console_commands_initial_value[0] = '[';
+                        commands_initial_value[0] = '[';
 
                         i := 1;
-                        bubble_sort(console_command_names);
-                        each name in console_command_names {
+                        bubble_sort(command_names);
+                        each name in command_names {
                             prefix := "{name = \""; #const
                             middle := "\"; handler = __"; #const
                             suffix := ";},"; #const
 
-                            memory_copy(console_commands_initial_value.data + i, prefix.data, prefix.length);
+                            memory_copy(commands_initial_value.data + i, prefix.data, prefix.length);
                             i += prefix.length;
 
-                            memory_copy(console_commands_initial_value.data + i, name.data, name.length);
+                            memory_copy(commands_initial_value.data + i, name.data, name.length);
                             i += name.length;
 
-                            memory_copy(console_commands_initial_value.data + i, middle.data, middle.length);
+                            memory_copy(commands_initial_value.data + i, middle.data, middle.length);
                             i += middle.length;
 
-                            memory_copy(console_commands_initial_value.data + i, name.data, name.length);
+                            memory_copy(commands_initial_value.data + i, name.data, name.length);
                             i += name.length;
 
-                            memory_copy(console_commands_initial_value.data + i, suffix.data, suffix.length);
+                            memory_copy(commands_initial_value.data + i, suffix.data, suffix.length);
                             i += suffix.length;
                         }
 
-                        console_commands_initial_value[console_commands_length - 1] = ']';
-                        set_global_variable_value(console_commands_variable, console_commands_initial_value);
+                        commands_initial_value[commands_length - 1] = ']';
+                        set_global_variable_value(commands_variable, commands_initial_value);
                     }
                 }
                 case CompilerMessageType.CodeGenerated; {}
@@ -336,8 +336,8 @@ bool add_profiling_to_function(FunctionAst* function, int index) {
     function_names: Array<string>;
 }
 
-// Code for verifying and generating console commands
-generate_console_command(FunctionAst* function) {
+// Code for verifying and generating commands
+generate_command(FunctionAst* function) {
     function_parts: Array<string>;
 
     declaration := format_string("""
@@ -411,7 +411,7 @@ CommandResult __%(Array<string> args) {
     add_code(code_string);
 }
 
-bool verify_console_command_arguments(FunctionAst* function) {
+bool verify_command_arguments(FunctionAst* function) {
     if function.return_type.type != TypeKind.Boolean return false;
 
     each argument in function.arguments {

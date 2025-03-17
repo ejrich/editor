@@ -134,8 +134,7 @@ handle_inputs() {
                     }
 
                     keysym := XLookupKeysym(&event.xkey, 0);
-                    key_code := convert_keycode(keysym);
-                    mod_code := convert_modcode(event.xkey.state);
+                    key_code, mod_code := convert_codes(keysym, event.xkey.state);
 
                     char: CArray<u8>[4]; // Allow utf-8
                     c := XLookupString(&event.xkey, &char, 4, null, null);
@@ -155,8 +154,7 @@ handle_inputs() {
                     }
 
                     keysym := XLookupKeysym(&event.xkey, 0);
-                    key_code := convert_keycode(keysym);
-                    mod_code := convert_modcode(event.xkey.state);
+                    key_code, mod_code := convert_codes(keysym, event.xkey.state);
                     str: string;
 
                     handle_key_event(PressState.Up, key_code, mod_code, str);
@@ -257,32 +255,71 @@ float, float convert_coordinates(int x, int y) {
 #if os == OS.Linux {
     #import X11
 
-    KeyCode convert_keycode(u64 keysym) {
+    KeyCode, ModCode convert_codes(u64 keysym, ModState mod) {
+        mod_code: ModCode;
+
+        if mod & ModState.ShiftMask   mod_code |= ModCode.Shift;
+        if mod & ModState.ControlMask mod_code |= ModCode.Control;
+        if mod & ModState.Mod1Mask    mod_code |= ModCode.Alt;
+
         if (keysym & 0xFF00) == 0 {
-            return cast(KeyCode, keysym);
+            if keysym >= 'a' && keysym <= 'z'
+                return cast(KeyCode, keysym), mod_code;
+
+            if keysym >= '0' && keysym <= '9' {
+                if mod_code & ModCode.Shift {
+                    mod_code &= ModCode.Alt | ModCode.Control;
+                    switch keysym {
+                        case '0'; keysym = ')';
+                        case '1'; keysym = '!';
+                        case '2'; keysym = '@';
+                        case '3'; keysym = '#';
+                        case '4'; keysym = '$';
+                        case '5'; keysym = '%';
+                        case '6'; keysym = '^';
+                        case '7'; keysym = '&';
+                        case '8'; keysym = '*';
+                        case '9'; keysym = '(';
+                    }
+                }
+                return cast(KeyCode, keysym), mod_code;
+            }
+
+            switch keysym {
+                case ';';  return select_keycode(KeyCode.Semicolon, KeyCode.Colon, mod_code);
+                case '=';  return select_keycode(KeyCode.Equals, KeyCode.Plus, mod_code);
+                case ',';  return select_keycode(KeyCode.Comma, KeyCode.LessThan, mod_code);
+                case '-';  return select_keycode(KeyCode.Minus, KeyCode.Underscore, mod_code);
+                case '.';  return select_keycode(KeyCode.Period, KeyCode.GreaterThan, mod_code);
+                case '/';  return select_keycode(KeyCode.ForwardSlash, KeyCode.Question, mod_code);
+                case '`';  return select_keycode(KeyCode.Tick, KeyCode.Tilde, mod_code);
+                case '[';  return select_keycode(KeyCode.OpenBracket, KeyCode.OpenBrace, mod_code);
+                case '\\'; return select_keycode(KeyCode.BackSlash, KeyCode.Pipe, mod_code);
+                case ']';  return select_keycode(KeyCode.CloseBracket, KeyCode.CloseBrace, mod_code);
+                case '\''; return select_keycode(KeyCode.Apostrophe, KeyCode.Quotation, mod_code);
+            }
+
+            return cast(KeyCode, keysym), mod_code;
         }
 
-        if keysym >= XK_F1 && keysym <= XK_F12 return cast(KeyCode, keysym - 0xFEBE);
+        if keysym >= XK_F1 && keysym <= XK_F12 return cast(KeyCode, keysym - 0xFEBE), mod_code;
 
         switch keysym {
-            case XK_BackSpace; return KeyCode.Backspace;
-            case XK_Tab;       return KeyCode.Tab;
-            case XK_Return;    return KeyCode.Enter;
-            case XK_Escape;    return KeyCode.Escape;
-            case XK_Left;      return KeyCode.Left;
-            case XK_Up;        return KeyCode.Up;
-            case XK_Right;     return KeyCode.Right;
-            case XK_Down;      return KeyCode.Down;
+            case XK_BackSpace; return KeyCode.Backspace, mod_code;
+            case XK_Tab;       return KeyCode.Tab, mod_code;
+            case XK_Return;    return KeyCode.Enter, mod_code;
+            case XK_Escape;    return KeyCode.Escape, mod_code;
+            case XK_Left;      return KeyCode.Left, mod_code;
+            case XK_Up;        return KeyCode.Up, mod_code;
+            case XK_Right;     return KeyCode.Right, mod_code;
+            case XK_Down;      return KeyCode.Down, mod_code;
             case XK_Shift_L;
-            case XK_Shift_R;
-                return KeyCode.Shift;
+            case XK_Shift_R;   return KeyCode.Shift, mod_code;
             case XK_Control_L;
-            case XK_Control_R;
-                return KeyCode.Control;
+            case XK_Control_R; return KeyCode.Control, mod_code;
             case XK_Alt_L;
-            case XK_Alt_R;
-                return KeyCode.Alt;
-            case XK_Delete;    return KeyCode.Delete;
+            case XK_Alt_R;     return KeyCode.Alt, mod_code;
+            case XK_Delete;    return KeyCode.Delete, mod_code;
         }
 
         return KeyCode.Unhandled;
@@ -321,8 +358,7 @@ else #if os == OS.Windows {
                 state := PressState.Down;
                 if lParam & 0x40000000 state |= PressState.Held;
 
-                key_code := convert_keycode(wParam);
-                mod_code := convert_modcode(lParam);
+                key_code, mod_code := convert_codes(wParam, lParam);
 
                 GetKeyboardState(key_state.data);
                 char: CArray<u8>[2];
@@ -333,8 +369,7 @@ else #if os == OS.Windows {
             }
             case MessageType.WM_KEYUP;
             case MessageType.WM_SYSKEYUP; {
-                key_code := convert_keycode(wParam);
-                mod_code := convert_modcode(lParam);
+                key_code, mod_code := convert_codes(wParam, lParam);
                 str: string;
 
                 handle_key_event(PressState.Up, key_code, mod_code, str);
@@ -399,54 +434,66 @@ else #if os == OS.Windows {
             handle_mouse_scroll(positive, mod_code);
     }
 
-    KeyCode convert_keycode(u8 char) {
-        if char >= 'A' && char <= 'Z'
-            return cast(KeyCode, char + 0x20);
-
-        if char >= '0' && char <= '9'
-            return cast(KeyCode, char);
-
-        if char >= VK_F1 && char <= VK_F12
-            return cast(KeyCode, char + 0x90);
-
-        switch char {
-            case VK_CONTROL;    return KeyCode.Control;
-            case VK_SHIFT;      return KeyCode.Shift;
-            case VK_MENU;       return KeyCode.Alt;
-            case VK_UP;         return KeyCode.Up;
-            case VK_DOWN;       return KeyCode.Down;
-            case VK_LEFT;       return KeyCode.Left;
-            case VK_RIGHT;      return KeyCode.Right;
-            case VK_OEM_1;      return KeyCode.Semicolon;
-            case VK_OEM_PLUS;   return KeyCode.Equals;
-            case VK_OEM_COMMA;  return KeyCode.Comma;
-            case VK_OEM_MINUS;  return KeyCode.Minus;
-            case VK_OEM_PERIOD; return KeyCode.Period;
-            case VK_OEM_2;      return KeyCode.ForwardSlash;
-            case VK_OEM_3;      return KeyCode.Tick;
-            case VK_OEM_4;      return KeyCode.OpenBracket;
-            case VK_OEM_5;      return KeyCode.BackSlash;
-            case VK_OEM_6;      return KeyCode.CloseBracket;
-            case VK_OEM_7;      return KeyCode.Apostrophe;
-            case VK_BACK;       return KeyCode.Backspace;
-            case VK_TAB;        return KeyCode.Tab;
-            case VK_RETURN;     return KeyCode.Enter;
-            case VK_SPACE;      return KeyCode.Space;
-            case VK_DELETE;     return KeyCode.Delete;
-            case VK_ESCAPE;     return KeyCode.Escape;
-        }
-
-        return KeyCode.Unhandled;
-    }
-
-    ModCode convert_modcode(u64 lParam) {
+    KeyCode, ModCode convert_codes(u8 char, u64 lParam) {
         mod_code: ModCode;
 
         if lParam & 0x20000000         mod_code |= ModCode.Alt;
         if GetKeyState(VK_SHIFT) < 0   mod_code |= ModCode.Shift;
         if GetKeyState(VK_CONTROL) < 0 mod_code |= ModCode.Control;
 
-        return mod_code;
+        if char >= 'A' && char <= 'Z'
+            return cast(KeyCode, char + 0x20), mod_code;
+
+        if char >= '0' && char <= '9' {
+            if mod_code & ModCode.Shift {
+                mod_code &= ModCode.Alt | ModCode.Control;
+                switch char {
+                    case '0'; char = ')';
+                    case '1'; char = '!';
+                    case '2'; char = '@';
+                    case '3'; char = '#';
+                    case '4'; char = '$';
+                    case '5'; char = '%';
+                    case '6'; char = '^';
+                    case '7'; char = '&';
+                    case '8'; char = '*';
+                    case '9'; char = '(';
+                }
+            }
+            return cast(KeyCode, char), mod_code;
+        }
+
+        if char >= VK_F1 && char <= VK_F12
+            return cast(KeyCode, char + 0x90), mod_code;
+
+        switch char {
+            case VK_CONTROL;    return KeyCode.Control, mod_code;
+            case VK_SHIFT;      return KeyCode.Shift, mod_code;
+            case VK_MENU;       return KeyCode.Alt, mod_code;
+            case VK_UP;         return KeyCode.Up, mod_code;
+            case VK_DOWN;       return KeyCode.Down, mod_code;
+            case VK_LEFT;       return KeyCode.Left, mod_code;
+            case VK_RIGHT;      return KeyCode.Right, mod_code;
+            case VK_OEM_1;      return select_keycode(KeyCode.Semicolon, KeyCode.Colon, mod_code);
+            case VK_OEM_PLUS;   return select_keycode(KeyCode.Equals, KeyCode.Plus, mod_code);
+            case VK_OEM_COMMA;  return select_keycode(KeyCode.Comma, KeyCode.LessThan, mod_code);
+            case VK_OEM_MINUS;  return select_keycode(KeyCode.Minus, KeyCode.Underscore, mod_code);
+            case VK_OEM_PERIOD; return select_keycode(KeyCode.Period, KeyCode.GreaterThan, mod_code);
+            case VK_OEM_2;      return select_keycode(KeyCode.ForwardSlash, KeyCode.Question, mod_code);
+            case VK_OEM_3;      return select_keycode(KeyCode.Tick, KeyCode.Tilde, mod_code);
+            case VK_OEM_4;      return select_keycode(KeyCode.OpenBracket, KeyCode.OpenBrace, mod_code);
+            case VK_OEM_5;      return select_keycode(KeyCode.BackSlash, KeyCode.Pipe, mod_code);
+            case VK_OEM_6;      return select_keycode(KeyCode.CloseBracket, KeyCode.CloseBrace, mod_code);
+            case VK_OEM_7;      return select_keycode(KeyCode.Apostrophe, KeyCode.Quotation, mod_code);
+            case VK_BACK;       return KeyCode.Backspace, mod_code;
+            case VK_TAB;        return KeyCode.Tab, mod_code;
+            case VK_RETURN;     return KeyCode.Enter, mod_code;
+            case VK_SPACE;      return KeyCode.Space, mod_code;
+            case VK_DELETE;     return KeyCode.Delete, mod_code;
+            case VK_ESCAPE;     return KeyCode.Escape, mod_code;
+        }
+
+        return KeyCode.Unhandled, mod_code;
     }
 
     ModCode convert_mouse_modcode(u64 wParam) {
@@ -459,4 +506,11 @@ else #if os == OS.Windows {
 
         return mod_code;
     }
+}
+
+KeyCode, ModCode select_keycode(KeyCode code, KeyCode shifted_code, ModCode mod_code) {
+    if mod_code & ModCode.Shift
+        return shifted_code, mod_code & (ModCode.Alt | ModCode.Control);
+
+    return code, mod_code;
 }

@@ -36,7 +36,7 @@ bool handle_command_prompt_press(PressState state, KeyCode code, ModCode mod, st
         case KeyCode.Enter;
             if command_prompt_buffer.length > 0 {
                 command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-                call_console_command(command);
+                call_command(command);
                 command_prompt_buffer.reset = true;
             }
         default;
@@ -49,7 +49,7 @@ bool handle_command_prompt_press(PressState state, KeyCode code, ModCode mod, st
     return true;
 }
 
-call_console_command(string command) {
+call_command(string command) {
     // Remove initial padding
     name_start := 0;
     while name_start < command.length {
@@ -101,9 +101,9 @@ call_console_command(string command) {
     }
 
     // Attempt to find the function and then call it
-    each console_command in console_commands {
-        if console_command.name == name {
-            command_prompt_buffer.result = console_command.handler(arguments);
+    each command_def in commands {
+        if command_def.name == name {
+            command_prompt_buffer.result = command_def.handler(arguments);
             return;
         }
     }
@@ -129,7 +129,7 @@ struct CommandDefinition {
     handler: ConsoleCommand;
 }
 
-console_commands: Array<CommandDefinition>;
+commands: Array<CommandDefinition>;
 
 display_command_prompt: bool;
 
