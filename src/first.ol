@@ -29,10 +29,8 @@ application_name := "Editor";
         optimizations: ReleaseOptimizations;
         get_current_optimizations(&optimizations);
 
-        if os == OS.Windows {
-            // @Robustness instcombine pass is not working on Windows, so disable
-            optimizations.combine_redudant_instruction = false;
-        }
+        // @Robustness instcombine pass is not working on Windows, so disable
+        optimizations.combine_redudant_instruction = false;
 
         optimizations.forget_scalar_evolution_in_loop_unrolling = true;
         set_optimizations(&optimizations);
