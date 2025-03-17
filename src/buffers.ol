@@ -28,13 +28,19 @@ draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
 
     buffer := buffers[window.buffer_index];
     start_line := clamp(window.start_line, 0, buffer.line_count - 1);
+    cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
+    digits := buffer.line_count_digits;
 
     line := buffer.lines;
-    line_number := 1;
+    line_number: u32 = 1;
     while line != null && position.y > -1.0 {
         if line_number > start_line {
             line_string: string = { length = line.length; data = line.data.data; }
-            position = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0), line_max_x);
+            cursor := -1;
+            if line_number == cursor_line {
+                cursor = clamp(window.cursor, 0, line.length - 1);
+            }
+            position.y = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0), line_number, digits, cursor, line_max_x);
         }
         line = line.next;
         line_number++;
@@ -66,6 +72,8 @@ open_file_buffer(string path) {
                     line.data[line.length++] = char;
                 }
             }
+
+            calculate_line_digits(&buffer);
         }
     }
 
@@ -103,6 +111,7 @@ move_line(bool up, u32 line_changes = 1) {
 struct FileBuffer {
     relative_path: string;
     line_count: u32;
+    line_count_digits: u32;
     lines: BufferLine*;
 }
 
@@ -142,6 +151,16 @@ BufferLine* allocate_line() {
     line.data.length = line_buffer_length;
     line.data.data = pointer + size_of(BufferLine);
     return line;
+}
+
+calculate_line_digits(FileBuffer* buffer) {
+    digit_count: u32 = 1;
+    value := 10;
+    while value < buffer.line_count {
+        value *= 10;
+        digit_count++;
+    }
+    buffer.line_count_digits = digit_count;
 }
 
 scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {

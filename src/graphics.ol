@@ -88,10 +88,16 @@ struct InstanceBuffer {
     data: void*;
 }
 
+enum QuadFlags : u32 {
+    None;
+    SingleChannel;
+    Solid;
+}
+
 struct QuadInstanceData {
     color: Vector4 = { x = 1.0; y = 1.0; z = 1.0; w = 1.0; }
     position: Vector3;
-    single_channel: u32;
+    flags: QuadFlags;
     width: float;
     height: float;
     bottom_left_texture_coord: Vector2;
@@ -1094,7 +1100,7 @@ bool set_current_command_buffer() {
 
 begin_ui_render_pass() {
     clear_values: Array<VkClearValue>[1];
-    clear_values[0].color.float32 = [0.0, 0.0, 0.0, 1.0]
+    clear_values[0].color.float32 = [0.1, 0.1, 0.1, 1.0]
 
     render_pass_info: VkRenderPassBeginInfo = {
         renderPass = ui_render_pass;
