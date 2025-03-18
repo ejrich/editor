@@ -38,7 +38,11 @@ draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
             line_string: string = { length = line.length; data = line.data.data; }
             cursor := -1;
             if line_number == cursor_line {
-                cursor = clamp(window.cursor, 0, line.length - 1);
+                cursor = window.cursor;
+                if line.length == 0
+                    cursor = 0;
+                else if cursor > line.length
+                    cursor = line.length - 1;
             }
             position.y = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0), line_number, digits, cursor, line_max_x);
         }
