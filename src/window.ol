@@ -87,7 +87,7 @@ create_window() {
         }
         RegisterClassExA(&window_class);
 
-        window.handle = CreateWindowExA(0, application_name, application_name, WindowStyle.WS_OVERLAPPEDWINDOW | WindowStyle.WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, settings.window_width, settings.window_height, null, null, hinstance, null);
+        window.handle = CreateWindowExA(ExtendedWindowStyle.WS_EX_LAYERED, application_name, application_name, WindowStyle.WS_OVERLAPPEDWINDOW | WindowStyle.WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, settings.window_width, settings.window_height, null, null, hinstance, null);
         SetWindowPos(window.handle, null, 0, 0, settings.window_width, settings.window_height, SWPFlags.SWP_FRAMECHANGED);
 
         margins: MARGINS = {
@@ -97,6 +97,7 @@ create_window() {
             cyBottomHeight = -1;
         }
         hr := DwmExtendFrameIntoClientArea(window.handle, &margins);
+        SetLayeredWindowAttributes(window.handle, 0x00FFFFFF, 204, 2);
     }
 
     log("Opened window of size %x% with handle %\n", settings.window_width, settings.window_height, window.handle);
