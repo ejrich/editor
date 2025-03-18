@@ -436,7 +436,7 @@ load_font_texture_job(int index, JobData data) {
         glyph: Glyph = {
             pixel_dimensions = { x = cast(float, glyph_slot.bitmap.width); y = cast(float, glyph_slot.bitmap.rows); }
             pixel_bearing = { x = cast(float, glyph_slot.bitmap_left); y = cast(float, glyph_slot.bitmap_top); }
-             x_offset = texture_width;
+            x_offset = texture_width;
         }
         adjust_glyph_to_window(&glyph);
 

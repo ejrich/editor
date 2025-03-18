@@ -1100,7 +1100,8 @@ bool set_current_command_buffer() {
 
 begin_ui_render_pass() {
     clear_values: Array<VkClearValue>[1];
-    clear_values[0].color.float32 = [0.157, 0.157, 0.157, 0.0]
+    // clear_values[0].color.float32 = [0.157, 0.157, 0.157, 0.8]
+    clear_values[0].color.float32 = [0.02, 0.02, 0.02, 0.8]
 
     render_pass_info: VkRenderPassBeginInfo = {
         renderPass = ui_render_pass;
@@ -1954,7 +1955,7 @@ create_swap_chain() {
         imageArrayLayers = 1;
         imageUsage = VkImageUsageFlagBits.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         preTransform = capabilities.currentTransform;
-        compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
         presentMode = present_mode;
         clipped = VK_TRUE;
         oldSwapchain = swap_chain;

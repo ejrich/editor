@@ -44,36 +44,24 @@ init_display() {
 create_window() {
     #if os == OS.Linux {
         screen := XDefaultScreen(window.handle);
-        black := XBlackPixel(window.handle, screen);
-        white := XWhitePixel(window.handle, screen);
+
+        vis: XVisualInfo;
+        XMatchVisualInfo(window.handle, screen, 32, 4, &vis);
 
         default_window := XDefaultRootWindow(window.handle);
-        x_win := XCreateSimpleWindow(window.handle, default_window, 0, 0, settings.window_width, settings.window_height, 0, white, black);
+        attributes: XSetWindowAttributes = {
+            background_pixel = 0x0;
+            event_mask = 0x0023200F;
+            colormap = XCreateColormap(window.handle, default_window, vis.visual, 0);
+        }
+
+        window.window = XCreateWindow(window.handle, default_window, 0, 0, settings.window_width, settings.window_height, 0, vis.depth, 1, vis.visual, 0x0000281A, &attributes);
+        window.graphics_context = XCreateGC(window.handle, window.window, 0, null);
 
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
 
-        size_hints: XSizeHints = {
-            flags = 0x1;
-            min_width = settings.window_width; max_width = settings.window_width;
-            min_height = settings.window_height; max_height = settings.window_height;
-        }
-        wm_hints: XWMHints = { flags = 0x3; input = 1; }
-        XSetWMProperties(window.handle, x_win, &name, null, null, 0, &size_hints, &wm_hints, null);
-
-        XSelectInput(window.handle, x_win, XInputMasks.AllEventMask);
-
-        gc := XCreateGC(window.handle, x_win, 0, null);
-
-        XSetBackground(window.handle, gc, white);
-        XSetForeground(window.handle, gc, black);
-
-        XClearWindow(window.handle, x_win);
-        XMapRaised(window.handle, x_win);
-
-        XSync(window.handle, false);
-
-        window = { window = x_win; graphics_context = gc; }
+        XMapRaised(window.handle, window.window);
     }
     else #if os == OS.Windows {
         hinstance := GetModuleHandleA(null);
