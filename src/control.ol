@@ -65,11 +65,13 @@ bool move_down(PressState state, ModCode mod) {
 [keybind]
 bool move_left(PressState state, ModCode mod) {
     // TODO Properly implement with visual mode
+    move_cursor(true);
     return true;
 }
 
 [keybind]
 bool move_right(PressState state, ModCode mod) {
     // TODO Properly implement with visual mode
+    move_cursor(false);
     return true;
 }

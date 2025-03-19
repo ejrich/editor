@@ -112,6 +112,15 @@ move_line(bool up, u32 line_changes = 1) {
     }
 }
 
+move_cursor(bool left, u32 cursor_changes = 1) {
+    switch current_window {
+        case SelectedWindow.Left;
+            move_buffer_cursor(&left_window, left, cursor_changes);
+        case SelectedWindow.Right;
+            move_buffer_cursor(&right_window, left, cursor_changes);
+    }
+}
+
 struct FileBuffer {
     relative_path: string;
     line_count: u32;
@@ -214,5 +223,43 @@ move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
         buffer := buffers[window.buffer_index];
         window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
         window.line = clamp(window.line, 0, buffer.line_count - 1);
+    }
+}
+
+move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
+    if window.buffer_index < 0 {
+        window.line = 0;
+        window.start_line = 0;
+    }
+    else {
+        buffer := buffers[window.buffer_index];
+        line := buffer.lines;
+        line_number := 0;
+        while line != null && line_number != window.line {
+            line = line.next;
+            line_number++;
+        }
+
+        if line == null || line.length == 0 return;
+
+        if left {
+            if cursor_changes > window.cursor {
+                window.cursor = 0;
+            }
+            else if window.cursor >= line.length {
+                window.cursor = line.length - cursor_changes - 1;
+            }
+            else {
+                window.cursor -= cursor_changes;
+            }
+        }
+        else {
+            if window.cursor + cursor_changes >= line.length {
+                window.cursor = line.length - 1;
+            }
+            else {
+                window.cursor += cursor_changes;
+            }
+        }
     }
 }

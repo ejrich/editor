@@ -1100,7 +1100,6 @@ bool set_current_command_buffer() {
 
 begin_ui_render_pass() {
     clear_values: Array<VkClearValue>[1];
-    // clear_values[0].color.float32 = [0.157, 0.157, 0.157, 0.8]
     clear_values[0].color.float32 = [0.02, 0.02, 0.02, 0.8]
 
     render_pass_info: VkRenderPassBeginInfo = {
