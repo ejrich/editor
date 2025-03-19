@@ -1640,8 +1640,8 @@ create_graphics_pipeline(ShaderName shader, bool use_existing = false) {
         srcColorBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_SRC_ALPHA;
         dstColorBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         colorBlendOp = VkBlendOp.VK_BLEND_OP_ADD;
-        srcAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE;
-        dstAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ZERO;
+        srcAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_SRC_ALPHA;
+        dstAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         alphaBlendOp = VkBlendOp.VK_BLEND_OP_ADD;
     }
 
@@ -1930,6 +1930,11 @@ create_swap_chain() {
     capabilities: VkSurfaceCapabilitiesKHR;
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &capabilities);
 
+    composite_alpha := capabilities.supportedCompositeAlpha & VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    if composite_alpha != VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR {
+        composite_alpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+    }
+
     if capabilities.currentExtent.width != 0xFFFFFFFF {
         swap_chain_extent = capabilities.currentExtent;
     }
@@ -1955,8 +1960,7 @@ create_swap_chain() {
         imageArrayLayers = 1;
         imageUsage = VkImageUsageFlagBits.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         preTransform = capabilities.currentTransform;
-        // compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
-        compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+        compositeAlpha = composite_alpha;
         presentMode = present_mode;
         clipped = VK_TRUE;
         oldSwapchain = swap_chain;
