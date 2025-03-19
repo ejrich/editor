@@ -1623,7 +1623,7 @@ create_graphics_pipeline(ShaderName shader, bool use_existing = false) {
         rasterizerDiscardEnable = VK_FALSE;
         polygonMode = VkPolygonMode.VK_POLYGON_MODE_FILL;
         lineWidth = 1.0;
-        cullMode = VkCullModeFlagBits.VK_CULL_MODE_BACK_BIT;
+        cullMode = VkCullModeFlagBits.VK_CULL_MODE_NONE;
         frontFace = VkFrontFace.VK_FRONT_FACE_CLOCKWISE;
         depthBiasEnable = VK_FALSE;
     }
@@ -1955,7 +1955,8 @@ create_swap_chain() {
         imageArrayLayers = 1;
         imageUsage = VkImageUsageFlagBits.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
         preTransform = capabilities.currentTransform;
-        compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+        // compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR;
+        compositeAlpha = VkCompositeAlphaFlagBitsKHR.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
         presentMode = present_mode;
         clipped = VK_TRUE;
         oldSwapchain = swap_chain;

@@ -85,7 +85,7 @@ create_window() {
             cyBottomHeight = -1;
         }
         hr := DwmExtendFrameIntoClientArea(window.handle, &margins);
-        SetLayeredWindowAttributes(window.handle, 0x00FFFFFF, 204, 2);
+        SetLayeredWindowAttributes(window.handle, 0x0, 204, 2);
     }
 
     log("Opened window of size %x% with handle %\n", settings.window_width, settings.window_height, window.handle);
