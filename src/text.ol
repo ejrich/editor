@@ -107,9 +107,9 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 line_number, u32 digits, int cursor, float max_x) {
+float render_line(string text, Vector3 position, u32 line_number, u32 digits, int cursor, float max_x) {
     // Load the font and texture
-    font_texture := load_font_texture(size);
+    font_texture := load_font_texture(settings.font_size);
     if font_texture == null return position.y;
 
     glyphs := font_texture.glyphs;
@@ -129,7 +129,8 @@ float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 li
             y_pos := y - glyph.quad_adjust.y;
 
             line_number_quads[length++] = {
-                color = color; position = { x = x_pos; y = y_pos; z = 0.0; }
+                color = appearance.line_number_color;
+                position = { x = x_pos; y = y_pos; z = 0.0; }
                 flags = QuadFlags.SingleChannel;
                 width = glyph.quad_dimensions.x;
                 height = glyph.quad_dimensions.y;
@@ -149,7 +150,7 @@ float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 li
 
     if text.length == 0 {
         if cursor == 0 {
-            draw_cursor(font_texture, x, y, color);
+            draw_cursor(font_texture, x, y);
         }
 
         position.y -= font_texture.line_height;
@@ -158,7 +159,7 @@ float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 li
 
     // Create the glyphs for the text string
     {
-        quad_data: Array<QuadInstanceData>[text.length];
+        quad_data: Array<QuadInstanceData>[text.length + 1];
         i, length := 0;
 
         while i < text.length {
@@ -168,8 +169,10 @@ float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 li
                 y = position.y;
             }
 
+            font_color := appearance.font_color;
             if i == cursor {
-                draw_cursor(font_texture, x, y, color);
+                font_color = appearance.cursor_font_color;
+                draw_cursor(font_texture, x, y);
             }
 
             char := text[i];
@@ -179,7 +182,8 @@ float render_line(string text, u32 size, Vector3 position, Vector4 color, u32 li
                 y_pos := y - glyph.quad_adjust.y;
 
                 quad_data[length++] = {
-                    color = color; position = { x = x_pos; y = y_pos; z = 0.0; }
+                    color = font_color;
+                    position = { x = x_pos; y = y_pos; z = 0.0; }
                     flags = QuadFlags.SingleChannel;
                     width = glyph.quad_dimensions.x;
                     height = glyph.quad_dimensions.y;
@@ -317,13 +321,13 @@ adjust_line(Array<QuadInstanceData> array, int start_index, int length, TextAlig
     }
 }
 
-draw_cursor(FontTexture* font_texture, float x, float y, Vector4 color) {
+draw_cursor(FontTexture* font_texture, float x, float y) {
     x_pos := x + font_texture.quad_advance / 2.0;
     y_pos := y + font_texture.line_height / 2.0 - font_texture.max_line_bearing_y / 3.0;
 
     cursor_quad: QuadInstanceData = {
-        color = vec4(1.0 - color.x, 1.0 - color.y, 1.0 - color.z, color.w);
-        position = { x = x_pos; y = y_pos; z = 0.0; }
+        color = appearance.cursor_color;
+        position = { x = x_pos; y = y_pos; z = 0.1; }
         flags = QuadFlags.Solid;
         width = font_texture.quad_advance;
         height = font_texture.line_height;

@@ -72,9 +72,6 @@ void main() {
             out_color = frag_color * texture;
             break;
         case SingleChannel:
-            if (texture.r == 0.0)
-                discard;
-
             out_color = vec4(frag_color.xyz, frag_color.w * texture.r);
             break;
         case Solid:

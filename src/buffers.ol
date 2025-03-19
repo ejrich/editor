@@ -5,7 +5,7 @@ draw_buffers() {
     if left_window.displayed {
         // TODO Reserve space and draw boundaries
         if left_window.buffer_index >= 0 {
-            position := vec3(-0.99, 1.0 - line_height);
+            position := vec3(-1.0, 1.0 - line_height);
             draw_buffer_window(&left_window, position, !right_window.displayed);
         }
     }
@@ -13,9 +13,9 @@ draw_buffers() {
     if right_window.displayed {
         // TODO Reserve space and draw boundaries
         if right_window.buffer_index >= 0 {
-            position := vec3(0.01, 1.0 - line_height);
+            position := vec3(0.0, 1.0 - line_height);
             if !left_window.displayed {
-                position.x = -0.99;
+                position.x = -1.0;
             }
             draw_buffer_window(&right_window, position, !left_window.displayed);
         }
@@ -44,7 +44,7 @@ draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
                 else if cursor > line.length
                     cursor = line.length - 1;
             }
-            position.y = render_line(line_string, settings.font_size, position, vec4(1.0, 1.0, 1.0, 1.0), line_number, digits, cursor, line_max_x);
+            position.y = render_line(line_string, position, line_number, digits, cursor, line_max_x);
         }
         line = line.next;
         line_number++;

@@ -1099,8 +1099,9 @@ bool set_current_command_buffer() {
 }
 
 begin_ui_render_pass() {
-    clear_values: Array<VkClearValue>[1];
-    clear_values[0].color.float32 = [0.02, 0.02, 0.02, 0.8]
+    clear_values: Array<VkClearValue>[2];
+    clear_values[0].color.float32 = [appearance.background_color.x, appearance.background_color.y, appearance.background_color.z, appearance.background_color.w]
+    clear_values[1].depthStencil = { depth = 1.0; stencil = 0; }
 
     render_pass_info: VkRenderPassBeginInfo = {
         renderPass = ui_render_pass;
@@ -1629,8 +1630,7 @@ create_graphics_pipeline(ShaderName shader, bool use_existing = false) {
 
     multisampling: VkPipelineMultisampleStateCreateInfo = {
         rasterizationSamples = msaa_samples;
-        sampleShadingEnable = VK_TRUE;
-        minSampleShading = 0.2;
+        sampleShadingEnable = VK_FALSE;
     }
 
     color_blend_attachment: VkPipelineColorBlendAttachmentState = {
@@ -2023,6 +2023,17 @@ create_swap_chain() {
             finalLayout = VkImageLayout.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 
+        depth_attachment: VkAttachmentDescription = {
+            format = depth_format;
+            samples = msaa_samples;
+            loadOp = VkAttachmentLoadOp.VK_ATTACHMENT_LOAD_OP_CLEAR;
+            storeOp = VkAttachmentStoreOp.VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            stencilLoadOp = VkAttachmentLoadOp.VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            stencilStoreOp = VkAttachmentStoreOp.VK_ATTACHMENT_STORE_OP_DONT_CARE;
+            initialLayout = VkImageLayout.VK_IMAGE_LAYOUT_UNDEFINED;
+            finalLayout = VkImageLayout.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        }
+
         color_attachment_resolve: VkAttachmentDescription = {
             format = swap_chain_format.format;
             samples = VkSampleCountFlagBits.VK_SAMPLE_COUNT_1_BIT;
@@ -2034,19 +2045,24 @@ create_swap_chain() {
             finalLayout = VkImageLayout.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
         }
 
-        attachments: Array<VkAttachmentDescription> = [color_attachment, color_attachment_resolve]
+        attachments: Array<VkAttachmentDescription> = [color_attachment, depth_attachment, color_attachment_resolve]
 
         color_ref: VkAttachmentReference = {
             attachment = 0;
             layout = VkImageLayout.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 
-        resolve_ref: VkAttachmentReference = {
+        depth_ref: VkAttachmentReference = {
             attachment = 1;
+            layout = VkImageLayout.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        }
+
+        resolve_ref: VkAttachmentReference = {
+            attachment = 2;
             layout = VkImageLayout.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
         }
 
-        create_render_pass(&ui_render_pass, attachments, &color_ref, null, &resolve_ref);
+        create_render_pass(&ui_render_pass, attachments, &color_ref, &depth_ref, &resolve_ref);
     }
 
     // Create color image view
@@ -2102,7 +2118,7 @@ create_swap_chain() {
     depth_image_views: Array<VkImageView*> = [depth_image_view]
 
     array_resize(&ui_framebuffers, image_count, allocate, reallocate);
-    create_framebuffers(ui_framebuffers, ui_render_pass, color_image_views, swap_chain_image_views);
+    create_framebuffers(ui_framebuffers, ui_render_pass, color_image_views, depth_image_views, swap_chain_image_views);
 }
 
 create_render_pass(VkRenderPass** render_pass, Array<VkAttachmentDescription> attachments, VkAttachmentReference* color, VkAttachmentReference* depth, VkAttachmentReference* resolve = null) {
