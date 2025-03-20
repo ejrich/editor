@@ -1195,15 +1195,15 @@ draw(int vertices, int instance_count = 1, int first_instance = 0, int buffer_le
 }
 
 draw_quad(QuadInstanceData* quad_data, int instance_count = 1, DescriptorSet* texture = null) {
-    texture_descriptor: DescriptorSet;
-    if texture texture_descriptor = *texture;
-    else       texture_descriptor = quad_default_texture_descriptor_set;
-
     buffer_offset: u64 = quad_instance_data_frame_offset * frame_index;
-    if current_quad_texture.set != null && current_quad_texture.set != texture_descriptor.set {
-        flush_quads(buffer_offset);
+
+    if texture {
+        if current_quad_texture.set != null && current_quad_texture.set != texture.set {
+            flush_quads(buffer_offset);
+        }
+
+        current_quad_texture = *texture;
     }
-    current_quad_texture = texture_descriptor;
 
     quad_index := 0;
 
@@ -1252,6 +1252,9 @@ draw_quad(QuadInstanceData* quad_data, int instance_count = 1, DescriptorSet* te
 
 finish_quads() {
     buffer_offset: u64 = quad_instance_data_frame_offset * frame_index;
+    if current_quad_texture.set == null {
+        current_quad_texture = quad_default_texture_descriptor_set;
+    }
     flush_quads(buffer_offset);
 
     current_quad_texture.set = null;

@@ -107,14 +107,13 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-float render_line(string text, Vector3 position, u32 line_number, u32 digits, int cursor, float max_x) {
+u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, float max_x) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
-    if font_texture == null return position.y;
+    if font_texture == null return 0;
 
     glyphs := font_texture.glyphs;
-    x := position.x;
-    y := position.y;
+    x_start := x;
 
     // Draw the line background
     if cursor >= 0 {
@@ -135,7 +134,7 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
             height = rendered_line_count * font_texture.line_height;
         }
 
-        draw_quad(&current_line_quad, 1, &font_texture.descriptor_set);
+        draw_quad(&current_line_quad, 1);
     }
 
     // Create the glyphs for the line number
@@ -164,8 +163,8 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
             line_number /= 10;
         }
 
-        position.x += (digits + 1) * font_texture.quad_advance;
-        x = position.x;
+        x_start += (digits + 1) * font_texture.quad_advance;
+        x = x_start;
 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
@@ -175,20 +174,20 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
             draw_cursor(font_texture, x, y);
         }
 
-        position.y -= font_texture.line_height;
-        return position.y;
+        return 1;
     }
 
     // Create the glyphs for the text string
+    line_count := 1;
     {
         quad_data: Array<QuadInstanceData>[text.length];
         i, length := 0;
 
         while i < text.length {
             if x + font_texture.quad_advance > max_x {
-                position.y -= font_texture.line_height;
-                x = position.x;
-                y = position.y;
+                x = x_start;
+                y -= font_texture.line_height;
+                line_count++;
             }
 
             font_color := appearance.font_color;
@@ -222,8 +221,7 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
     }
 
-    position.y -= font_texture.line_height;
-    return position.y;
+    return line_count;
 }
 
 render_text_box(string text, u32 size, Vector3 position, Vector4 color, float max_width) {
@@ -323,7 +321,10 @@ struct Glyph {
 }
 
 line_height: float;
+first_line_offset: float;
 max_lines: u32;
+max_chars_per_line: u32;
+max_chars_per_line_full: u32;
 
 
 #private
@@ -355,7 +356,7 @@ draw_cursor(FontTexture* font_texture, float x, float y) {
         height = font_texture.line_height;
     }
 
-    draw_quad(&cursor_quad, 1, &font_texture.descriptor_set);
+    draw_quad(&cursor_quad, 1);
 }
 
 FontTexture* load_font_texture(u32 size) {
@@ -527,7 +528,10 @@ adjust_texture_to_window(FontTexture* texture) {
 
     if texture.size == settings.font_size {
         line_height = texture.line_height;
+        first_line_offset = line_height - texture.max_line_bearing_y / 3.0;
         max_lines = cast(u32, 2.0 / line_height);
+        max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
+        max_chars_per_line_full = max_chars_per_line * 2;
     }
 }
 

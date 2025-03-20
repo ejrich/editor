@@ -2,28 +2,35 @@
 draw_buffers() {
     if !is_font_ready(settings.font_size) return;
 
+    if left_window.displayed && right_window.displayed {
+        divider_quad: QuadInstanceData = {
+            color = appearance.font_color;
+            flags = QuadFlags.Solid;
+            width = 1.0 / settings.window_width; height = 2.0;
+        }
+
+        draw_quad(&divider_quad, 1);
+    }
+
     if left_window.displayed {
-        // TODO Reserve space and draw boundaries
         if left_window.buffer_index >= 0 {
-            position := vec3(-1.0, 1.0 - line_height);
-            draw_buffer_window(&left_window, position, !right_window.displayed);
+            draw_buffer_window(&left_window, -1.0, !right_window.displayed);
         }
     }
 
     if right_window.displayed {
-        // TODO Reserve space and draw boundaries
         if right_window.buffer_index >= 0 {
-            position := vec3(0.0, 1.0 - line_height);
+            x := 0.0;
             if !left_window.displayed {
-                position.x = -1.0;
+                x = -1.0;
             }
-            draw_buffer_window(&right_window, position, !left_window.displayed);
+            draw_buffer_window(&right_window, x, !left_window.displayed);
         }
     }
 }
 
-draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
-    line_max_x := position.x + 0.99;
+draw_buffer_window(BufferWindow* window, float x, bool full_width) {
+    line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
 
     buffer := buffers[window.buffer_index];
@@ -33,7 +40,10 @@ draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
 
     line := buffer.lines;
     line_number: u32 = 1;
-    while line != null && position.y > -1.0 {
+    total_lines_rendered: u32 = 0;
+    y := 1.0 - first_line_offset;
+
+    while line != null && total_lines_rendered < max_lines {
         if line_number > start_line {
             line_string: string = { length = line.length; data = line.data.data; }
             cursor := -1;
@@ -44,7 +54,9 @@ draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
                 else if cursor > line.length
                     cursor = line.length - 1;
             }
-            position.y = render_line(line_string, position, line_number, digits, cursor, line_max_x);
+            lines := render_line(line_string, x, y, line_number, digits, cursor, line_max_x);
+            y -= line_height * lines;
+            total_lines_rendered += lines;
         }
         line = line.next;
         line_number++;
@@ -69,6 +81,7 @@ open_file_buffer(string path) {
                     next_line := allocate_line();
                     buffer.line_count++;
                     line.next = next_line;
+                    next_line.previous = line;
                     line = next_line;
                 }
                 else {
@@ -133,6 +146,7 @@ line_buffer_length := 500; #const
 struct BufferLine {
     length: u32;
     data: string;
+    previous: BufferLine*;
     next: BufferLine*;
 }
 
@@ -207,6 +221,8 @@ move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
         window.start_line = 0;
     }
     else {
+        buffer := buffers[window.buffer_index];
+
         if up {
             window.line -= line_changes;
             if window.start_line + settings.scroll_offset > window.line {
@@ -215,12 +231,12 @@ move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
         }
         else {
             window.line += line_changes;
-            if window.line - window.start_line + settings.scroll_offset > max_lines {
+            if window.line + settings.scroll_offset <= buffer.line_count &&
+                window.line - window.start_line + settings.scroll_offset > max_lines {
                 window.start_line = window.line + settings.scroll_offset - max_lines;
             }
         }
 
-        buffer := buffers[window.buffer_index];
         window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
         window.line = clamp(window.line, 0, buffer.line_count - 1);
     }
