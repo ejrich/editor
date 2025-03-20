@@ -116,6 +116,28 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
     x := position.x;
     y := position.y;
 
+    // Draw the line background
+    if cursor >= 0 {
+        line_number_offset := (digits + 1) * font_texture.quad_advance;
+        available_line_width := max_x - x - line_number_offset;
+
+        full_line_width := text.length * font_texture.quad_advance;
+        rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
+
+        current_line_quad: QuadInstanceData = {
+            color = appearance.current_line_color;
+            flags = QuadFlags.Solid;
+            position = {
+                x = (max_x + x) / 2;
+                y = y - font_texture.max_line_bearing_y / 3 + font_texture.line_height * (1 - rendered_line_count / 2.0);
+                z = 0.2; }
+            width = max_x - x;
+            height = rendered_line_count * font_texture.line_height;
+        }
+
+        draw_quad(&current_line_quad, 1, &font_texture.descriptor_set);
+    }
+
     // Create the glyphs for the line number
     {
         line_number_quads: Array<QuadInstanceData>[digits];
@@ -159,7 +181,7 @@ float render_line(string text, Vector3 position, u32 line_number, u32 digits, in
 
     // Create the glyphs for the text string
     {
-        quad_data: Array<QuadInstanceData>[text.length + 1];
+        quad_data: Array<QuadInstanceData>[text.length];
         i, length := 0;
 
         while i < text.length {
