@@ -14,8 +14,9 @@
 main() {
     init_subsystems();
 
-    // TODO Remove
-    open_file_buffer("src/first.ol");
+    each input_file in get_command_line_arguments() {
+        open_file_buffer(input_file);
+    }
 
     frequency := cast(float, get_performance_frequency());
     start := get_performance_counter();
