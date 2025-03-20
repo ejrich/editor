@@ -23,7 +23,7 @@ draw_buffers() {
 }
 
 draw_buffer_window(BufferWindow* window, Vector3 position, bool full_width) {
-    line_max_x := position.x + 0.98;
+    line_max_x := position.x + 0.99;
     if full_width line_max_x += 1.0;
 
     buffer := buffers[window.buffer_index];

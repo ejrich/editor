@@ -820,9 +820,9 @@ Texture create_texture(void* buffer, int width, int height, int channels, int in
 
     format: VkFormat;
     switch channels {
-        case 1; format = VkFormat.VK_FORMAT_R8_SRGB;
-        case 2; format = VkFormat.VK_FORMAT_R8G8_SRGB;
-        case 4; format = VkFormat.VK_FORMAT_R8G8B8A8_SRGB;
+        case 1; format = VkFormat.VK_FORMAT_R8_UNORM;
+        case 2; format = VkFormat.VK_FORMAT_R8G8_UNORM;
+        case 4; format = VkFormat.VK_FORMAT_R8G8B8A8_UNORM;
         default; {
             log("Unable to determine texture format from given number of channels %\n", channels);
             exit_program(1);
@@ -1911,7 +1911,7 @@ create_swap_chain() {
 
     format_set := false;
     each format in formats {
-        if format.format == VkFormat.VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VkColorSpaceKHR.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
+        if format.format == VkFormat.VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace == VkColorSpaceKHR.VK_COLOR_SPACE_SRGB_NONLINEAR_KHR {
             swap_chain_format = format;
             format_set = true;
         }
