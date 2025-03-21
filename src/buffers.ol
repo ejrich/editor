@@ -116,6 +116,13 @@ handle_buffer_scroll(ScrollDirection direction) {
     }
 }
 
+resize_buffers() {
+    if left_window.displayed
+        adjust_start_line(&left_window);
+    if right_window.displayed
+        adjust_start_line(&right_window);
+}
+
 move_line(bool up, u32 line_changes = 1) {
     switch current_window {
         case SelectedWindow.Left;
@@ -194,24 +201,69 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;
+        return;
     }
-    else {
-        if up {
-            window.start_line -= line_changes;
-            if window.line - window.start_line + settings.scroll_offset > max_lines {
-                window.line = window.start_line + max_lines - settings.scroll_offset;
+
+    if up window.start_line -= line_changes;
+    else  window.start_line += line_changes;
+
+    buffer := buffers[window.buffer_index];
+    window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
+    // window.line = clamp(window.line, 0, buffer.line_count - 1);
+    window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
+
+    if settings.scroll_offset > max_lines {
+        window.line = window.start_line;
+        return;
+    }
+
+    starting_line := buffer.lines;
+    line_number := 0;
+    while starting_line != null && line_number != window.start_line {
+        starting_line = starting_line.next;
+        line_number++;
+    }
+
+    current_line := starting_line;
+    full_width := left_window.displayed ^ right_window.displayed;
+    rendered_lines := calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+    while current_line != null && line_number != window.line {
+        current_line = current_line.next;
+        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+        line_number++;
+    }
+
+    if !up {
+        if rendered_lines <= settings.scroll_offset {
+            while current_line.next != null && rendered_lines <= settings.scroll_offset {
+                window.line++;
+                current_line = current_line.next;
+                rendered_lines += calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
             }
         }
-        else {
-            window.start_line += line_changes;
-            if window.start_line + settings.scroll_offset > window.line {
-                window.line = window.start_line + settings.scroll_offset;
+        return;
+    }
+
+    if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
+        // Check that there are more lines to scroll to
+        end_line := current_line.next;
+        rendered_lines_after_current: u32;
+        while end_line != null {
+            rendered_lines_after_current += calculate_rendered_lines(buffer.line_count_digits, end_line.length, full_width);
+            end_line = end_line.next;
+
+            if rendered_lines_after_current >= settings.scroll_offset {
+                break;
             }
         }
 
-        buffer := buffers[window.buffer_index];
-        window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
-        window.line = clamp(window.line, 0, buffer.line_count - 1);
+        if rendered_lines_after_current >= settings.scroll_offset {
+            while current_line != null && rendered_lines + settings.scroll_offset > max_lines {
+                window.line--;
+                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+                current_line = current_line.previous;
+            }
+        }
     }
 }
 
@@ -219,63 +271,124 @@ move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;
+        return;
     }
-    else {
-        buffer := buffers[window.buffer_index];
 
-        if up {
-            window.line -= line_changes;
-            if window.start_line + settings.scroll_offset > window.line {
-                window.start_line = window.line - settings.scroll_offset;
-            }
-        }
-        else {
-            window.line += line_changes;
-            if window.line + settings.scroll_offset <= buffer.line_count &&
-                window.line - window.start_line + settings.scroll_offset > max_lines {
-                window.start_line = window.line + settings.scroll_offset - max_lines;
-            }
-        }
+    if up window.line -= line_changes;
+    else  window.line += line_changes;
 
-        window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
-        window.line = clamp(window.line, 0, buffer.line_count - 1);
-    }
+    buffer := buffers[window.buffer_index];
+
+    window.line = clamp(window.line, 0, buffer.line_count - 1);
+    window.start_line = clamp(window.start_line, 0, window.line);
+    adjust_start_line(window);
 }
 
 move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;
+        return;
     }
-    else {
-        buffer := buffers[window.buffer_index];
-        line := buffer.lines;
-        line_number := 0;
-        while line != null && line_number != window.line {
-            line = line.next;
-            line_number++;
+
+    buffer := buffers[window.buffer_index];
+    line := buffer.lines;
+    line_number := 0;
+    while line != null && line_number != window.line {
+        line = line.next;
+        line_number++;
+    }
+
+    if line == null || line.length == 0 return;
+
+    if left {
+        if cursor_changes > window.cursor {
+            window.cursor = 0;
         }
-
-        if line == null || line.length == 0 return;
-
-        if left {
-            if cursor_changes > window.cursor {
-                window.cursor = 0;
-            }
-            else if window.cursor >= line.length {
-                window.cursor = line.length - cursor_changes - 1;
-            }
-            else {
-                window.cursor -= cursor_changes;
-            }
+        else if window.cursor >= line.length {
+            window.cursor = line.length - cursor_changes - 1;
         }
         else {
-            if window.cursor + cursor_changes >= line.length {
-                window.cursor = line.length - 1;
+            window.cursor -= cursor_changes;
+        }
+    }
+    else {
+        if window.cursor + cursor_changes >= line.length {
+            window.cursor = line.length - 1;
+        }
+        else {
+            window.cursor += cursor_changes;
+        }
+    }
+}
+
+adjust_start_line(BufferWindow* window) {
+    if window.buffer_index < 0 {
+        window.line = 0;
+        window.start_line = 0;
+        return;
+    }
+
+    if settings.scroll_offset > max_lines {
+        window.start_line = window.line;
+        return;
+    }
+
+    buffer := buffers[window.buffer_index];
+    starting_line := buffer.lines;
+    line_number := 0;
+    while starting_line != null && line_number != window.start_line {
+        starting_line = starting_line.next;
+        line_number++;
+    }
+
+    if starting_line == null return;
+
+    current_line := starting_line;
+    full_width := left_window.displayed ^ right_window.displayed;
+    rendered_lines := calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+    while current_line != null && line_number != window.line {
+        current_line = current_line.next;
+        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+        line_number++;
+    }
+
+    if rendered_lines <= settings.scroll_offset {
+        while starting_line.previous != null && rendered_lines <= settings.scroll_offset {
+            window.start_line--;
+            starting_line = starting_line.previous;
+            rendered_lines += calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+        }
+    }
+    else if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
+        // Check that there are more lines to scroll to
+        end_line := current_line.next;
+        rendered_lines_after_current: u32;
+        while end_line != null {
+            rendered_lines_after_current += calculate_rendered_lines(buffer.line_count_digits, end_line.length, full_width);
+            end_line = end_line.next;
+
+            if rendered_lines_after_current >= settings.scroll_offset {
+                break;
             }
-            else {
-                window.cursor += cursor_changes;
+        }
+
+        if rendered_lines_after_current >= settings.scroll_offset {
+            while starting_line != null && rendered_lines + settings.scroll_offset > max_lines {
+                window.start_line++;
+                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+                starting_line = starting_line.next;
             }
         }
     }
+}
+
+u32 calculate_rendered_lines(u32 digits, u32 line_length, bool full_width) {
+    max_chars := max_chars_per_line;
+    if full_width max_chars = max_chars_per_line_full;
+
+    max_chars -= digits + 1;
+    lines := line_length / max_chars + 1;
+
+    return lines;
 }

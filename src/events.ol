@@ -4,6 +4,7 @@ handle_window_resize() {
 
     recreate_swap_chain();
     resize_font_glyphs();
+    resize_buffers();
 }
 
 handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
