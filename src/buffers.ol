@@ -5,45 +5,58 @@ draw_buffers() {
     if left_window.displayed && right_window.displayed {
         divider_quad: QuadInstanceData = {
             color = appearance.font_color;
+            position = { y = divider_y; }
             flags = QuadFlags.Solid;
-            width = 1.0 / settings.window_width; height = 2.0;
+            width = 1.0 / settings.window_width;
+            height = divider_height;
         }
 
         draw_quad(&divider_quad, 1);
     }
 
     if left_window.displayed {
-        if left_window.buffer_index >= 0 {
-            draw_buffer_window(&left_window, -1.0, !right_window.displayed);
-        }
+        draw_buffer_window(&left_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed);
     }
 
     if right_window.displayed {
-        if right_window.buffer_index >= 0 {
-            x := 0.0;
-            if !left_window.displayed {
-                x = -1.0;
-            }
-            draw_buffer_window(&right_window, x, !left_window.displayed);
+        x := 0.0;
+        if !left_window.displayed {
+            x = -1.0;
         }
+        draw_buffer_window(&right_window, x, current_window == SelectedWindow.Right, !left_window.displayed);
     }
 }
 
-draw_buffer_window(BufferWindow* window, float x, bool full_width) {
+draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width) {
     line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
+
+    y := 1.0 - first_line_offset;
+
+    info_quad: QuadInstanceData = {
+        color = appearance.current_line_color;
+        position = { x = (x + line_max_x) / 2; y = y - max_lines * line_height + block_y_offset; z = 0.2; }
+        flags = QuadFlags.Solid;
+        width = line_max_x - x;
+        height = line_height;
+    }
+
+    draw_quad(&info_quad, 1);
+
+    if window.buffer_index < 0 return;
 
     buffer := buffers[window.buffer_index];
     start_line := clamp(window.start_line, 0, buffer.line_count - 1);
     cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
     digits := buffer.line_count_digits;
 
+    // Render the file text
     line := buffer.lines;
     line_number: u32 = 1;
-    total_lines_rendered: u32 = 0;
-    y := 1.0 - first_line_offset;
+    line_cursor: u32;
+    available_lines_to_render := max_lines;
 
-    while line != null && total_lines_rendered < max_lines {
+    while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
             line_string: string = { length = line.length; data = line.data.data; }
             cursor := -1;
@@ -53,13 +66,49 @@ draw_buffer_window(BufferWindow* window, float x, bool full_width) {
                     cursor = 0;
                 else if cursor > line.length
                     cursor = line.length - 1;
+
+                line_cursor = cursor;
             }
-            lines := render_line(line_string, x, y, line_number, digits, cursor, line_max_x);
+            lines := render_line(line_string, x, y, line_number, digits, cursor, line_max_x, available_lines_to_render);
             y -= line_height * lines;
-            total_lines_rendered += lines;
+            available_lines_to_render -= lines;
         }
         line = line.next;
         line_number++;
+    }
+
+    // Render the file information
+    {
+        y = 1.0 - first_line_offset - line_height * max_lines;
+        if selected {
+            mode_string := empty_string;
+            switch edit_mode {
+                case EditMode.Normal; {
+                    mode_string = " NORMAL ";
+                }
+                case EditMode.Insert; {
+                    mode_string = " INSERT ";
+                }
+                case EditMode.Visual; {
+                    mode_string = " VISUAL ";
+                }
+                case EditMode.VisualLine; {
+                    mode_string = " V-LINE ";
+                }
+                case EditMode.VisualBlock; {
+                    mode_string = " VBLOCK ";
+                }
+            }
+
+            // TODO Color the mode
+            render_text(mode_string, settings.font_size, vec3(x, y), appearance.font_color);
+            x += mode_string.length * quad_advance;
+        }
+
+        render_text(buffer.relative_path, settings.font_size, vec3(x + quad_advance, y), appearance.font_color);
+
+        // TODO Color the line/cursor if buffer is selected
+        render_text(settings.font_size, vec3(line_max_x, y), appearance.font_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
     }
 }
 

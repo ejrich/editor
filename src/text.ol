@@ -107,7 +107,7 @@ render_text(string text, u32 size, Vector3 position, Vector4 color, TextAlignmen
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, float max_x) {
+u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, float max_x, u32 lines_available) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -171,7 +171,7 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
 
     if text.length == 0 {
         if cursor == 0 {
-            draw_cursor(font_texture, x, y);
+            draw_cursor(x, y);
         }
 
         return 1;
@@ -185,6 +185,9 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
 
         while i < text.length {
             if x + font_texture.quad_advance > max_x {
+                if line_count >= lines_available
+                    break;
+
                 x = x_start;
                 y -= font_texture.line_height;
                 line_count++;
@@ -193,7 +196,7 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
             font_color := appearance.font_color;
             if i == cursor {
                 font_color = appearance.cursor_font_color;
-                draw_cursor(font_texture, x, y);
+                draw_cursor(x, y);
             }
 
             char := text[i];
@@ -320,8 +323,12 @@ struct Glyph {
     top_right_texture_coord: Vector2;
 }
 
+quad_advance: float;
 line_height: float;
 first_line_offset: float;
+block_y_offset: float;
+divider_y: float;
+divider_height: float;
 max_lines: u32;
 max_chars_per_line: u32;
 max_chars_per_line_full: u32;
@@ -344,16 +351,16 @@ adjust_line(Array<QuadInstanceData> array, int start_index, int length, TextAlig
     }
 }
 
-draw_cursor(FontTexture* font_texture, float x, float y) {
-    x_pos := x + font_texture.quad_advance / 2.0;
-    y_pos := y + font_texture.line_height / 2.0 - font_texture.max_line_bearing_y / 3.0;
+draw_cursor(float x, float y) {
+    x_pos := x + quad_advance / 2.0;
+    y_pos := y + block_y_offset;
 
     cursor_quad: QuadInstanceData = {
         color = appearance.cursor_color;
         position = { x = x_pos; y = y_pos; z = 0.1; }
         flags = QuadFlags.Solid;
-        width = font_texture.quad_advance;
-        height = font_texture.line_height;
+        width = quad_advance;
+        height = line_height;
     }
 
     draw_quad(&cursor_quad, 1);
@@ -527,9 +534,13 @@ adjust_texture_to_window(FontTexture* texture) {
     texture.quad_advance = cast(float, texture.pixel_advance) / settings.window_width;
 
     if texture.size == settings.font_size {
+        quad_advance = texture.quad_advance;
         line_height = texture.line_height;
         first_line_offset = line_height - texture.max_line_bearing_y / 3.0;
-        max_lines = cast(u32, 2.0 / line_height);
+        block_y_offset = line_height / 2.0 - texture.max_line_bearing_y / 3.0;
+        max_lines = cast(u32, 2.0 / line_height) - 2;
+        divider_y = line_height + texture.max_line_bearing_y / 4.0;
+        divider_height = line_height * max_lines + texture.max_line_bearing_y / 2.0;
         max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
         max_chars_per_line_full = max_chars_per_line * 2;
     }
