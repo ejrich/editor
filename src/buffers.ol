@@ -80,22 +80,28 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     // Render the file information
     {
         y = 1.0 - first_line_offset - line_height * max_lines;
+        highlight_color: Vector4;
         if selected {
             mode_string := empty_string;
             switch edit_mode {
                 case EditMode.Normal; {
+                    highlight_color = appearance.normal_mode_color;
                     mode_string = " NORMAL ";
                 }
                 case EditMode.Insert; {
+                    highlight_color = appearance.insert_mode_color;
                     mode_string = " INSERT ";
                 }
                 case EditMode.Visual; {
+                    highlight_color = appearance.visual_mode_color;
                     mode_string = " VISUAL ";
                 }
                 case EditMode.VisualLine; {
+                    highlight_color = appearance.visual_mode_color;
                     mode_string = " V-LINE ";
                 }
                 case EditMode.VisualBlock; {
+                    highlight_color = appearance.visual_mode_color;
                     mode_string = " VBLOCK ";
                 }
             }

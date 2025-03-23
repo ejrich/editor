@@ -17,6 +17,12 @@ struct Settings {
     background_color: u32;
     background_transparency: float;
     scroll_offset: u8;
+    [color]
+    normal_mode_color: u32;
+    [color]
+    insert_mode_color: u32;
+    [color]
+    visual_mode_color: u32;
 }
 
 #run {
@@ -46,6 +52,9 @@ struct AppearanceSettings {
     cursor_color: Vector4;
     cursor_font_color: Vector4;
     background_color: Vector4;
+    normal_mode_color: Vector4;
+    insert_mode_color: Vector4;
+    visual_mode_color: Vector4;
 }
 
 appearance: AppearanceSettings;
@@ -361,6 +370,9 @@ load_settings() {
         cursor_color = convert_to_color(settings.cursor_color);
         cursor_font_color = convert_to_color(settings.cursor_font_color);
         background_color = convert_to_color(settings.background_color, settings.background_transparency);
+        normal_mode_color = convert_to_color(settings.normal_mode_color);
+        insert_mode_color = convert_to_color(settings.insert_mode_color);
+        visual_mode_color = convert_to_color(settings.visual_mode_color);
     }
 }
 
@@ -410,6 +422,9 @@ get_default_settings() {
         background_color = 0x000000;
         background_transparency = 1.0;
         scroll_offset = 10;
+        normal_mode_color = 0xA89984;
+        insert_mode_color = 0x83A598;
+        visual_mode_color = 0xFE8019;
     }
 }
 
