@@ -71,7 +71,8 @@ draw_performance_stats(float average_frame_time, float frequency) {
         fps_string: string = { length = string_buffer.length; data = buffer.data; }
 
         text_color: Vector4 = { x = 1.0; y = 1.0; z = 1.0; w = 1.0; }
-        render_text(fps_string, 20, vec3(0.99, 0.95), text_color, TextAlignment.Right);
+        background_color: Vector4;
+        render_text(fps_string, 20, 0.99, 0.95, text_color, background_color, TextAlignment.Right);
 
         #if PROFILE {
             if show_profiling_data return;
@@ -97,13 +98,14 @@ draw_performance_stats(float average_frame_time, float frequency) {
                 }
             }
 
-            p := vec3(0.99, 0.90);
+            x := 0.99;
+            y := 0.90;
             each t in execution_times {
-                p.y -= 0.05;
+                y -= 0.05;
 
                 data := profiling_data[t];
                 s := format_string("% - % times, % seconds", temp_allocate, function_names[t], data.times_called, data.execution_time / frequency);
-                render_text(s, 20, p, text_color, TextAlignment.Right);
+                render_text(s, 20, x, y, text_color, background_color, TextAlignment.Right);
             }
         }
     }

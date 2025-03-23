@@ -106,15 +106,13 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
                 }
             }
 
-            // TODO Color the mode
-            render_text(mode_string, settings.font_size, vec3(x, y), appearance.font_color);
+            render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
             x += mode_string.length * quad_advance;
         }
 
-        render_text(buffer.relative_path, settings.font_size, vec3(x + quad_advance, y), appearance.font_color);
+        render_text(buffer.relative_path, settings.font_size, x + quad_advance, y, appearance.font_color, vec4());
 
-        // TODO Color the line/cursor if buffer is selected
-        render_text(settings.font_size, vec3(line_max_x, y), appearance.font_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
+        render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
     }
 }
 

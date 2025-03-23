@@ -7,17 +7,19 @@ draw_command_prompt() {
     if !display_command_prompt return;
 
     color := vec4(1.0, 1.0, 1.0, 1.0);
-    position := vec3(-0.9675, 0.95);
-    render_text("~", 20, position, color);
+    background_color: Vector4;
+    x := -0.9675;
+    y := 0.95;
+    render_text("~", 20, x, y, color, background_color);
 
-    position.x = -0.95;
+    x = -0.95;
     command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-    render_text(command_prompt_buffer_str, 20, position, color);
+    render_text(command_prompt_buffer_str, 20, x, y, color, background_color);
 
     if command_prompt_buffer.result != CommandResult.None {
         result_string := format_string("Result = %", temp_allocate, command_prompt_buffer.result);
-        position.y = 0.9;
-        render_text(result_string, 20, position, color);
+        y = 0.9;
+        render_text(result_string, 20, x, y, color, background_color);
     }
 }
 
