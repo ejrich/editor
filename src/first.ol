@@ -87,7 +87,7 @@ application_name := "Editor";
                             }
                             else
                             {
-                                error_string := format_string("Function '%' has the incorrect arguments/return type for a command. The return type needs to be 'bool' and the arguments can only be bool, integer, float, or string types", function.name);
+                                error_string := format_string("Function '%' has the incorrect arguments/return type for a command. The return type needs to be 'string, bool' and the arguments can only be bool, integer, float, or string types", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);
                             }
@@ -339,8 +339,8 @@ generate_command(FunctionAst* function) {
     function_parts: Array<string>;
 
     declaration := format_string("""
-CommandResult __%(Array<string> args) {
-    if args.length != % return CommandResult.IncorrectArgumentCount;
+CommandResult, string, bool __%(Array<string> args) {
+    if args.length != % return CommandResult.IncorrectArgumentCount, empty_string, false;
     success: bool;""", function.name, function.arguments.length);
     code_length := declaration.length;
     array_insert(&function_parts, declaration);
@@ -358,7 +358,7 @@ CommandResult __%(Array<string> args) {
             argument_parsed = format_string("""
     arg%: %;
     success, arg% = try_parse_%(args[%]);
-    if !success return CommandResult.IncorrectArgumentTypes;""", i, argument.type_info.name, i, argument.type_info.name, i);
+    if !success return CommandResult.IncorrectArgumentTypes, empty_string, false;""", i, argument.type_info.name, i, argument.type_info.name, i);
         }
 
         code_length += argument_parsed.length;
@@ -390,9 +390,8 @@ CommandResult __%(Array<string> args) {
     }
 
     ending := format_string("""
-    success = %(%);
-    if success return CommandResult.Success;
-    return CommandResult.CommandFailed;
+    result_string, free_result_string := %(%);
+    return CommandResult.Success, result_string, free_result_string;
 }""", function.name, arguments_string);
     code_length += ending.length;
     array_insert(&function_parts, ending);
@@ -410,7 +409,13 @@ CommandResult __%(Array<string> args) {
 }
 
 bool verify_command_arguments(FunctionAst* function) {
-    if function.return_type.type != TypeKind.Boolean return false;
+    if function.return_type.type != TypeKind.Compound return false;
+
+    compound_return_type := cast(CompoundTypeInfo*, function.return_type);
+    if compound_return_type.types.length != 2 ||
+        compound_return_type.types[0].type != TypeKind.String ||
+        compound_return_type.types[1].type != TypeKind.Boolean
+        return false;
 
     each argument in function.arguments {
         switch argument.type_info.type {

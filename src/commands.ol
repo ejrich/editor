@@ -1,30 +1,41 @@
+#import "parse.ol"
+
 start_command_mode() {
     command_mode = true;
     clear_buffer();
 }
 
 draw_command() {
-    if !command_mode return;
-
     background_color: Vector4;
     x := -1.0;
     y := 1.0 - first_line_offset - line_height * (max_lines + 1);
-    render_text(":", settings.font_size, x, y, appearance.font_color, background_color);
+    switch command_prompt_buffer.result {
+        case CommandResult.None; {
+            if command_mode {
+                render_text(":", settings.font_size, x, y, appearance.font_color, background_color);
 
-    x += quad_advance;
-    command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-    render_text(command_prompt_buffer_str, settings.font_size, x, y, appearance.font_color, background_color);
-
-    // if command_prompt_buffer.result != CommandResult.None {
-    //     result_string := format_string("Result = %", temp_allocate, command_prompt_buffer.result);
-    //     render_text(result_string, settings.font_size, x, y, appearance.font_color, background_color);
-    // }
+                x += quad_advance;
+                command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+                render_text(command_prompt_buffer_str, settings.font_size, x, y, appearance.font_color, background_color);
+            }
+        }
+        case CommandResult.Success; {
+            render_text(command_prompt_buffer.result_string, settings.font_size, x, y, appearance.font_color, background_color);
+        }
+        case CommandResult.IncorrectArgumentCount; {
+            render_text(settings.font_size, x, y, appearance.font_color, background_color, "Incorrect argument count for command '%'", get_command());
+        }
+        case CommandResult.IncorrectArgumentTypes; {
+            render_text(settings.font_size, x, y, appearance.font_color, background_color, "Incorrect arguments for command '%'", get_command());
+        }
+        case CommandResult.CommandNotFound; {
+            render_text(settings.font_size, x, y, appearance.font_color, background_color, "Command '%' not found", get_command());
+        }
+    }
 }
 
 bool handle_command_press(PressState state, KeyCode code, ModCode mod, string char) {
     if !command_mode return false;
-
-    if command_prompt_buffer.reset clear_buffer();
 
     switch code {
         case KeyCode.Escape;
@@ -63,12 +74,10 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
         case KeyCode.Right; {
             command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, command_prompt_buffer.length);
         }
-        case KeyCode.Enter;
-            if command_prompt_buffer.length > 0 {
-                command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-                call_command(command);
-                command_prompt_buffer.reset = true;
-            }
+        case KeyCode.Enter; {
+            command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+            call_command(command);
+        }
         default;
             if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
                 if command_prompt_buffer.length == command_prompt_buffer.cursor {
@@ -91,6 +100,8 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
 }
 
 call_command(string command) {
+    defer command_mode = false;
+
     // Remove initial padding
     name_start := 0;
     while name_start < command.length {
@@ -144,7 +155,7 @@ call_command(string command) {
     // Attempt to find the function and then call it
     each command_def in commands {
         if command_def.name == name {
-            command_prompt_buffer.result = command_def.handler(arguments);
+            command_prompt_buffer.result, command_prompt_buffer.result_string, command_prompt_buffer.free_result_string = command_def.handler(arguments);
             return;
         }
     }
@@ -155,7 +166,6 @@ call_command(string command) {
 enum CommandResult {
     None;
     Success;
-    CommandFailed;
     IncorrectArgumentCount;
     IncorrectArgumentTypes;
     CommandNotFound;
@@ -163,9 +173,10 @@ enum CommandResult {
 
 command_mode: bool;
 
+
 #private
 
-interface CommandResult ConsoleCommand(Array<string> args)
+interface CommandResult, string, bool ConsoleCommand(Array<string> args)
 
 struct CommandDefinition {
     name: string;
@@ -176,16 +187,46 @@ commands: Array<CommandDefinition>;
 
 command_prompt_buffer_length := 200; #const
 struct CommandPromptBuffer {
-    reset: bool;
     length: int;
     cursor: int;
     buffer: Array<u8>[command_prompt_buffer_length];
     result: CommandResult;
+    result_string: string;
+    free_result_string: bool;
 }
 
 command_prompt_buffer: CommandPromptBuffer;
 
 clear_buffer() {
+    if command_prompt_buffer.free_result_string {
+        free_allocation(command_prompt_buffer.result_string.data);
+    }
+
     clear_memory(command_prompt_buffer.buffer.data, command_prompt_buffer_length);
-    command_prompt_buffer = { reset = false; length = 0; result = CommandResult.None; }
+    command_prompt_buffer = { length = 0; cursor = 0; result = CommandResult.None; result_string = empty_string; free_result_string = false; }
+}
+
+string get_command() {
+    command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+
+    // Remove initial padding
+    name_start := 0;
+    while name_start < command.length {
+        if command[name_start] != ' ' {
+            break;
+        }
+        name_start++;
+    }
+
+    // Get the end of the command name
+    name_end := name_start;
+    while name_end < command.length {
+        if command[name_end] == ' ' {
+            break;
+        }
+        name_end++;
+    }
+
+    name: string = { length = name_end - name_start; data = command.data + name_start; }
+    return name;
 }
