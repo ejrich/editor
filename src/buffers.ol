@@ -25,6 +25,8 @@ draw_buffers() {
         }
         draw_buffer_window(&right_window, x, current_window == SelectedWindow.Right, !left_window.displayed);
     }
+
+    draw_command();
 }
 
 draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width) {
@@ -102,8 +104,12 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
                 }
                 case EditMode.VisualBlock; {
                     highlight_color = appearance.visual_mode_color;
-                    mode_string = " VBLOCK ";
+                    mode_string = " V-BLOCK ";
                 }
+            }
+
+            if command_mode {
+                mode_string = " COMMAND ";
             }
 
             render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);

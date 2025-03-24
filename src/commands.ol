@@ -1,40 +1,68 @@
-toggle_command_prompt() {
-    display_command_prompt = !display_command_prompt;
+start_command_mode() {
+    command_mode = true;
     clear_buffer();
 }
 
-draw_command_prompt() {
-    if !display_command_prompt return;
+draw_command() {
+    if !command_mode return;
 
-    color := vec4(1.0, 1.0, 1.0, 1.0);
     background_color: Vector4;
-    x := -0.9675;
-    y := 0.95;
-    render_text("~", 20, x, y, color, background_color);
+    x := -1.0;
+    y := 1.0 - first_line_offset - line_height * (max_lines + 1);
+    render_text(":", settings.font_size, x, y, appearance.font_color, background_color);
 
-    x = -0.95;
+    x += quad_advance;
     command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-    render_text(command_prompt_buffer_str, 20, x, y, color, background_color);
+    render_text(command_prompt_buffer_str, settings.font_size, x, y, appearance.font_color, background_color);
 
-    if command_prompt_buffer.result != CommandResult.None {
-        result_string := format_string("Result = %", temp_allocate, command_prompt_buffer.result);
-        y = 0.9;
-        render_text(result_string, 20, x, y, color, background_color);
-    }
+    // if command_prompt_buffer.result != CommandResult.None {
+    //     result_string := format_string("Result = %", temp_allocate, command_prompt_buffer.result);
+    //     render_text(result_string, settings.font_size, x, y, appearance.font_color, background_color);
+    // }
 }
 
-bool handle_command_prompt_press(PressState state, KeyCode code, ModCode mod, string char) {
-    if !display_command_prompt return false;
+bool handle_command_press(PressState state, KeyCode code, ModCode mod, string char) {
+    if !command_mode return false;
 
     if command_prompt_buffer.reset clear_buffer();
 
     switch code {
-        case KeyCode.Tick;
         case KeyCode.Escape;
-            toggle_command_prompt();
-        case KeyCode.Backspace;
-            if command_prompt_buffer.length
-                command_prompt_buffer.buffer[--command_prompt_buffer.length];
+            command_mode = false;
+        case KeyCode.Backspace; {
+            if command_prompt_buffer.length > 0 {
+                if command_prompt_buffer.cursor > 0 {
+                    if command_prompt_buffer.cursor < command_prompt_buffer.length {
+                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor - 1, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.length - command_prompt_buffer.cursor);
+                    }
+
+                    command_prompt_buffer.cursor--;
+                    command_prompt_buffer.length--;
+                }
+            }
+            else {
+                command_mode = false;
+            }
+        }
+        case KeyCode.Delete; {
+            if command_prompt_buffer.length > 0 {
+                if command_prompt_buffer.cursor < command_prompt_buffer.length {
+                    if command_prompt_buffer.cursor < command_prompt_buffer.length - 1 {
+                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor + 1, command_prompt_buffer.length - command_prompt_buffer.cursor);
+                    }
+                    command_prompt_buffer.length--;
+                }
+            }
+            else {
+                command_mode = false;
+            }
+        }
+        case KeyCode.Left; {
+            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, command_prompt_buffer.length);
+        }
+        case KeyCode.Right; {
+            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, command_prompt_buffer.length);
+        }
         case KeyCode.Enter;
             if command_prompt_buffer.length > 0 {
                 command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
@@ -43,8 +71,19 @@ bool handle_command_prompt_press(PressState state, KeyCode code, ModCode mod, st
             }
         default;
             if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
-                memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
+                if command_prompt_buffer.length == command_prompt_buffer.cursor {
+                    memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
+                }
+                else {
+                    each i in command_prompt_buffer.length - command_prompt_buffer.cursor {
+                        index := command_prompt_buffer.length - i - 1;
+                        command_prompt_buffer.buffer[index + char.length] = command_prompt_buffer.buffer[index];
+                    }
+                    memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, char.data, char.length);
+                }
+
                 command_prompt_buffer.length += char.length;
+                command_prompt_buffer.cursor += char.length;
             }
     }
 
@@ -122,6 +161,8 @@ enum CommandResult {
     CommandNotFound;
 }
 
+command_mode: bool;
+
 #private
 
 interface CommandResult ConsoleCommand(Array<string> args)
@@ -133,12 +174,11 @@ struct CommandDefinition {
 
 commands: Array<CommandDefinition>;
 
-display_command_prompt: bool;
-
 command_prompt_buffer_length := 200; #const
 struct CommandPromptBuffer {
     reset: bool;
     length: int;
+    cursor: int;
     buffer: Array<u8>[command_prompt_buffer_length];
     result: CommandResult;
 }

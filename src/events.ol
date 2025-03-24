@@ -11,7 +11,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     // log("Key % is % with mod %!\n", code, state, mod);
 
     if state & PressState.Down {
-        if handle_command_prompt_press(state, code, mod, char) return;
+        if handle_command_press(state, code, mod, char) return;
 
         if code == KeyCode.Escape {
             if mod & ModCode.Shift signal_shutdown();
@@ -25,9 +25,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
             }
-            case KeyCode.Tick; {
+            case KeyCode.Colon; {
                 if (state & PressState.Held) != PressState.Held {
-                    toggle_command_prompt();
+                    start_command_mode();
                     return;
                 }
             }
