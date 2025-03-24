@@ -163,6 +163,31 @@ open_file_buffer(string path) {
     }
 }
 
+switch_to_buffer(SelectedWindow window) {
+    if window == current_window return;
+
+    original_window, new_window: BufferWindow*;
+    switch window {
+        case SelectedWindow.Left; {
+            original_window = &right_window;
+            new_window = &left_window;
+        }
+        case SelectedWindow.Right; {
+            original_window = &left_window;
+            new_window = &right_window;
+        }
+    }
+
+    assert(original_window != null && new_window != null);
+
+    if !new_window.displayed {
+        *new_window = *original_window;
+    }
+
+    current_window = window;
+}
+
+
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
