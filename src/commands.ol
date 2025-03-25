@@ -6,6 +6,34 @@ string, bool open_file_command(string path) {
     return empty_string, false;
 }
 
+[command, w]
+string, bool save_current_buffer() {
+    buffer_index := -1;
+    switch current_window {
+        case SelectedWindow.Left;
+            buffer_index = left_window.buffer_index;
+        case SelectedWindow.Right;
+            buffer_index = right_window.buffer_index;
+    }
+
+    lines, file := save_buffer(buffer_index);
+    if string_is_empty(file) {
+        return empty_string, true;
+    }
+
+    command_result := format_string("\"%\" % lines written", allocate, file, lines);
+    return command_result, true;
+}
+
+[command, wa]
+string, bool save_all_buffers() {
+    each buffer_index in buffers.length {
+        save_buffer(buffer_index);
+    }
+
+    return empty_string, false;
+}
+
 start_command_mode() {
     command_mode = true;
     clear_buffer();

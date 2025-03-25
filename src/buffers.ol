@@ -197,6 +197,18 @@ switch_to_buffer(SelectedWindow window) {
     current_window = window;
 }
 
+// Saving buffers to a file
+u32, string save_buffer(int buffer_index){
+    if buffer_index < 0 || buffer_index >= buffers.length
+        return 0, empty_string;
+
+    lines_written: u32;
+    buffer := buffers[buffer_index];
+    // TODO Write to the file and remove whitespace from EOLs
+
+    return lines_written, buffer.relative_path;
+}
+
 
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
