@@ -124,42 +124,54 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
 // Opening buffers with files
 open_file_buffer(string path) {
-    buffer: FileBuffer = {
-        relative_path = path;
-    }
+    buffer_index := -1;
 
-    found, file := read_file(path, temp_allocate);
-    if found {
-        if file.length > 0 {
-            line := allocate_line();
-            buffer = { line_count = 1; lines = line; }
-
-            each i in file.length {
-                char := file[i];
-                if char == '\n' {
-                    next_line := allocate_line();
-                    buffer.line_count++;
-                    line.next = next_line;
-                    next_line.previous = line;
-                    line = next_line;
-                }
-                else {
-                    assert(line.length < line_buffer_length);
-                    line.data[line.length++] = char;
-                }
-            }
-
-            calculate_line_digits(&buffer);
+    each buffer, i in buffers {
+        if buffer.relative_path == path {
+            buffer_index = i;
+            break;
         }
     }
 
-    array_insert(&buffers, buffer, allocate, reallocate);
+    if buffer_index < 0 {
+        buffer: FileBuffer = {
+            relative_path = path;
+        }
+
+        found, file := read_file(path, temp_allocate);
+        if found {
+            if file.length > 0 {
+                line := allocate_line();
+                buffer = { line_count = 1; lines = line; }
+
+                each i in file.length {
+                    char := file[i];
+                    if char == '\n' {
+                        next_line := allocate_line();
+                        buffer.line_count++;
+                        line.next = next_line;
+                        next_line.previous = line;
+                        line = next_line;
+                    }
+                    else {
+                        assert(line.length < line_buffer_length);
+                        line.data[line.length++] = char;
+                    }
+                }
+
+                calculate_line_digits(&buffer);
+            }
+        }
+
+        array_insert(&buffers, buffer, allocate, reallocate);
+        buffer_index = buffers.length - 1;
+    }
 
     switch current_window {
         case SelectedWindow.Left;
-            left_window.buffer_index = buffers.length - 1;
+            left_window.buffer_index = buffer_index;
         case SelectedWindow.Right;
-            right_window.buffer_index = buffers.length - 1;
+            right_window.buffer_index = buffer_index;
     }
 }
 
