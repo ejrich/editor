@@ -23,6 +23,10 @@ bool, bool try_parse_bool(string arg) {
     return false, false;
 }
 
+bool, u32 try_parse_u32(string value) {
+    return try_parse_integer<u32>(value);
+}
+
 bool, s32 try_parse_s32(string value) {
     return try_parse_integer<s32>(value);
 }

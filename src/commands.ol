@@ -158,6 +158,16 @@ call_command(string command) {
         }
     }
 
+    // If the command is just a number, go to that line
+    if argument_count == 0 {
+        success, value := try_parse_u32(name);
+        if success {
+            go_to_line(value);
+            command_prompt_buffer.result = CommandResult.None;
+            return;
+        }
+    }
+
     // Attempt to find the function and then call it
     each command_def in commands {
         if command_def.name == name {

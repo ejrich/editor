@@ -80,46 +80,44 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     }
 
     // Render the file information
-    {
-        y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * global_font_config.max_lines;
-        highlight_color: Vector4;
-        if selected {
-            mode_string := empty_string;
-            switch edit_mode {
-                case EditMode.Normal; {
-                    highlight_color = appearance.normal_mode_color;
-                    mode_string = " NORMAL ";
-                }
-                case EditMode.Insert; {
-                    highlight_color = appearance.insert_mode_color;
-                    mode_string = " INSERT ";
-                }
-                case EditMode.Visual; {
-                    highlight_color = appearance.visual_mode_color;
-                    mode_string = " VISUAL ";
-                }
-                case EditMode.VisualLine; {
-                    highlight_color = appearance.visual_mode_color;
-                    mode_string = " V-LINE ";
-                }
-                case EditMode.VisualBlock; {
-                    highlight_color = appearance.visual_mode_color;
-                    mode_string = " V-BLOCK ";
-                }
+    y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * global_font_config.max_lines;
+    highlight_color: Vector4;
+    if selected {
+        mode_string := empty_string;
+        switch edit_mode {
+            case EditMode.Normal; {
+                highlight_color = appearance.normal_mode_color;
+                mode_string = " NORMAL ";
             }
-
-            if command_mode {
-                mode_string = " COMMAND ";
+            case EditMode.Insert; {
+                highlight_color = appearance.insert_mode_color;
+                mode_string = " INSERT ";
             }
-
-            render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
-            x += mode_string.length * global_font_config.quad_advance;
+            case EditMode.Visual; {
+                highlight_color = appearance.visual_mode_color;
+                mode_string = " VISUAL ";
+            }
+            case EditMode.VisualLine; {
+                highlight_color = appearance.visual_mode_color;
+                mode_string = " V-LINE ";
+            }
+            case EditMode.VisualBlock; {
+                highlight_color = appearance.visual_mode_color;
+                mode_string = " V-BLOCK ";
+            }
         }
 
-        render_text(buffer.relative_path, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
+        if command_mode {
+            mode_string = " COMMAND ";
+        }
 
-        render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
+        render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
+        x += mode_string.length * global_font_config.quad_advance;
     }
+
+    render_text(buffer.relative_path, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
+
+    render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
 }
 
 // Opening buffers with files
@@ -217,6 +215,15 @@ resize_buffers() {
         adjust_start_line(&left_window);
     if right_window.displayed
         adjust_start_line(&right_window);
+}
+
+go_to_line(u32 line) {
+    switch current_window {
+        case SelectedWindow.Left;
+            go_to_buffer_line(&left_window, line);
+        case SelectedWindow.Right;
+            go_to_buffer_line(&right_window, line);
+    }
 }
 
 move_line(bool up, u32 line_changes = 1) {
@@ -362,6 +369,19 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     }
 }
 
+go_to_buffer_line(BufferWindow* window, u32 line) {
+    if window.buffer_index < 0 {
+        window.line = 0;
+        window.start_line = 0;
+        return;
+    }
+
+    buffer := buffers[window.buffer_index];
+    window.line = clamp(line - 1, 0, buffer.line_count - 1);
+    window.start_line = clamp(window.start_line, 0, window.line);
+    adjust_start_line(window);
+}
+
 move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
     if window.buffer_index < 0 {
         window.line = 0;
@@ -468,12 +488,15 @@ adjust_start_line(BufferWindow* window) {
             }
         }
 
-        if rendered_lines_after_current >= settings.scroll_offset {
-            while starting_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
-                window.start_line++;
-                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
-                starting_line = starting_line.next;
-            }
+        allowed_scroll_offset := settings.scroll_offset;
+        if rendered_lines_after_current < settings.scroll_offset {
+            allowed_scroll_offset = rendered_lines_after_current;
+        }
+
+        while starting_line != null && rendered_lines + allowed_scroll_offset > global_font_config.max_lines {
+            window.start_line++;
+            rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+            starting_line = starting_line.next;
         }
     }
 }
