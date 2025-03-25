@@ -222,15 +222,19 @@ struct Glyph {
     top_right_texture_coord: Vector2;
 }
 
-quad_advance: float;
-line_height: float;
-first_line_offset: float;
-block_y_offset: float;
-divider_y: float;
-divider_height: float;
-max_lines: u32;
-max_chars_per_line: u32;
-max_chars_per_line_full: u32;
+struct GlobalFontConfig {
+    quad_advance: float;
+    line_height: float;
+    first_line_offset: float;
+    block_y_offset: float;
+    max_lines: u32;
+    max_chars_per_line: u32;
+    max_chars_per_line_full: u32;
+    divider_y: float;
+    divider_height: float;
+}
+
+global_font_config: GlobalFontConfig;
 
 
 #private
@@ -287,7 +291,8 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
     }
 
     // Issue the draw call(s) for the characters
-    draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+    if length > 0
+        draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
     return line_count;
 }
@@ -320,15 +325,15 @@ adjust_line_and_draw_background(FontTexture* font_texture, Array<QuadInstanceDat
 }
 
 draw_cursor(float x, float y) {
-    x_pos := x + quad_advance / 2.0;
-    y_pos := y + block_y_offset;
+    x_pos := x + global_font_config.quad_advance / 2.0;
+    y_pos := y + global_font_config.block_y_offset;
 
     cursor_quad: QuadInstanceData = {
         color = appearance.cursor_color;
         position = { x = x_pos; y = y_pos; z = 0.1; }
         flags = QuadFlags.Solid;
-        width = quad_advance;
-        height = line_height;
+        width = global_font_config.quad_advance;
+        height = global_font_config.line_height;
     }
 
     draw_quad(&cursor_quad, 1);
@@ -503,15 +508,19 @@ adjust_texture_to_window(FontTexture* texture) {
     texture.block_y_offset = texture.line_height / 2.0 - texture.max_line_bearing_y / 3.0;
 
     if texture.size == settings.font_size {
-        quad_advance = texture.quad_advance;
-        line_height = texture.line_height;
-        first_line_offset = line_height - texture.max_line_bearing_y / 3.0;
-        block_y_offset = texture.block_y_offset;
-        max_lines = cast(u32, 2.0 / line_height) - 2;
-        divider_y = line_height + texture.max_line_bearing_y / 4.0;
-        divider_height = line_height * max_lines + texture.max_line_bearing_y / 2.0;
-        max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
-        max_chars_per_line_full = max_chars_per_line * 2;
+        max_lines := cast(u32, 2.0 / texture.line_height) - 2;
+
+        global_font_config = {
+            quad_advance = texture.quad_advance;
+            line_height = texture.line_height;
+            first_line_offset = texture.line_height - texture.max_line_bearing_y / 3.0;
+            block_y_offset = texture.block_y_offset;
+            max_lines = max_lines;
+            max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
+            max_chars_per_line_full = cast(u32, 0.5 / texture.quad_advance);
+            divider_y = texture.line_height + texture.max_line_bearing_y / 4.0;
+            divider_height = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
+        }
     }
 }
 

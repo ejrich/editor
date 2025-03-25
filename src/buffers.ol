@@ -5,10 +5,10 @@ draw_buffers() {
     if left_window.displayed && right_window.displayed {
         divider_quad: QuadInstanceData = {
             color = appearance.font_color;
-            position = { y = divider_y; }
+            position = { y = global_font_config.divider_y; }
             flags = QuadFlags.Solid;
             width = 1.0 / settings.window_width;
-            height = divider_height;
+            height = global_font_config.divider_height;
         }
 
         draw_quad(&divider_quad, 1);
@@ -33,14 +33,14 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
 
-    y := 1.0 - first_line_offset;
+    y := 1.0 - global_font_config.first_line_offset;
 
     info_quad: QuadInstanceData = {
         color = appearance.current_line_color;
-        position = { x = (x + line_max_x) / 2; y = y - max_lines * line_height + block_y_offset; z = 0.2; }
+        position = { x = (x + line_max_x) / 2; y = y - global_font_config.max_lines * global_font_config.line_height + global_font_config.block_y_offset; z = 0.2; }
         flags = QuadFlags.Solid;
         width = line_max_x - x;
-        height = line_height;
+        height = global_font_config.line_height;
     }
 
     draw_quad(&info_quad, 1);
@@ -56,7 +56,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     line := buffer.lines;
     line_number: u32 = 1;
     line_cursor: u32;
-    available_lines_to_render := max_lines;
+    available_lines_to_render := global_font_config.max_lines;
 
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
@@ -72,7 +72,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
                 line_cursor = cursor;
             }
             lines := render_line(line_string, x, y, line_number, digits, cursor, line_max_x, available_lines_to_render);
-            y -= line_height * lines;
+            y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }
         line = line.next;
@@ -81,7 +81,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     // Render the file information
     {
-        y = 1.0 - first_line_offset - line_height * max_lines;
+        y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * global_font_config.max_lines;
         highlight_color: Vector4;
         if selected {
             mode_string := empty_string;
@@ -113,10 +113,10 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
             }
 
             render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
-            x += mode_string.length * quad_advance;
+            x += mode_string.length * global_font_config.quad_advance;
         }
 
-        render_text(buffer.relative_path, settings.font_size, x + quad_advance, y, appearance.font_color, vec4());
+        render_text(buffer.relative_path, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
 
         render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
     }
@@ -296,7 +296,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     // window.line = clamp(window.line, 0, buffer.line_count - 1);
     window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
 
-    if settings.scroll_offset > max_lines {
+    if settings.scroll_offset > global_font_config.max_lines {
         window.line = window.start_line;
         return;
     }
@@ -328,7 +328,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
         return;
     }
 
-    if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
+    if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
         // Check that there are more lines to scroll to
         end_line := current_line.next;
         rendered_lines_after_current: u32;
@@ -342,7 +342,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
         }
 
         if rendered_lines_after_current >= settings.scroll_offset {
-            while current_line != null && rendered_lines + settings.scroll_offset > max_lines {
+            while current_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
                 window.line--;
                 rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
                 current_line = current_line.previous;
@@ -413,7 +413,7 @@ adjust_start_line(BufferWindow* window) {
         return;
     }
 
-    if settings.scroll_offset > max_lines {
+    if settings.scroll_offset > global_font_config.max_lines {
         window.start_line = window.line;
         return;
     }
@@ -444,7 +444,7 @@ adjust_start_line(BufferWindow* window) {
             rendered_lines += calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
         }
     }
-    else if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
+    else if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
         // Check that there are more lines to scroll to
         end_line := current_line.next;
         rendered_lines_after_current: u32;
@@ -458,7 +458,7 @@ adjust_start_line(BufferWindow* window) {
         }
 
         if rendered_lines_after_current >= settings.scroll_offset {
-            while starting_line != null && rendered_lines + settings.scroll_offset > max_lines {
+            while starting_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
                 window.start_line++;
                 rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
                 starting_line = starting_line.next;
@@ -468,8 +468,8 @@ adjust_start_line(BufferWindow* window) {
 }
 
 u32 calculate_rendered_lines(u32 digits, u32 line_length, bool full_width) {
-    max_chars := max_chars_per_line;
-    if full_width max_chars = max_chars_per_line_full;
+    max_chars := global_font_config.max_chars_per_line;
+    if full_width max_chars = global_font_config.max_chars_per_line_full;
 
     max_chars -= digits + 1;
     lines := line_length / max_chars + 1;

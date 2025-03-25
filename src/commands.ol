@@ -8,13 +8,13 @@ start_command_mode() {
 draw_command() {
     background_color: Vector4;
     x := -1.0;
-    y := 1.0 - first_line_offset - line_height * (max_lines + 1);
+    y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines + 1);
     switch command_prompt_buffer.result {
         case CommandResult.None; {
             if command_mode {
                 render_text(":", settings.font_size, x, y, appearance.font_color, background_color);
 
-                x += quad_advance;
+                x += global_font_config.quad_advance;
                 command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
                 render_line_with_cursor(command_prompt_buffer_str, x, y, command_prompt_buffer.cursor, 1.0);
             }
