@@ -1,5 +1,11 @@
 #import "parse.ol"
 
+[command, e]
+string, bool open_file_command(string path) {
+    open_file_buffer(path);
+    return empty_string, false;
+}
+
 start_command_mode() {
     command_mode = true;
     clear_buffer();

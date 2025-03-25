@@ -293,7 +293,6 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
 
     buffer := buffers[window.buffer_index];
     window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
-    // window.line = clamp(window.line, 0, buffer.line_count - 1);
     window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
 
     if settings.scroll_offset > global_font_config.max_lines {
@@ -336,15 +335,15 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
             rendered_lines_after_current += calculate_rendered_lines(buffer.line_count_digits, end_line.length, full_width);
             end_line = end_line.next;
 
-            if rendered_lines_after_current >= settings.scroll_offset {
+            if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
                 break;
             }
         }
 
-        if rendered_lines_after_current >= settings.scroll_offset {
+        if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
             while current_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
                 window.line--;
-                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
                 current_line = current_line.previous;
             }
         }

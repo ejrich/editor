@@ -517,7 +517,7 @@ adjust_texture_to_window(FontTexture* texture) {
             block_y_offset = texture.block_y_offset;
             max_lines = max_lines;
             max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
-            max_chars_per_line_full = cast(u32, 0.5 / texture.quad_advance);
+            max_chars_per_line_full = cast(u32, 2.0 / texture.quad_advance);
             divider_y = texture.line_height + texture.max_line_bearing_y / 4.0;
             divider_height = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
         }
