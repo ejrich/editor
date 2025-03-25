@@ -41,7 +41,8 @@ application_name := "Editor";
 
     if intercept_compiler_messages() {
         profiling_data_variable, function_names_variable, keybind_definitions_variable, commands_variable: GlobalVariableAst*;
-        profiled_function_names, keybind_function_names, command_names: Array<string>;
+        profiled_function_names, keybind_function_names: Array<string>;
+        commands: Array<Command>;
         function_index, function_names_length, keybind_definitions_length, commands_length: int;
 
         message: CompilerMessage;
@@ -82,8 +83,27 @@ application_name := "Editor";
                         else if array_contains(function.attributes, "command") {
                             if verify_command_arguments(function) {
                                 generate_command(function);
-                                commands_length += function.name.length * 2 + 27;
-                                array_insert(&command_names, function.name);
+
+                                if function.attributes.length == 1 {
+                                    command: Command = {
+                                        command = function.name;
+                                        function = function.name;
+                                    }
+
+                                    commands_length += function.name.length * 2 + 27;
+                                    array_insert(&commands, command);
+                                }
+                                else {
+                                    each i in 1..function.attributes.length - 1 {
+                                        command: Command = {
+                                            command = function.attributes[i];
+                                            function = function.name;
+                                        }
+
+                                        commands_length += function.name.length + command.command.length + 27;
+                                        array_insert(&commands, command);
+                                    }
+                                }
                             }
                             else
                             {
@@ -187,8 +207,8 @@ application_name := "Editor";
                         commands_initial_value[0] = '[';
 
                         i := 1;
-                        bubble_sort(command_names);
-                        each name in command_names {
+                        bubble_sort(commands, command_sort);
+                        each command in commands {
                             prefix := "{name = \""; #const
                             middle := "\"; handler = __"; #const
                             suffix := ";},"; #const
@@ -196,14 +216,14 @@ application_name := "Editor";
                             memory_copy(commands_initial_value.data + i, prefix.data, prefix.length);
                             i += prefix.length;
 
-                            memory_copy(commands_initial_value.data + i, name.data, name.length);
-                            i += name.length;
+                            memory_copy(commands_initial_value.data + i, command.command.data, command.command.length);
+                            i += command.command.length;
 
                             memory_copy(commands_initial_value.data + i, middle.data, middle.length);
                             i += middle.length;
 
-                            memory_copy(commands_initial_value.data + i, name.data, name.length);
-                            i += name.length;
+                            memory_copy(commands_initial_value.data + i, command.function.data, command.function.length);
+                            i += command.function.length;
 
                             memory_copy(commands_initial_value.data + i, suffix.data, suffix.length);
                             i += suffix.length;
@@ -335,6 +355,39 @@ bool add_profiling_to_function(FunctionAst* function, int index) {
 }
 
 // Code for verifying and generating commands
+struct Command {
+    command: string;
+    function: string;
+}
+
+int command_sort(Command a, Command b) {
+    if a.command > b.command return 1;
+    if a.command < b.command return -1;
+    return 0;
+}
+
+bool verify_command_arguments(FunctionAst* function) {
+    if function.return_type.type != TypeKind.Compound return false;
+
+    compound_return_type := cast(CompoundTypeInfo*, function.return_type);
+    if compound_return_type.types.length != 2 ||
+        compound_return_type.types[0].type != TypeKind.String ||
+        compound_return_type.types[1].type != TypeKind.Boolean
+        return false;
+
+    each argument in function.arguments {
+        switch argument.type_info.type {
+            case TypeKind.Boolean;
+            case TypeKind.Integer;
+            case TypeKind.Float;
+            case TypeKind.String; {} // Valid Types
+            default; return false;
+        }
+    }
+
+    return true;
+}
+
 generate_command(FunctionAst* function) {
     function_parts: Array<string>;
 
@@ -406,28 +459,6 @@ CommandResult, string, bool __%(Array<string> args) {
     }
 
     add_code(code_string);
-}
-
-bool verify_command_arguments(FunctionAst* function) {
-    if function.return_type.type != TypeKind.Compound return false;
-
-    compound_return_type := cast(CompoundTypeInfo*, function.return_type);
-    if compound_return_type.types.length != 2 ||
-        compound_return_type.types[0].type != TypeKind.String ||
-        compound_return_type.types[1].type != TypeKind.Boolean
-        return false;
-
-    each argument in function.arguments {
-        switch argument.type_info.type {
-            case TypeKind.Boolean;
-            case TypeKind.Integer;
-            case TypeKind.Float;
-            case TypeKind.String; {} // Valid Types
-            default; return false;
-        }
-    }
-
-    return true;
 }
 
 
