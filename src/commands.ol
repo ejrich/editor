@@ -16,7 +16,7 @@ draw_command() {
 
                 x += quad_advance;
                 command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-                render_text(command_prompt_buffer_str, settings.font_size, x, y, appearance.font_color, background_color);
+                render_line_with_cursor(command_prompt_buffer_str, x, y, command_prompt_buffer.cursor, 1.0);
             }
         }
         case CommandResult.Success; {
