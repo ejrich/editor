@@ -16,12 +16,17 @@ string, bool save_current_buffer() {
             buffer_index = right_window.buffer_index;
     }
 
-    lines, file := save_buffer(buffer_index);
+    success, lines, bytes, file := save_buffer(buffer_index);
+    if !success {
+        error_result := format_string("Unable to open file \"%\" to write", allocate, file);
+        return error_result, true;
+    }
+
     if string_is_empty(file) {
         return empty_string, true;
     }
 
-    command_result := format_string("\"%\" % lines written", allocate, file, lines);
+    command_result := format_string("\"%\" % lines and % bytes written", allocate, file, lines, bytes);
     return command_result, true;
 }
 

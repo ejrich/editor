@@ -138,27 +138,31 @@ open_file_buffer(string path) {
 
         found, file := read_file(path, temp_allocate);
         if found {
-            if file.length > 0 {
-                line := allocate_line();
-                buffer = { line_count = 1; lines = line; }
+            line := allocate_line();
+            buffer = { line_count = 1; lines = line; }
 
-                each i in file.length {
-                    char := file[i];
-                    if char == '\n' {
-                        next_line := allocate_line();
-                        buffer.line_count++;
-                        line.next = next_line;
-                        next_line.previous = line;
-                        line = next_line;
-                    }
-                    else {
-                        assert(line.length < line_buffer_length);
-                        line.data[line.length++] = char;
-                    }
+            add_new_line := false;
+            each i in file.length {
+                char := file[i];
+                if add_new_line {
+                    next_line := allocate_line();
+                    buffer.line_count++;
+                    line.next = next_line;
+                    next_line.previous = line;
+                    line = next_line;
+                    add_new_line = false;
                 }
 
-                calculate_line_digits(&buffer);
+                if char == '\n' {
+                    add_new_line = true;
+                }
+                else {
+                    assert(line.length < line_buffer_length);
+                    line.data[line.length++] = char;
+                }
             }
+
+            calculate_line_digits(&buffer);
         }
 
         array_insert(&buffers, buffer, allocate, reallocate);
@@ -198,15 +202,51 @@ switch_to_buffer(SelectedWindow window) {
 }
 
 // Saving buffers to a file
-u32, string save_buffer(int buffer_index){
+bool, u32, u32, string save_buffer(int buffer_index) {
     if buffer_index < 0 || buffer_index >= buffers.length
-        return 0, empty_string;
+        return true, 0, 0, empty_string;
 
-    lines_written: u32;
+    lines_written, bytes_written: u32;
     buffer := buffers[buffer_index];
-    // TODO Write to the file and remove whitespace from EOLs
 
-    return lines_written, buffer.relative_path;
+    create_directories_recursively(buffer.relative_path);
+    opened, file := open_file(buffer.relative_path, FileFlags.Create);
+    if !opened return false, 0, 0, buffer.relative_path;
+
+    defer close_file(file);
+
+    line := buffer.lines;
+    while line {
+        // Trim the whitespace from the current line
+        if trim_line(line) {
+            // If the line is now empty, find the next line that is not empty
+            //   If there is not a next line, free the remaining lines and break
+            //   If there is a next line, go to that line and zero out the lines on the way
+            next_line_with_text := get_next_line_with_text(line);
+            if next_line_with_text {
+                while line != next_line_with_text {
+                    write_to_file(file, '\n');
+                    lines_written++;
+                    bytes_written++;
+                    line = line.next;
+                }
+            }
+            else {
+                // TODO Remove extra lines
+                break;
+            }
+        }
+        // Write the line to the file, and go to the next
+        else {
+            write_buffer_to_file(file, line.data.data, line.length);
+            write_to_file(file, '\n');
+            lines_written++;
+            bytes_written += line.length + 1;
+            line = line.next;
+        }
+    }
+
+    return true, lines_written, bytes_written, buffer.relative_path;
 }
 
 
@@ -299,6 +339,37 @@ BufferLine* allocate_line() {
     line: BufferLine* = pointer;
     line.data.length = line_buffer_length;
     line.data.data = pointer + size_of(BufferLine);
+    return line;
+}
+
+// Removes whitespace from the end of line, returns true if the line is now empty
+bool trim_line(BufferLine* line) {
+    actual_length: u32;
+    each i in line.length {
+        switch line.data[i] {
+            case ' ';
+            case '\t';
+            case '\r'; {} // Whitespace
+            default;
+                actual_length = i + 1;
+        }
+    }
+
+    line.length = actual_length;
+    return actual_length == 0;
+}
+
+BufferLine* get_next_line_with_text(BufferLine* line) {
+    assert(line != null);
+
+    line = line.next;
+    while line {
+        if !trim_line(line) {
+            return line;
+        }
+        line = line.next;
+    }
+
     return line;
 }
 
