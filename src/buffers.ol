@@ -207,7 +207,7 @@ bool, u32, u32, string save_buffer(int buffer_index) {
         return true, 0, 0, empty_string;
 
     lines_written, bytes_written: u32;
-    buffer := buffers[buffer_index];
+    buffer := &buffers[buffer_index];
 
     create_directories_recursively(buffer.relative_path);
     opened, file := open_file(buffer.relative_path, FileFlags.Create);
@@ -232,7 +232,23 @@ bool, u32, u32, string save_buffer(int buffer_index) {
                 }
             }
             else {
-                // TODO Remove extra lines
+                next_line := line.next;
+                line.next = null;
+
+                if line.previous != null {
+                    line.previous.next = null;
+                    free_allocation(line);
+                    buffer.line_count--;
+                }
+
+                while next_line {
+                    next_next_line := next_line.next;
+                    free_allocation(next_line);
+                    next_line = next_next_line;
+                    buffer.line_count--;
+                }
+
+                calculate_line_digits(buffer);
                 break;
             }
         }
