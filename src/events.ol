@@ -13,12 +13,13 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     if state & PressState.Down {
         if handle_command_press(state, code, mod, char) return;
 
-        if code == KeyCode.Escape {
-            if mod & ModCode.Shift signal_shutdown();
-            return;
-        }
-
         switch code {
+            case KeyCode.Escape; {
+                if mod & ModCode.Shift {
+                    signal_shutdown();
+                    return;
+                }
+            }
             case KeyCode.F12; {
                 if (state & PressState.Held) != PressState.Held {
                     toggle_performance_stats(mod == ModCode.Control);

@@ -312,6 +312,54 @@ move_cursor(bool left, u32 cursor_changes = 1) {
     }
 }
 
+move_to_start_of_word(bool forward, bool ignore) {
+    // TODO Implement
+    buffer_window: BufferWindow*;
+    switch current_window {
+        case SelectedWindow.Left;
+            buffer_window = &left_window;
+        case SelectedWindow.Right;
+            buffer_window = &right_window;
+    }
+
+    adjust_start_line(buffer_window);
+}
+
+move_to_line_boundary(bool end) {
+    buffer_window: BufferWindow*;
+    switch current_window {
+        case SelectedWindow.Left;
+            buffer_window = &left_window;
+        case SelectedWindow.Right;
+            buffer_window = &right_window;
+    }
+
+    if buffer_window == null || buffer_window.buffer_index < 0 {
+        return;
+    }
+
+    if !end {
+        buffer_window.cursor = 0;
+        return;
+    }
+
+    line_number: u32;
+    buffer := &buffers[buffer_window.buffer_index];
+    line := buffer.lines;
+
+    while line != null {
+        if line_number == buffer_window.line {
+            buffer_window.cursor = line.length - 1;
+            break;
+        }
+
+        line_number++;
+        line = line.next;
+    }
+}
+
+
+// Data structures
 struct FileBuffer {
     relative_path: string;
     line_count: u32;

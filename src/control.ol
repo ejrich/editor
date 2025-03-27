@@ -88,7 +88,7 @@ bool move_right(PressState state, ModCode mod) {
 
 [keybind]
 bool next_word(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_to_start_of_word(true, (mod & ModCode.Shift) == ModCode.Shift);
     return true;
 }
 
@@ -100,19 +100,19 @@ bool end_word(PressState state, ModCode mod) {
 
 [keybind]
 bool previous_word(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_to_start_of_word(false, (mod & ModCode.Shift) == ModCode.Shift);
     return true;
 }
 
 [keybind]
 bool start_of_line(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_to_line_boundary(false);
     return true;
 }
 
 [keybind]
 bool end_of_line(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_to_line_boundary(true);
     return true;
 }
 
