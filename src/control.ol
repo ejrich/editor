@@ -85,3 +85,63 @@ bool move_right(PressState state, ModCode mod) {
     }
     return true;
 }
+
+[keybind]
+bool next_word(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool end_word(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool previous_word(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool start_of_line(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool end_of_line(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool begin_paragraph(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool end_paragraph(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool go_to(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool find_char(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
+
+[keybind]
+bool until_char(PressState state, ModCode mod) {
+    // TODO Implement me
+    return true;
+}
