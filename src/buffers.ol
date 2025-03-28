@@ -71,7 +71,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
                 line_cursor = cursor;
             }
-            lines := render_line(line_string, x, y, line_number, digits, cursor, line_max_x, available_lines_to_render);
+            lines := render_line(line_string, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }
@@ -312,14 +312,160 @@ move_cursor(bool left, u32 cursor_changes = 1) {
     }
 }
 
-move_to_start_of_word(bool forward, bool ignore) {
-    // TODO Implement
+move_to_start_of_word(bool forward, bool full_word) {
     buffer_window: BufferWindow*;
     switch current_window {
         case SelectedWindow.Left;
             buffer_window = &left_window;
         case SelectedWindow.Right;
             buffer_window = &right_window;
+    }
+
+    if buffer_window == null || buffer_window.buffer_index < 0 {
+        return;
+    }
+
+    line_number: u32;
+    buffer := &buffers[buffer_window.buffer_index];
+    target_line := clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := buffer.lines;
+
+    while line != null {
+        if line_number == target_line {
+            break;
+        }
+
+        line_number++;
+        line = line.next;
+    }
+
+    if line == null {
+        return;
+    }
+
+    char: u8;
+    is_whitespace := false;
+    cursor: u32;
+    if line.length == 0 {
+        is_whitespace = true;
+    }
+    else {
+        cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+        char = line.data[cursor];
+        is_whitespace = is_whitespace(char);
+    }
+
+    // Go to the next non-whitespace character
+    if is_whitespace {
+        if forward {
+            next_word_found := false;
+            while ++cursor < line.length {
+                char = line.data[cursor];
+                if !is_whitespace(char) {
+                    buffer_window.cursor = cursor;
+                    next_word_found = true;
+                    break;
+                }
+            }
+
+            if !next_word_found && line.next != null {
+                cursor = 0;
+                line = line.next;
+                while cursor < line.length {
+                    char = line.data[cursor];
+                    if !is_whitespace(char) {
+                        buffer_window.cursor = cursor;
+                        buffer_window.line++;
+                        break;
+                    }
+
+                    cursor++;
+                }
+            }
+        }
+        else {
+            // TODO Implement
+        }
+    }
+    else if is_text_character(char) {
+        if forward {
+            next_word_found, whitespace_found := false;
+            while ++cursor < line.length {
+                char = line.data[cursor];
+                if is_whitespace(char) {
+                    whitespace_found = true;
+                }
+                else if whitespace_found {
+                    buffer_window.cursor = cursor;
+                    next_word_found = true;
+                    break;
+                }
+                else if !is_text_character(char) && !full_word{
+                    buffer_window.cursor = cursor;
+                    next_word_found = true;
+                    break;
+                }
+            }
+
+            if !next_word_found && line.next != null {
+                cursor = 0;
+                line = line.next;
+                while cursor < line.length {
+                    char = line.data[cursor];
+                    if !is_whitespace(char) {
+                        break;
+                    }
+
+                    cursor++;
+                }
+
+                buffer_window.cursor = cursor;
+                buffer_window.line++;
+            }
+        }
+        else {
+            // TODO Implement
+        }
+    }
+    else {
+        if forward {
+            next_word_found, whitespace_found := false;
+            while ++cursor < line.length {
+                char = line.data[cursor];
+                if is_whitespace(char) {
+                    whitespace_found = true;
+                }
+                else if whitespace_found {
+                    buffer_window.cursor = cursor;
+                    next_word_found = true;
+                    break;
+                }
+                else if is_text_character(char) && !full_word {
+                    buffer_window.cursor = cursor;
+                    next_word_found = true;
+                    break;
+                }
+            }
+
+            if !next_word_found && line.next != null {
+                cursor = 0;
+                line = line.next;
+                while cursor < line.length {
+                    char = line.data[cursor];
+                    if !is_whitespace(char) {
+                        break;
+                    }
+
+                    cursor++;
+                }
+
+                buffer_window.cursor = cursor;
+                buffer_window.line++;
+            }
+        }
+        else {
+            // TODO Implement
+        }
     }
 
     adjust_start_line(buffer_window);
@@ -410,17 +556,37 @@ BufferLine* allocate_line() {
 bool trim_line(BufferLine* line) {
     actual_length: u32;
     each i in line.length {
-        switch line.data[i] {
-            case ' ';
-            case '\t';
-            case '\r'; {} // Whitespace
-            default;
-                actual_length = i + 1;
+        if !is_whitespace(line.data[i]) {
+            actual_length = i + 1;
         }
     }
 
     line.length = actual_length;
     return actual_length == 0;
+}
+
+bool is_whitespace(u8 char) {
+    switch char {
+        case ' ';
+        case '\t';
+        case '\r';
+            return true;
+    }
+
+    return false;
+}
+
+bool is_text_character(u8 char) {
+    if char >= '0' && char <= '9'
+        return true;
+
+    if char >= 'A' && char <= 'Z'
+        return true;
+
+    if char >= 'a' && char <= 'z'
+        return true;
+
+    return char == '_';
 }
 
 BufferLine* get_next_line_with_text(BufferLine* line) {

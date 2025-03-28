@@ -107,7 +107,7 @@ render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 back
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, float max_x, u32 lines_available) {
+u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -169,7 +169,7 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line_with_cursor(font_texture, text, x, y, cursor, max_x, lines_available);
+    return render_line_with_cursor(font_texture, text, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
 render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
@@ -177,7 +177,7 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    render_line_with_cursor(font_texture, text, x, y, cursor, max_x, lines_available);
+    render_line_with_cursor(font_texture, text, x, y, cursor, true, max_x, lines_available);
 }
 
 
@@ -241,8 +241,8 @@ global_font_config: GlobalFontConfig;
 
 library: FT_Library*;
 
-u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, float max_x, u32 lines_available) {
-    if cursor == text.length {
+u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available) {
+    if cursor == text.length && render_cursor {
         draw_cursor(x + text.length * font_texture.quad_advance, y);
     }
 
@@ -264,7 +264,7 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
         }
 
         font_color := appearance.font_color;
-        if i == cursor {
+        if i == cursor && render_cursor {
             font_color = appearance.cursor_font_color;
             draw_cursor(x, y);
         }
