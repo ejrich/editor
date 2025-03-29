@@ -335,40 +335,12 @@ move_to_start_of_word(bool forward, bool full_word) {
         is_whitespace = is_whitespace(char);
     }
 
-    // Go to the next non-whitespace character
-    if is_whitespace {
-        if forward {
-            next_word_found := false;
-            while ++cursor < line.length {
-                char = line.data[cursor];
-                if !is_whitespace(char) {
-                    buffer_window.cursor = cursor;
-                    next_word_found = true;
-                    break;
-                }
-            }
-
-            if !next_word_found && line.next != null {
-                cursor = 0;
-                line = line.next;
-                while cursor < line.length {
-                    char = line.data[cursor];
-                    if !is_whitespace(char) {
-                        buffer_window.cursor = cursor;
-                        buffer_window.line++;
-                        break;
-                    }
-
-                    cursor++;
-                }
-            }
+    if forward {
+        if is_whitespace {
+            move_to_next_non_whitespace(buffer_window, line, cursor + 1);
         }
         else {
-            // TODO Implement
-        }
-    }
-    else if is_text_character(char) {
-        if forward {
+            is_text := is_text_character(char);
             next_word_found, whitespace_found := false;
             while ++cursor < line.length {
                 char = line.data[cursor];
@@ -380,7 +352,7 @@ move_to_start_of_word(bool forward, bool full_word) {
                     next_word_found = true;
                     break;
                 }
-                else if !is_text_character(char) && !full_word {
+                else if !full_word && (is_text != is_text_character(char)) {
                     buffer_window.cursor = cursor;
                     next_word_found = true;
                     break;
@@ -390,62 +362,83 @@ move_to_start_of_word(bool forward, bool full_word) {
             if !next_word_found && line.next != null {
                 cursor = 0;
                 line = line.next;
-                while cursor < line.length {
-                    char = line.data[cursor];
-                    if !is_whitespace(char) {
-                        break;
-                    }
-
-                    cursor++;
-                }
-
-                buffer_window.cursor = cursor;
                 buffer_window.line++;
+                move_to_next_non_whitespace(buffer_window, line, cursor);
             }
-        }
-        else {
-            // TODO Implement
         }
     }
     else {
-        if forward {
-            next_word_found, whitespace_found := false;
-            while ++cursor < line.length {
-                char = line.data[cursor];
-                if is_whitespace(char) {
-                    whitespace_found = true;
-                }
-                else if whitespace_found {
-                    buffer_window.cursor = cursor;
-                    next_word_found = true;
-                    break;
-                }
-                else if is_text_character(char) && !full_word {
-                    buffer_window.cursor = cursor;
-                    next_word_found = true;
-                    break;
-                }
+        is_first := false;
+        if !is_whitespace && cursor > 0 {
+            is_text := is_text_character(char);
+            previous_char := line.data[cursor - 1];
+            if is_whitespace(previous_char) {
+                is_first = true;
             }
+            else {
+                is_first = !full_word && (is_text != is_text_character(previous_char));
+            }
+        }
 
-            if !next_word_found && line.next != null {
+        // Go to the last non-whitespace character
+        if is_whitespace || is_first || cursor == 0 {
+            if cursor > 0 {
+                cursor--;
+            }
+            else if line.previous {
+                buffer_window.line--;
+                line = line.previous;
                 cursor = 0;
-                line = line.next;
-                while cursor < line.length {
-                    char = line.data[cursor];
-                    if !is_whitespace(char) {
-                        break;
-                    }
+                if line.length > 0 {
+                    cursor = line.length - 1;
+                }
+            }
 
-                    cursor++;
+            while true {
+                char_found := false;
+                if line.length > 0 {
+                    while true {
+                        char = line.data[cursor];
+                        if !is_whitespace(char) {
+                            char_found = true;
+                            break;
+                        }
+
+                        if cursor == 0
+                            break;
+
+                        cursor--;
+                    }
                 }
 
-                buffer_window.cursor = cursor;
-                buffer_window.line++;
+                if char_found || line.previous == null
+                    break;
+
+                buffer_window.line--;
+                line = line.previous;
+                cursor = 0;
+                if line.length > 0 {
+                    cursor = line.length - 1;
+                }
             }
         }
-        else {
-            // TODO Implement
+
+        // Move to the beginning of the word
+        is_text := is_text_character(char);
+        while true {
+            if cursor == 0 {
+                break;
+            }
+
+            previous_char := line.data[cursor - 1];
+            if is_whitespace(previous_char) || !full_word && (is_text != is_text_character(previous_char)) {
+                break;
+            }
+
+            cursor--;
         }
+
+        buffer_window.cursor = cursor;
     }
 
     adjust_start_line(buffer_window);
@@ -487,28 +480,12 @@ move_to_end_of_word(bool full_word) {
 
     // Go to the next non-whitespace character
     if is_whitespace || is_last || cursor == line.length - 1 {
-        cursor++;
-        while true {
-            char_found := false;
-            while cursor < line.length {
-                char = line.data[cursor];
-                if !is_whitespace(char) {
-                    char_found = true;
-                    break;
-                }
-                cursor++;
-            }
-
-            if char_found || line.next == null
-                break;
-
-            buffer_window.line++;
-            cursor = 0;
-            line = line.next;
-        }
+        line = move_to_next_non_whitespace(buffer_window, line, cursor + 1);
     }
 
     // Move to the end of the word
+    cursor = buffer_window.cursor;
+    char = line.data[cursor];
     is_text := is_text_character(char);
     while cursor < line.length {
         if cursor + 1 == line.length {
@@ -671,6 +648,30 @@ BufferLine* get_current_line(FileBuffer* buffer, u32 target_line) {
         line = line.next;
     }
 
+    return line;
+}
+
+BufferLine* move_to_next_non_whitespace(BufferWindow* window, BufferLine* line, u32 cursor) {
+    while true {
+        char_found := false;
+        while cursor < line.length {
+            char := line.data[cursor];
+            if !is_whitespace(char) {
+                char_found = true;
+                break;
+            }
+            cursor++;
+        }
+
+        if char_found || line.next == null
+            break;
+
+        window.line++;
+        cursor = 0;
+        line = line.next;
+    }
+
+    window.cursor = cursor;
     return line;
 }
 

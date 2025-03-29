@@ -2,6 +2,7 @@
 
 [command, e]
 string, bool open_file_command(string path) {
+    allocate_strings(&path);
     open_file_buffer(path);
     return empty_string, false;
 }
