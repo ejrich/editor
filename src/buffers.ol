@@ -380,7 +380,7 @@ move_to_start_of_word(bool forward, bool full_word) {
                     next_word_found = true;
                     break;
                 }
-                else if !is_text_character(char) && !full_word{
+                else if !is_text_character(char) && !full_word {
                     buffer_window.cursor = cursor;
                     next_word_found = true;
                     break;
@@ -451,6 +451,83 @@ move_to_start_of_word(bool forward, bool full_word) {
     adjust_start_line(buffer_window);
 }
 
+move_to_end_of_word(bool full_word) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line := get_current_line(buffer, buffer_window.line);
+    if line == null {
+        return;
+    }
+
+    char: u8;
+    is_whitespace, is_last := false;
+    cursor: u32;
+    if line.length == 0 {
+        is_whitespace = true;
+    }
+    else {
+        cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+        char = line.data[cursor];
+        is_whitespace = is_whitespace(char);
+    }
+
+    if !is_whitespace && cursor < line.length - 1 {
+        is_text := is_text_character(char);
+        next_char := line.data[cursor + 1];
+        if is_whitespace(next_char) {
+            is_last = true;
+        }
+        else {
+            is_last = !full_word && (is_text != is_text_character(next_char));
+        }
+    }
+
+    // Go to the next non-whitespace character
+    if is_whitespace || is_last || cursor == line.length - 1 {
+        cursor++;
+        while true {
+            char_found := false;
+            while cursor < line.length {
+                char = line.data[cursor];
+                if !is_whitespace(char) {
+                    char_found = true;
+                    break;
+                }
+                cursor++;
+            }
+
+            if char_found || line.next == null
+                break;
+
+            buffer_window.line++;
+            cursor = 0;
+            line = line.next;
+        }
+    }
+
+    // Move to the end of the word
+    is_text := is_text_character(char);
+    while cursor < line.length {
+        if cursor + 1 == line.length {
+            break;
+        }
+
+        next_char := line.data[cursor + 1];
+        if is_whitespace(next_char) || !full_word && (is_text != is_text_character(next_char)) {
+            break;
+        }
+
+        cursor++;
+    }
+
+    buffer_window.cursor = cursor;
+
+    adjust_start_line(buffer_window);
+}
+
 move_to_line_boundary(bool end) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -478,8 +555,6 @@ move_paragraph(bool forward) {
         return;
     }
 
-
-
     if line.length == 0 {
         if forward {
             while line.next != null && line.length == 0 {
@@ -506,6 +581,13 @@ move_paragraph(bool forward) {
             buffer_window.line--;
             line = line.previous;
         }
+    }
+
+    if line.length == 0 {
+        buffer_window.cursor = 0;
+    }
+    else {
+        buffer_window.cursor = line.length - 1;
     }
 
     adjust_start_line(buffer_window);

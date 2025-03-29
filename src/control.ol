@@ -94,7 +94,7 @@ bool next_word(PressState state, ModCode mod) {
 
 [keybind]
 bool end_word(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_to_end_of_word((mod & ModCode.Shift) == ModCode.Shift);
     return true;
 }
 
