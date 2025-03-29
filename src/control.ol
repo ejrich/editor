@@ -118,13 +118,13 @@ bool end_of_line(PressState state, ModCode mod) {
 
 [keybind]
 bool begin_paragraph(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_paragraph(false);
     return true;
 }
 
 [keybind]
 bool end_paragraph(PressState state, ModCode mod) {
-    // TODO Implement me
+    move_paragraph(true);
     return true;
 }
 

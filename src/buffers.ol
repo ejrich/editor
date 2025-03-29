@@ -313,32 +313,12 @@ move_cursor(bool left, u32 cursor_changes = 1) {
 }
 
 move_to_start_of_word(bool forward, bool full_word) {
-    buffer_window: BufferWindow*;
-    switch current_window {
-        case SelectedWindow.Left;
-            buffer_window = &left_window;
-        case SelectedWindow.Right;
-            buffer_window = &right_window;
-    }
-
-    if buffer_window == null || buffer_window.buffer_index < 0 {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
         return;
     }
 
-    line_number: u32;
-    buffer := &buffers[buffer_window.buffer_index];
-    target_line := clamp(buffer_window.line, 0, buffer.line_count - 1);
-    line := buffer.lines;
-
-    while line != null {
-        if line_number == target_line {
-            break;
-        }
-
-        line_number++;
-        line = line.next;
-    }
-
+    line := get_current_line(buffer, buffer_window.line);
     if line == null {
         return;
     }
@@ -472,15 +452,8 @@ move_to_start_of_word(bool forward, bool full_word) {
 }
 
 move_to_line_boundary(bool end) {
-    buffer_window: BufferWindow*;
-    switch current_window {
-        case SelectedWindow.Left;
-            buffer_window = &left_window;
-        case SelectedWindow.Right;
-            buffer_window = &right_window;
-    }
-
-    if buffer_window == null || buffer_window.buffer_index < 0 {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
         return;
     }
 
@@ -489,19 +462,53 @@ move_to_line_boundary(bool end) {
         return;
     }
 
-    line_number: u32;
-    buffer := &buffers[buffer_window.buffer_index];
-    line := buffer.lines;
+    line := get_current_line(buffer, buffer_window.line);
+    if line
+        buffer_window.cursor = line.length - 1;
+}
 
-    while line != null {
-        if line_number == buffer_window.line {
-            buffer_window.cursor = line.length - 1;
-            break;
-        }
-
-        line_number++;
-        line = line.next;
+move_paragraph(bool forward) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
     }
+
+    line := get_current_line(buffer, buffer_window.line);
+    if line == null {
+        return;
+    }
+
+
+
+    if line.length == 0 {
+        if forward {
+            while line.next != null && line.length == 0 {
+                buffer_window.line++;
+                line = line.next;
+            }
+        }
+        else {
+            while line.previous != null && line.length == 0 {
+                buffer_window.line--;
+                line = line.previous;
+            }
+        }
+    }
+
+    if forward {
+        while line.next != null && line.length != 0 {
+            buffer_window.line++;
+            line = line.next;
+        }
+    }
+    else {
+        while line.previous != null && line.length != 0 {
+            buffer_window.line--;
+            line = line.previous;
+        }
+    }
+
+    adjust_start_line(buffer_window);
 }
 
 
@@ -549,6 +556,39 @@ BufferLine* allocate_line() {
     line: BufferLine* = pointer;
     line.data.length = line_buffer_length;
     line.data.data = pointer + size_of(BufferLine);
+    return line;
+}
+
+BufferWindow*, FileBuffer* get_current_window_and_buffer() {
+    buffer_window: BufferWindow*;
+    switch current_window {
+        case SelectedWindow.Left;
+            buffer_window = &left_window;
+        case SelectedWindow.Right;
+            buffer_window = &right_window;
+    }
+
+    if buffer_window == null || buffer_window.buffer_index < 0 {
+        return null, null;
+    }
+
+    return buffer_window, &buffers[buffer_window.buffer_index];
+}
+
+BufferLine* get_current_line(FileBuffer* buffer, u32 target_line) {
+    line_number: u32;
+    target_line = clamp(target_line, 0, buffer.line_count - 1);
+    line := buffer.lines;
+
+    while line != null {
+        if line_number == target_line {
+            break;
+        }
+
+        line_number++;
+        line = line.next;
+    }
+
     return line;
 }
 
@@ -691,7 +731,6 @@ go_to_buffer_line(BufferWindow* window, u32 line) {
 
     buffer := buffers[window.buffer_index];
     window.line = clamp(line - 1, 0, buffer.line_count - 1);
-    window.start_line = clamp(window.start_line, 0, window.line);
     adjust_start_line(window);
 }
 
@@ -708,7 +747,6 @@ move_buffer_line(BufferWindow* window, bool up, u32 line_changes = 1) {
     buffer := buffers[window.buffer_index];
 
     window.line = clamp(window.line, 0, buffer.line_count - 1);
-    window.start_line = clamp(window.start_line, 0, window.line);
     adjust_start_line(window);
 }
 
@@ -761,6 +799,8 @@ adjust_start_line(BufferWindow* window) {
         window.start_line = window.line;
         return;
     }
+
+    window.start_line = clamp(window.start_line, 0, window.line);
 
     buffer := buffers[window.buffer_index];
     starting_line := buffer.lines;
