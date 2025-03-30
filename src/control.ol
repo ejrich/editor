@@ -49,6 +49,9 @@ add_repeats(KeyCode code) {
 }
 
 bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char) {
+    if char.length == 0
+        return false;
+
     switch key_command.command {
         case KeyCommand.FindChar; {
             find_character_in_line(!key_command.shifted, false, char);

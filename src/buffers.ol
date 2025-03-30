@@ -571,17 +571,57 @@ move_paragraph(bool forward) {
 }
 
 find_character_in_line(bool forward, bool before, string char) {
+    if char.length != 1 return;
+
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
     line := get_current_line(buffer, buffer_window.line);
-    if line == null {
+    if line == null || line.length == 0 {
         return;
     }
 
-    // TODO Implement this
+    cursor := clamp(buffer_window.cursor, 0, line.length - 1);
+    char_found := false;
+    if forward {
+        cursor++;
+        while cursor < line.length {
+            if line.data[cursor] == char[0] {
+                char_found = true;
+                break;
+            }
+
+            cursor++;
+        }
+
+        if before {
+            cursor--;
+        }
+    }
+    else if cursor > 0 {
+        cursor--;
+        while true {
+            if line.data[cursor] == char[0] {
+                char_found = true;
+                break;
+            }
+
+            if cursor == 0
+                break;
+
+            cursor--;
+        }
+
+        if before {
+            cursor++;
+        }
+    }
+
+    if char_found {
+        buffer_window.cursor = cursor;
+    }
 }
 
 
