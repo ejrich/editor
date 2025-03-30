@@ -17,3 +17,5 @@ end_paragraph=CloseBrace
 go_to=G
 find_char=F
 until_char=T
+next_line=Plus
+previous_line=Minus
