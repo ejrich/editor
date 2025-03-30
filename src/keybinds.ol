@@ -48,8 +48,24 @@ bool handle_keybind_event(KeyCode code, PressState state, ModCode mod) {
     handler_index := keybind_lookup[cast(int, code)];
     if handler_index == 0 return false;
 
-    handler := keybind_definitions[handler_index - 1].handler;
-    return handler(state, mod);
+    keybind := keybind_definitions[handler_index - 1];
+
+    result: bool;
+    if keybind.no_repeat || key_command.repeats == 0 {
+        result = keybind.handler(state, mod);
+    }
+    else {
+        each i in key_command.repeats {
+            result = keybind.handler(state, mod);
+
+            if !result
+                break;
+        }
+    }
+
+    reset_key_command();
+
+    return result;
 }
 
 reassign_keybind(KeyCode code, string keybind) {
@@ -151,6 +167,7 @@ interface bool KeybindHandler(PressState state, ModCode mod)
 struct KeybindDefinition {
     name: string;
     handler: KeybindHandler;
+    no_repeat: bool;
 }
 
 keybind_definitions: Array<KeybindDefinition>;

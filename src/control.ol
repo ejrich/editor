@@ -8,13 +8,70 @@ enum EditMode {
 
 edit_mode: EditMode;
 
-[keybind]
+enum KeyCommand {
+    None;
+    FindChar;
+    UntilChar;
+}
+
+struct KeyCommandData {
+    command: KeyCommand;
+    can_reset := true;
+    shifted: bool;
+    repeats: u32;
+}
+
+key_command: KeyCommandData;
+
+set_key_command(KeyCommand command, ModCode mod) {
+    key_command = {
+        command = command;
+        can_reset = false;
+        shifted = (mod & ModCode.Shift) == ModCode.Shift;
+        repeats = 0;
+    }
+}
+
+reset_key_command(bool force = false) {
+    if key_command.can_reset {
+        key_command = {
+            command = KeyCommand.None;
+            shifted = false;
+            repeats = 0;
+        }
+    }
+    key_command.can_reset = true;
+}
+
+add_repeats(KeyCode code) {
+    key_command.repeats *= 10;
+    key_command.repeats += cast(u32, code) - '0';
+}
+
+bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char) {
+    switch key_command.command {
+        case KeyCommand.FindChar; {
+            find_character_in_line(!key_command.shifted, false, char);
+            reset_key_command(true);
+            return true;
+        }
+        case KeyCommand.UntilChar; {
+            find_character_in_line(!key_command.shifted, true, char);
+            reset_key_command(true);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[keybind, no_repeat]
 bool normal_mode(PressState state, ModCode mod) {
     edit_mode = EditMode.Normal;
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool visual_mode(PressState state, ModCode mod) {
     switch mod {
         case ModCode.Shift;
@@ -27,14 +84,14 @@ bool visual_mode(PressState state, ModCode mod) {
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool insert(PressState state, ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool append(PressState state, ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
@@ -128,20 +185,20 @@ bool end_paragraph(PressState state, ModCode mod) {
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool go_to(PressState state, ModCode mod) {
     // TODO Implement me
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool find_char(PressState state, ModCode mod) {
-    // TODO Implement me
+    set_key_command(KeyCommand.FindChar, mod);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool until_char(PressState state, ModCode mod) {
-    // TODO Implement me
+    set_key_command(KeyCommand.UntilChar, mod);
     return true;
 }

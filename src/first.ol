@@ -41,7 +41,8 @@ application_name := "Editor";
 
     if intercept_compiler_messages() {
         profiling_data_variable, function_names_variable, keybind_definitions_variable, commands_variable: GlobalVariableAst*;
-        profiled_function_names, keybind_function_names: Array<string>;
+        profiled_function_names: Array<string>;
+        keybind_functions: Array<KeybindFunction>;
         commands: Array<Command>;
         function_index, function_names_length, keybind_definitions_length, commands_length: int;
 
@@ -77,8 +78,13 @@ application_name := "Editor";
                     if message.value.ast.type == AstType.Function {
                         function := cast(FunctionAst*, message.value.ast);
                         if array_contains(function.attributes, "keybind") {
-                            keybind_definitions_length += function.name.length * 2 + 25;
-                            array_insert(&keybind_function_names, function.name);
+                            keybind_function: KeybindFunction = {
+                                name = function.name;
+                                no_repeat = array_contains(function.attributes, "no_repeat");
+                            }
+                            keybind_definitions_length += function.name.length * 2 + 43;
+                            if !keybind_function.no_repeat keybind_definitions_length++;
+                            array_insert(&keybind_functions, keybind_function);
                         }
                         else if array_contains(function.attributes, "command") {
                             if verify_command_arguments(function) {
@@ -173,25 +179,32 @@ application_name := "Editor";
                         keybind_definitions_initial_value[0] = '[';
 
                         i := 1;
-                        each name in keybind_function_names {
+                        each function in keybind_functions {
                             prefix := "{name = \""; #const
-                            middle := "\"; handler = "; #const
-                            suffix := ";},"; #const
+                            handler := "\"; handler = "; #const
+                            no_repeat_true := "; no_repeat = true;},"; #const
+                            no_repeat_false := "; no_repeat = false;},"; #const
 
                             memory_copy(keybind_definitions_initial_value.data + i, prefix.data, prefix.length);
                             i += prefix.length;
 
-                            memory_copy(keybind_definitions_initial_value.data + i, name.data, name.length);
-                            i += name.length;
+                            memory_copy(keybind_definitions_initial_value.data + i, function.name.data, function.name.length);
+                            i += function.name.length;
 
-                            memory_copy(keybind_definitions_initial_value.data + i, middle.data, middle.length);
-                            i += middle.length;
+                            memory_copy(keybind_definitions_initial_value.data + i, handler.data, handler.length);
+                            i += handler.length;
 
-                            memory_copy(keybind_definitions_initial_value.data + i, name.data, name.length);
-                            i += name.length;
+                            memory_copy(keybind_definitions_initial_value.data + i, function.name.data, function.name.length);
+                            i += function.name.length;
 
-                            memory_copy(keybind_definitions_initial_value.data + i, suffix.data, suffix.length);
-                            i += suffix.length;
+                            if function.no_repeat {
+                                memory_copy(keybind_definitions_initial_value.data + i, no_repeat_true.data, no_repeat_true.length);
+                                i += no_repeat_true.length;
+                            }
+                            else {
+                                memory_copy(keybind_definitions_initial_value.data + i, no_repeat_false.data, no_repeat_false.length);
+                                i += no_repeat_false.length;
+                            }
                         }
 
                         keybind_definitions_initial_value[keybind_definitions_length - 1] = ']';
@@ -352,6 +365,11 @@ bool add_profiling_to_function(FunctionAst* function, int index) {
 
     profiling_data: Array<ProfilingData>;
     function_names: Array<string>;
+}
+
+struct KeybindFunction {
+    name: string;
+    no_repeat: bool;
 }
 
 // Code for verifying and generating commands

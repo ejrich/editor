@@ -570,6 +570,20 @@ move_paragraph(bool forward) {
     adjust_start_line(buffer_window);
 }
 
+find_character_in_line(bool forward, bool before, string char) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line := get_current_line(buffer, buffer_window.line);
+    if line == null {
+        return;
+    }
+
+    // TODO Implement this
+}
+
 
 // Data structures
 struct FileBuffer {

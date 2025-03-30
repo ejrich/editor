@@ -11,12 +11,45 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     // log("Key % is % with mod %!\n", code, state, mod);
 
     if state & PressState.Down {
+        if edit_mode == EditMode.Insert {
+            // TODO Implement insert mode
+            if cast(u32, code) >= ' ' && char.length > 0 {
+                return;
+            }
+        }
+
         if handle_command_press(state, code, mod, char) return;
+
+        if handle_key_command(state, code, mod, char) return;
 
         switch code {
             case KeyCode.Escape; {
                 if mod & ModCode.Shift {
                     signal_shutdown();
+                    return;
+                }
+            }
+            case KeyCode.Zero; {
+                if key_command.repeats > 0 {
+                    add_repeats(code);
+                    return;
+                }
+            }
+            case KeyCode.One;
+            case KeyCode.Two;
+            case KeyCode.Three;
+            case KeyCode.Four;
+            case KeyCode.Five;
+            case KeyCode.Six;
+            case KeyCode.Seven;
+            case KeyCode.Eight;
+            case KeyCode.Nine; {
+                add_repeats(code);
+                return;
+            }
+            case KeyCode.Colon; {
+                if (state & PressState.Held) != PressState.Held {
+                    start_command_mode();
                     return;
                 }
             }
@@ -26,11 +59,21 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
             }
-            case KeyCode.Colon; {
-                if (state & PressState.Held) != PressState.Held {
-                    start_command_mode();
-                    return;
-                }
+            case KeyCode.Up; {
+                move_up(state, mod);
+                return;
+            }
+            case KeyCode.Down; {
+                move_down(state, mod);
+                return;
+            }
+            case KeyCode.Left; {
+                move_left(state, mod);
+                return;
+            }
+            case KeyCode.Right; {
+                move_right(state, mod);
+                return;
             }
         }
 
