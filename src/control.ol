@@ -195,14 +195,26 @@ bool previous_line(PressState state, ModCode mod) {
 }
 
 [keybind]
+bool begin_sentence(PressState state, ModCode mod) {
+    move_block(false, false);
+    return true;
+}
+
+[keybind]
+bool end_sentence(PressState state, ModCode mod) {
+    move_block(true, false);
+    return true;
+}
+
+[keybind]
 bool begin_paragraph(PressState state, ModCode mod) {
-    move_paragraph(false);
+    move_block(false, true);
     return true;
 }
 
 [keybind]
 bool end_paragraph(PressState state, ModCode mod) {
-    move_paragraph(true);
+    move_block(true, true);
     return true;
 }
 

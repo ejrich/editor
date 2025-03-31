@@ -535,7 +535,7 @@ move_to_line_boundary(bool end, bool soft_boundary = false) {
     }
 }
 
-move_paragraph(bool forward) {
+move_block(bool forward, bool paragraph) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -546,40 +546,76 @@ move_paragraph(bool forward) {
         return;
     }
 
-    if line.length == 0 {
+    if paragraph {
+        if line.length == 0 {
+            if forward {
+                while line.next != null && line.length == 0 {
+                    buffer_window.line++;
+                    line = line.next;
+                }
+            }
+            else {
+                while line.previous != null && line.length == 0 {
+                    buffer_window.line--;
+                    line = line.previous;
+                }
+            }
+        }
+
         if forward {
-            while line.next != null && line.length == 0 {
+            while line.next != null && line.length != 0 {
                 buffer_window.line++;
                 line = line.next;
             }
         }
         else {
-            while line.previous != null && line.length == 0 {
+            while line.previous != null && line.length != 0 {
                 buffer_window.line--;
                 line = line.previous;
             }
         }
     }
+    else {
+        if line.length == 0 {
+            if forward {
+                while line.next != null && line.length == 0 {
+                    buffer_window.line++;
+                    line = line.next;
+                }
+            }
+            else {
+                while line.previous != null && line.length == 0 {
+                    buffer_window.line--;
+                    line = line.previous;
+                }
 
-    if forward {
-        while line.next != null && line.length != 0 {
-            buffer_window.line++;
-            line = line.next;
+                while line.previous != null && line.previous.length != 0 {
+                    buffer_window.line--;
+                    line = line.previous;
+                }
+            }
+        }
+        else {
+            if forward {
+                while line.next != null && line.length != 0 {
+                    buffer_window.line++;
+                    line = line.next;
+                }
+            }
+            else if line.previous != null && line.previous.length == 0 {
+                buffer_window.line--;
+                line = line.previous;
+            }
+            else {
+                while line.previous != null && line.previous.length != 0 {
+                    buffer_window.line--;
+                    line = line.previous;
+                }
+            }
         }
     }
-    else {
-        while line.previous != null && line.length != 0 {
-            buffer_window.line--;
-            line = line.previous;
-        }
-    }
 
-    if line.length == 0 {
-        buffer_window.cursor = 0;
-    }
-    else {
-        buffer_window.cursor = line.length - 1;
-    }
+    buffer_window.cursor = 0;
 
     adjust_start_line(buffer_window);
 }
