@@ -505,20 +505,34 @@ move_to_end_of_word(bool full_word) {
     adjust_start_line(buffer_window);
 }
 
-move_to_line_boundary(bool end) {
+move_to_line_boundary(bool end, bool soft_boundary = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
-    if !end {
-        buffer_window.cursor = 0;
+    line := get_current_line(buffer, buffer_window.line);
+    if line == null {
         return;
     }
 
-    line := get_current_line(buffer, buffer_window.line);
-    if line
+    if end {
         buffer_window.cursor = line.length - 1;
+    }
+    else {
+        cursor := 0;
+        if soft_boundary {
+            while cursor < line.length {
+                char := line.data[cursor];
+                if !is_whitespace(char) {
+                    break;
+                }
+
+                cursor++;
+            }
+        }
+        buffer_window.cursor = cursor;
+    }
 }
 
 move_paragraph(bool forward) {

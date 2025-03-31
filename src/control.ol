@@ -171,8 +171,26 @@ bool start_of_line(PressState state, ModCode mod) {
 }
 
 [keybind]
+bool start_of_line_text(PressState state, ModCode mod) {
+    move_to_line_boundary(false, true);
+    return true;
+}
+
+[keybind]
 bool end_of_line(PressState state, ModCode mod) {
     move_to_line_boundary(true);
+    return true;
+}
+
+[keybind]
+bool next_line(PressState state, ModCode mod) {
+    move_line(false, 1, true);
+    return true;
+}
+
+[keybind]
+bool previous_line(PressState state, ModCode mod) {
+    move_line(true, 1, true);
     return true;
 }
 
@@ -203,17 +221,5 @@ bool find_char(PressState state, ModCode mod) {
 [keybind, no_repeat]
 bool until_char(PressState state, ModCode mod) {
     set_key_command(KeyCommand.UntilChar, mod);
-    return true;
-}
-
-[keybind]
-bool next_line(PressState state, ModCode mod) {
-    move_line(false, 1, true);
-    return true;
-}
-
-[keybind]
-bool previous_line(PressState state, ModCode mod) {
-    move_line(true, 1, true);
     return true;
 }
