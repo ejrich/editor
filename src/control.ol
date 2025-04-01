@@ -12,6 +12,7 @@ enum KeyCommand {
     None;
     FindChar;
     UntilChar;
+    GoTo;
 }
 
 struct KeyCommandData {
@@ -32,8 +33,8 @@ set_key_command(KeyCommand command, ModCode mod) {
     }
 }
 
-reset_key_command(bool force = false) {
-    if key_command.can_reset {
+reset_key_command() {
+    if key_command.can_reset && key_command.command != KeyCommand.None {
         key_command = {
             command = KeyCommand.None;
             shifted = false;
@@ -55,12 +56,12 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
     switch key_command.command {
         case KeyCommand.FindChar; {
             find_character_in_line(!key_command.shifted, false, char);
-            reset_key_command(true);
+            reset_key_command();
             return true;
         }
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
-            reset_key_command(true);
+            reset_key_command();
             return true;
         }
     }
@@ -111,14 +112,14 @@ bool substitute(PressState state, ModCode mod) {
 [keybind]
 bool move_up(PressState state, ModCode mod) {
     // TODO Properly implement with visual mode
-    move_line(true);
+    move_line(true, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
 [keybind]
 bool move_down(PressState state, ModCode mod) {
     // TODO Properly implement with visual mode
-    move_line(false);
+    move_line(false, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
@@ -166,31 +167,31 @@ bool previous_word(PressState state, ModCode mod) {
 
 [keybind]
 bool start_of_line(PressState state, ModCode mod) {
-    move_to_line_boundary(false);
+    move_to_line_boundary(false, false, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
 [keybind]
 bool start_of_line_text(PressState state, ModCode mod) {
-    move_to_line_boundary(false, true);
+    move_to_line_boundary(false, true, false);
     return true;
 }
 
 [keybind]
 bool end_of_line(PressState state, ModCode mod) {
-    move_to_line_boundary(true);
+    move_to_line_boundary(true, false, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
 [keybind]
 bool next_line(PressState state, ModCode mod) {
-    move_line(false, 1, true);
+    move_line(false, false, 1, true);
     return true;
 }
 
 [keybind]
 bool previous_line(PressState state, ModCode mod) {
-    move_line(true, 1, true);
+    move_line(true, false, 1, true);
     return true;
 }
 
@@ -220,7 +221,15 @@ bool end_paragraph(PressState state, ModCode mod) {
 
 [keybind, no_repeat]
 bool go_to(PressState state, ModCode mod) {
-    // TODO Implement me
+    if mod & ModCode.Shift {
+        go_to_line(-1);
+    }
+    else if key_command.command == KeyCommand.GoTo {
+        go_to_line(0);
+    }
+    else {
+        set_key_command(KeyCommand.GoTo, ModCode.None);
+    }
     return true;
 }
 

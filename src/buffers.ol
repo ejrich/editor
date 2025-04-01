@@ -1,4 +1,4 @@
-// Buffer rendering
+// Buffer renderinn
 draw_buffers() {
     if !is_font_ready(settings.font_size) return;
 
@@ -285,30 +285,84 @@ resize_buffers() {
         adjust_start_line(&right_window);
 }
 
-go_to_line(u32 line) {
-    switch current_window {
-        case SelectedWindow.Left;
-            go_to_buffer_line(&left_window, line);
-        case SelectedWindow.Right;
-            go_to_buffer_line(&right_window, line);
+go_to_line(s32 line) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
     }
+
+    if line < 0 {
+        buffer_window.line = clamp(buffer.line_count + line, 0, buffer.line_count - 1);
+    }
+    else {
+        buffer_window.line = clamp(line - 1, 0, buffer.line_count - 1);
+    }
+    adjust_start_line(buffer_window);
 }
 
-move_line(bool up, u32 line_changes = 1, bool move_to_first = false) {
-    switch current_window {
-        case SelectedWindow.Left;
-            move_buffer_line(&left_window, up, line_changes, move_to_first);
-        case SelectedWindow.Right;
-            move_buffer_line(&right_window, up, line_changes, move_to_first);
+move_line(bool up, bool with_wrap, u32 line_changes = 1, bool move_to_first = false) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    // TODO Implement with_wrap
+
+    if up buffer_window.line -= line_changes;
+    else  buffer_window.line += line_changes;
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    adjust_start_line(buffer_window);
+
+    if move_to_first {
+        line := get_current_line(buffer, buffer_window.line);
+        if line != null {
+            cursor := 0;
+            while cursor < line.length {
+                char := line.data[cursor];
+                if !is_whitespace(char) {
+                    break;
+                }
+
+                cursor++;
+            }
+
+            buffer_window.cursor = cursor;
+        }
     }
 }
 
 move_cursor(bool left, u32 cursor_changes = 1) {
-    switch current_window {
-        case SelectedWindow.Left;
-            move_buffer_cursor(&left_window, left, cursor_changes);
-        case SelectedWindow.Right;
-            move_buffer_cursor(&right_window, left, cursor_changes);
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line := get_current_line(buffer, buffer_window.line);
+    if line == null || line.length == 0 {
+        return;
+    }
+
+    if left {
+        if cursor_changes > buffer_window.cursor {
+            buffer_window.cursor = 0;
+        }
+        else if buffer_window.cursor >= line.length {
+            buffer_window.cursor = line.length - cursor_changes - 1;
+        }
+        else {
+            buffer_window.cursor -= cursor_changes;
+        }
+    }
+    else {
+        if buffer_window.cursor + cursor_changes >= line.length {
+            buffer_window.cursor = line.length - 1;
+        }
+        else {
+            buffer_window.cursor += cursor_changes;
+        }
     }
 }
 
@@ -505,7 +559,7 @@ move_to_end_of_word(bool full_word) {
     adjust_start_line(buffer_window);
 }
 
-move_to_line_boundary(bool end, bool soft_boundary = false) {
+move_to_line_boundary(bool end, bool soft_boundary, bool with_wrap) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -514,6 +568,38 @@ move_to_line_boundary(bool end, bool soft_boundary = false) {
     line := get_current_line(buffer, buffer_window.line);
     if line == null {
         return;
+    }
+
+    if line.length <= 1 {
+        buffer_window.cursor = 0;
+        return;
+    }
+
+    if with_wrap {
+        full_width := left_window.displayed ^ right_window.displayed;
+        max_chars := global_font_config.max_chars_per_line;
+        if full_width max_chars = global_font_config.max_chars_per_line_full;
+        max_chars -= buffer.line_count_digits + 1;
+
+        current_cursor := clamp(buffer_window.cursor, 0, line.length - 1);
+
+        if line.length > max_chars {
+            cursor := 0;
+            if end {
+                while cursor <= current_cursor {
+                    cursor += max_chars;
+                }
+                cursor--;
+                cursor = clamp(cursor, 0, line.length - 1);
+            }
+            else {
+                while cursor + max_chars < current_cursor {
+                    cursor += max_chars;
+                }
+            }
+            buffer_window.cursor = cursor;
+            return;
+        }
     }
 
     if end {
@@ -921,39 +1007,6 @@ go_to_buffer_line(BufferWindow* window, u32 line) {
     adjust_start_line(window);
 }
 
-move_buffer_line(BufferWindow* window, bool up, u32 line_changes, bool move_to_first) {
-    if window.buffer_index < 0 {
-        window.line = 0;
-        window.start_line = 0;
-        return;
-    }
-
-    if up window.line -= line_changes;
-    else  window.line += line_changes;
-
-    buffer := &buffers[window.buffer_index];
-
-    window.line = clamp(window.line, 0, buffer.line_count - 1);
-    adjust_start_line(window);
-
-    if move_to_first {
-        line := get_current_line(buffer, window.line);
-        if line != null {
-            cursor := 0;
-            while cursor < line.length {
-                char := line.data[cursor];
-                if !is_whitespace(char) {
-                    break;
-                }
-
-                cursor++;
-            }
-
-            window.cursor = cursor;
-        }
-    }
-}
-
 move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
     if window.buffer_index < 0 {
         window.line = 0;
@@ -962,34 +1015,6 @@ move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
     }
 
     buffer := buffers[window.buffer_index];
-    line := buffer.lines;
-    line_number := 0;
-    while line != null && line_number != window.line {
-        line = line.next;
-        line_number++;
-    }
-
-    if line == null || line.length == 0 return;
-
-    if left {
-        if cursor_changes > window.cursor {
-            window.cursor = 0;
-        }
-        else if window.cursor >= line.length {
-            window.cursor = line.length - cursor_changes - 1;
-        }
-        else {
-            window.cursor -= cursor_changes;
-        }
-    }
-    else {
-        if window.cursor + cursor_changes >= line.length {
-            window.cursor = line.length - 1;
-        }
-        else {
-            window.cursor += cursor_changes;
-        }
-    }
 }
 
 adjust_start_line(BufferWindow* window) {
