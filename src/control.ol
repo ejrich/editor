@@ -34,7 +34,7 @@ set_key_command(KeyCommand command, ModCode mod) {
 }
 
 reset_key_command() {
-    if key_command.can_reset && key_command.command != KeyCommand.None {
+    if key_command.can_reset {
         key_command = {
             command = KeyCommand.None;
             shifted = false;
@@ -47,6 +47,13 @@ reset_key_command() {
 add_repeats(KeyCode code) {
     key_command.repeats *= 10;
     key_command.repeats += cast(u32, code) - '0';
+}
+
+u32 get_repeats() {
+    if key_command.repeats > 0
+        return key_command.repeats;
+
+    return 1;
 }
 
 bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char) {
@@ -102,47 +109,47 @@ bool append(PressState state, ModCode mod) {
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool substitute(PressState state, ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool move_up(PressState state, ModCode mod) {
-    // TODO Properly implement with visual mode
-    move_line(true, key_command.command == KeyCommand.GoTo);
+    line_changes := get_repeats();
+    move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool move_down(PressState state, ModCode mod) {
-    // TODO Properly implement with visual mode
-    move_line(false, key_command.command == KeyCommand.GoTo);
+    line_changes := get_repeats();
+    move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool move_left(PressState state, ModCode mod) {
-    // TODO Properly implement with visual mode
     if mod & ModCode.Control {
         switch_to_buffer(SelectedWindow.Left);
     }
     else {
-        move_cursor(true);
+        cursor_changes := get_repeats();
+        move_cursor(true, cursor_changes);
     }
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool move_right(PressState state, ModCode mod) {
-    // TODO Properly implement with visual mode
     if mod & ModCode.Control {
         switch_to_buffer(SelectedWindow.Right);
     }
     else {
-        move_cursor(false);
+        cursor_changes := get_repeats();
+        move_cursor(false, cursor_changes);
     }
     return true;
 }
@@ -165,33 +172,35 @@ bool previous_word(PressState state, ModCode mod) {
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool start_of_line(PressState state, ModCode mod) {
     move_to_line_boundary(false, false, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool start_of_line_text(PressState state, ModCode mod) {
     move_to_line_boundary(false, true, false);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool end_of_line(PressState state, ModCode mod) {
     move_to_line_boundary(true, false, key_command.command == KeyCommand.GoTo);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool next_line(PressState state, ModCode mod) {
-    move_line(false, false, 1, true);
+    line_changes := get_repeats();
+    move_line(false, false, line_changes, true);
     return true;
 }
 
-[keybind]
+[keybind, no_repeat]
 bool previous_line(PressState state, ModCode mod) {
-    move_line(true, false, 1, true);
+    line_changes := get_repeats();
+    move_line(true, false, line_changes, true);
     return true;
 }
 

@@ -111,8 +111,7 @@ application_name := "Editor";
                                     }
                                 }
                             }
-                            else
-                            {
+                            else {
                                 error_string := format_string("Function '%' has the incorrect arguments/return type for a command. The return type needs to be 'string, bool' and the arguments can only be bool, integer, float, or string types", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);

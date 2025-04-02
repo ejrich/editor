@@ -1,4 +1,4 @@
-// Buffer renderinn
+// Buffer rendering
 draw_buffers() {
     if !is_font_ready(settings.font_size) return;
 
@@ -300,7 +300,7 @@ go_to_line(s32 line) {
     adjust_start_line(buffer_window);
 }
 
-move_line(bool up, bool with_wrap, u32 line_changes = 1, bool move_to_first = false) {
+move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -309,9 +309,60 @@ move_line(bool up, bool with_wrap, u32 line_changes = 1, bool move_to_first = fa
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
     // TODO Implement with_wrap
+    if with_wrap {
+        max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
+        line := get_current_line(buffer, buffer_window.line);
 
-    if up buffer_window.line -= line_changes;
-    else  buffer_window.line += line_changes;
+        current_cursor := 0;
+        if line.length > 1 {
+            current_cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+        }
+
+        column := current_cursor % max_chars;
+
+        if up {
+            while line_changes > 0 {
+                if line.length <= max_chars || current_cursor - max_chars < 0 {
+                    if line.previous == null {
+                        break;
+                    }
+
+                    line = line.previous;
+                    current_cursor = line.length / max_chars * max_chars + column;
+                    buffer_window.line--;
+                }
+                else {
+                    current_cursor -= max_chars;
+                }
+
+                line_changes--;
+            }
+        }
+        else {
+            while line_changes > 0 {
+                if line.length <= max_chars || current_cursor + max_chars > line.length {
+                    if line.next == null {
+                        break;
+                    }
+
+                    line = line.next;
+                    current_cursor = column;
+                    buffer_window.line++;
+                }
+                else {
+                    current_cursor += max_chars;
+                }
+
+                line_changes--;
+            }
+        }
+
+        buffer_window.cursor = current_cursor;
+    }
+    else {
+        if up buffer_window.line -= line_changes;
+        else  buffer_window.line += line_changes;
+    }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     adjust_start_line(buffer_window);
@@ -334,7 +385,7 @@ move_line(bool up, bool with_wrap, u32 line_changes = 1, bool move_to_first = fa
     }
 }
 
-move_cursor(bool left, u32 cursor_changes = 1) {
+move_cursor(bool left, u32 cursor_changes) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -576,11 +627,7 @@ move_to_line_boundary(bool end, bool soft_boundary, bool with_wrap) {
     }
 
     if with_wrap {
-        full_width := left_window.displayed ^ right_window.displayed;
-        max_chars := global_font_config.max_chars_per_line;
-        if full_width max_chars = global_font_config.max_chars_per_line_full;
-        max_chars -= buffer.line_count_digits + 1;
-
+        max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
         current_cursor := clamp(buffer_window.cursor, 0, line.length - 1);
 
         if line.length > max_chars {
@@ -953,11 +1000,11 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     }
 
     current_line := starting_line;
-    full_width := left_window.displayed ^ right_window.displayed;
-    rendered_lines := calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+    max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
+    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
     while current_line != null && line_number != window.line {
         current_line = current_line.next;
-        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length);
         line_number++;
     }
 
@@ -966,7 +1013,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
             while current_line.next != null && rendered_lines <= settings.scroll_offset {
                 window.line++;
                 current_line = current_line.next;
-                rendered_lines += calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+                rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
             }
         }
         return;
@@ -977,7 +1024,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
         end_line := current_line.next;
         rendered_lines_after_current: u32;
         while end_line != null {
-            rendered_lines_after_current += calculate_rendered_lines(buffer.line_count_digits, end_line.length, full_width);
+            rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
             end_line = end_line.next;
 
             if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
@@ -988,7 +1035,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
         if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
             while current_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
                 window.line--;
-                rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+                rendered_lines -= calculate_rendered_lines(max_chars, current_line.length);
                 current_line = current_line.previous;
             }
         }
@@ -1042,11 +1089,11 @@ adjust_start_line(BufferWindow* window) {
     if starting_line == null return;
 
     current_line := starting_line;
-    full_width := left_window.displayed ^ right_window.displayed;
-    rendered_lines := calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+    max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
+    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
     while current_line != null && line_number != window.line {
         current_line = current_line.next;
-        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length, full_width);
+        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
         line_number++;
     }
 
@@ -1054,7 +1101,7 @@ adjust_start_line(BufferWindow* window) {
         while starting_line.previous != null && rendered_lines <= settings.scroll_offset {
             window.start_line--;
             starting_line = starting_line.previous;
-            rendered_lines += calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+            rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
         }
     }
     else if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
@@ -1062,7 +1109,7 @@ adjust_start_line(BufferWindow* window) {
         end_line := current_line.next;
         rendered_lines_after_current: u32;
         while end_line != null {
-            rendered_lines_after_current += calculate_rendered_lines(buffer.line_count_digits, end_line.length, full_width);
+            rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
             end_line = end_line.next;
 
             if rendered_lines_after_current >= settings.scroll_offset {
@@ -1077,18 +1124,24 @@ adjust_start_line(BufferWindow* window) {
 
         while starting_line != null && rendered_lines + allowed_scroll_offset > global_font_config.max_lines {
             window.start_line++;
-            rendered_lines -= calculate_rendered_lines(buffer.line_count_digits, starting_line.length, full_width);
+            rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
             starting_line = starting_line.next;
         }
     }
 }
 
-u32 calculate_rendered_lines(u32 digits, u32 line_length, bool full_width) {
-    max_chars := global_font_config.max_chars_per_line;
-    if full_width max_chars = global_font_config.max_chars_per_line_full;
-
-    max_chars -= digits + 1;
+u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
     lines := line_length / max_chars + 1;
 
     return lines;
+}
+
+u32 calculate_max_chars_per_line(u32 digits) {
+    full_width := left_window.displayed ^ right_window.displayed;
+
+    if full_width {
+        return global_font_config.max_chars_per_line_full - digits - 1;
+    }
+
+    return global_font_config.max_chars_per_line - digits - 1;
 }
