@@ -14,6 +14,8 @@ struct Settings {
     [color]
     cursor_font_color: u32;
     [color]
+    visual_font_color: u32;
+    [color]
     background_color: u32;
     background_transparency: float;
     scroll_offset: u8;
@@ -51,6 +53,7 @@ struct AppearanceSettings {
     current_line_color: Vector4;
     cursor_color: Vector4;
     cursor_font_color: Vector4;
+    visual_font_color: Vector4;
     background_color: Vector4;
     normal_mode_color: Vector4;
     insert_mode_color: Vector4;
@@ -419,6 +422,7 @@ get_default_settings() {
         current_line_color = 0x000000;
         cursor_color = 0x000000;
         cursor_font_color = 0xFFFFFF;
+        visual_font_color = 0x000000;
         background_color = 0x000000;
         background_transparency = 1.0;
         scroll_offset = 10;

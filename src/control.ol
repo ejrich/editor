@@ -8,6 +8,13 @@ enum EditMode {
 
 edit_mode: EditMode;
 
+struct VisualModeData {
+    line: u32;
+    cursor: u32;
+}
+
+visual_mode_data: VisualModeData;
+
 enum KeyCommand {
     None;
     FindChar;
@@ -84,13 +91,31 @@ bool normal_mode(PressState state, ModCode mod) {
 
 [keybind, no_repeat]
 bool visual_mode(PressState state, ModCode mod) {
+    target_mode: EditMode;
     switch mod {
         case ModCode.Shift;
-            edit_mode = EditMode.VisualLine;
+            target_mode = EditMode.VisualLine;
         case ModCode.Control;
-            edit_mode = EditMode.VisualBlock;
+            target_mode = EditMode.VisualBlock;
         default;
-            edit_mode = EditMode.Visual;
+            target_mode = EditMode.Visual;
+    }
+
+    if target_mode == edit_mode {
+        edit_mode = EditMode.Normal;
+    }
+    else {
+        if edit_mode == EditMode.Normal {
+            buffer_window := get_current_window();
+            if buffer_window {
+                visual_mode_data = {
+                    line = buffer_window.line;
+                    cursor = buffer_window.cursor;
+                }
+            }
+        }
+
+        edit_mode = target_mode;
     }
     return true;
 }

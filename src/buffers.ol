@@ -845,6 +845,18 @@ enum SelectedWindow {
 
 current_window: SelectedWindow;
 
+BufferWindow* get_current_window() {
+    buffer_window: BufferWindow*;
+    switch current_window {
+        case SelectedWindow.Left;
+            buffer_window = &left_window;
+        case SelectedWindow.Right;
+            buffer_window = &right_window;
+    }
+
+    return buffer_window;
+}
+
 #private
 
 BufferLine* allocate_line() {
@@ -856,14 +868,7 @@ BufferLine* allocate_line() {
 }
 
 BufferWindow*, FileBuffer* get_current_window_and_buffer() {
-    buffer_window: BufferWindow*;
-    switch current_window {
-        case SelectedWindow.Left;
-            buffer_window = &left_window;
-        case SelectedWindow.Right;
-            buffer_window = &right_window;
-    }
-
+    buffer_window := get_current_window();
     if buffer_window == null || buffer_window.buffer_index < 0 {
         return null, null;
     }
