@@ -53,15 +53,17 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     digits := buffer.line_count_digits;
 
     visual_start_line, visual_end_line := -1;
-    switch edit_mode {
-        case EditMode.Visual;
-        case EditMode.VisualLine;
-        case EditMode.VisualBlock; {
-            visual_start_line = visual_mode_data.line + 1;
-            visual_end_line = cursor_line;
-            if cursor_line <= visual_mode_data.line {
-                visual_start_line = cursor_line;
-                visual_end_line = visual_mode_data.line + 1;
+    if selected {
+        switch edit_mode {
+            case EditMode.Visual;
+            case EditMode.VisualLine;
+            case EditMode.VisualBlock; {
+                visual_start_line = visual_mode_data.line + 1;
+                visual_end_line = cursor_line;
+                if cursor_line <= visual_mode_data.line {
+                    visual_start_line = cursor_line;
+                    visual_end_line = visual_mode_data.line + 1;
+                }
             }
         }
     }
@@ -88,9 +90,48 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
             }
 
             if line_number >= visual_start_line && line_number <= visual_end_line {
-                // TODO Visual and Visual Block mode
                 visual_start = 0;
                 visual_end = line.length - 1;
+                switch edit_mode {
+                    case EditMode.Visual; {
+                        if visual_start_line == visual_end_line {
+                            if cursor > visual_mode_data.cursor {
+                                visual_start = visual_mode_data.cursor;
+                                visual_end = cursor;
+                            }
+                            else {
+                                visual_start = cursor;
+                                visual_end = visual_mode_data.cursor;
+                            }
+                        }
+                        else if line_number == visual_start_line {
+                            if cursor == -1 {
+                                visual_start = visual_mode_data.cursor;
+                            }
+                            else {
+                                visual_start = cursor;
+                            }
+                        }
+                        else if line_number == visual_end_line {
+                            if cursor == -1 {
+                                visual_end = visual_mode_data.cursor;
+                            }
+                            else {
+                                visual_end = cursor;
+                            }
+                        }
+                    }
+                    case EditMode.VisualBlock; {
+                        if window.cursor > visual_mode_data.cursor {
+                            visual_start = visual_mode_data.cursor;
+                            visual_end = window.cursor;
+                        }
+                        else {
+                            visual_start = window.cursor;
+                            visual_end = visual_mode_data.cursor;
+                        }
+                    }
+                }
             }
 
             lines := render_line(line_string, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
@@ -331,7 +372,6 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
-    // TODO Implement with_wrap
     if with_wrap {
         max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
         line := get_current_line(buffer, buffer_window.line);
