@@ -372,6 +372,7 @@ load_settings() {
         current_line_color = convert_to_color(settings.current_line_color);
         cursor_color = convert_to_color(settings.cursor_color);
         cursor_font_color = convert_to_color(settings.cursor_font_color);
+        visual_font_color = convert_to_color(settings.visual_font_color);
         background_color = convert_to_color(settings.background_color, settings.background_transparency);
         normal_mode_color = convert_to_color(settings.normal_mode_color);
         insert_mode_color = convert_to_color(settings.insert_mode_color);

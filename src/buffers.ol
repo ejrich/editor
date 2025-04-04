@@ -52,6 +52,20 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
     digits := buffer.line_count_digits;
 
+    visual_start_line, visual_end_line := -1;
+    switch edit_mode {
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            visual_start_line = visual_mode_data.line + 1;
+            visual_end_line = cursor_line;
+            if cursor_line <= visual_mode_data.line {
+                visual_start_line = cursor_line;
+                visual_end_line = visual_mode_data.line + 1;
+            }
+        }
+    }
+
     // Render the file text
     line := buffer.lines;
     line_number: u32 = 1;
@@ -61,7 +75,8 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
             line_string: string = { length = line.length; data = line.data.data; }
-            cursor := -1;
+            cursor, visual_start, visual_end := -1;
+
             if line_number == cursor_line {
                 cursor = window.cursor;
                 if line.length == 0
@@ -71,7 +86,14 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
                 line_cursor = cursor;
             }
-            lines := render_line(line_string, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render);
+
+            if line_number >= visual_start_line && line_number <= visual_end_line {
+                // TODO Visual and Visual Block mode
+                visual_start = 0;
+                visual_end = line.length - 1;
+            }
+
+            lines := render_line(line_string, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }
@@ -177,8 +199,8 @@ open_file_buffer(string path) {
     }
 }
 
-switch_to_buffer(SelectedWindow window) {
-    if window == current_window return;
+bool switch_to_buffer(SelectedWindow window) {
+    if window == current_window return false;
 
     original_window, new_window: BufferWindow*;
     switch window {
@@ -199,6 +221,7 @@ switch_to_buffer(SelectedWindow window) {
     }
 
     current_window = window;
+    return true;
 }
 
 // Saving buffers to a file

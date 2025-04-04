@@ -158,7 +158,9 @@ bool move_down(PressState state, ModCode mod) {
 [keybind, no_repeat]
 bool move_left(PressState state, ModCode mod) {
     if mod & ModCode.Control {
-        switch_to_buffer(SelectedWindow.Left);
+        if switch_to_buffer(SelectedWindow.Left) {
+            edit_mode = EditMode.Normal;
+        }
     }
     else {
         cursor_changes := get_repeats();
@@ -170,7 +172,9 @@ bool move_left(PressState state, ModCode mod) {
 [keybind, no_repeat]
 bool move_right(PressState state, ModCode mod) {
     if mod & ModCode.Control {
-        switch_to_buffer(SelectedWindow.Right);
+        if switch_to_buffer(SelectedWindow.Right) {
+            edit_mode = EditMode.Normal;
+        }
     }
     else {
         cursor_changes := get_repeats();

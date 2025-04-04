@@ -107,7 +107,7 @@ render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 back
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available) {
+u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -169,7 +169,7 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line_with_cursor(font_texture, text, x, y, cursor, render_cursor, max_x, lines_available);
+    return render_line_with_cursor(font_texture, text, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
 }
 
 render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
@@ -241,9 +241,9 @@ global_font_config: GlobalFontConfig;
 
 library: FT_Library*;
 
-u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available) {
+u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1) {
     if cursor == text.length && render_cursor {
-        draw_cursor(x + text.length * font_texture.quad_advance, y);
+        draw_cursor(x + text.length * font_texture.quad_advance, y, appearance.cursor_color);
     }
 
     // Create the glyphs for the text string
@@ -266,7 +266,11 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
         font_color := appearance.font_color;
         if i == cursor && render_cursor {
             font_color = appearance.cursor_font_color;
-            draw_cursor(x, y);
+            draw_cursor(x, y, appearance.cursor_color);
+        }
+        else if i >= visual_start && i <= visual_end {
+            font_color = appearance.visual_font_color;
+            draw_cursor(x, y, appearance.font_color);
         }
 
         char := text[i];
@@ -324,12 +328,12 @@ adjust_line_and_draw_background(FontTexture* font_texture, Array<QuadInstanceDat
     }
 }
 
-draw_cursor(float x, float y) {
+draw_cursor(float x, float y, Vector4 color) {
     x_pos := x + global_font_config.quad_advance / 2.0;
     y_pos := y + global_font_config.block_y_offset;
 
     cursor_quad: QuadInstanceData = {
-        color = appearance.cursor_color;
+        color = color;
         position = { x = x_pos; y = y_pos; z = 0.1; }
         flags = QuadFlags.Solid;
         width = global_font_config.quad_advance;
