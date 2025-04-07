@@ -15,7 +15,7 @@ draw_buffers() {
     }
 
     if left_window.displayed {
-        draw_buffer_window(&left_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed);
+        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed);
     }
 
     if right_window.displayed {
@@ -23,13 +23,15 @@ draw_buffers() {
         if !left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(&right_window, x, current_window == SelectedWindow.Right, !left_window.displayed);
+        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed);
     }
 
     draw_command();
 }
 
 draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width) {
+    if window == null return;
+
     line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
 
@@ -234,16 +236,16 @@ open_file_buffer(string path) {
 
     switch current_window {
         case SelectedWindow.Left;
-            left_window.buffer_index = buffer_index;
+            left_window.buffer_window = allocate_buffer_window(buffer_index, left_window.buffer_window);
         case SelectedWindow.Right;
-            right_window.buffer_index = buffer_index;
+            right_window.buffer_window = allocate_buffer_window(buffer_index, right_window.buffer_window);
     }
 }
 
 bool switch_to_buffer(SelectedWindow window) {
     if window == current_window return false;
 
-    original_window, new_window: BufferWindow*;
+    original_window, new_window: EditorWindow*;
     switch window {
         case SelectedWindow.Left; {
             original_window = &right_window;
@@ -486,18 +488,18 @@ handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
 
     if left_window.displayed && (!right_window.displayed || x < 0.0) {
-        scroll_buffer(&left_window, direction == ScrollDirection.Up);
+        scroll_buffer(left_window.buffer_window, direction == ScrollDirection.Up);
     }
     else if right_window.displayed && (!left_window.displayed || x > 0.0) {
-        scroll_buffer(&right_window, direction == ScrollDirection.Up);
+        scroll_buffer(right_window.buffer_window, direction == ScrollDirection.Up);
     }
 }
 
 resize_buffers() {
     if left_window.displayed
-        adjust_start_line(&left_window);
+        adjust_start_line(left_window.buffer_window);
     if right_window.displayed
-        adjust_start_line(&right_window);
+        adjust_start_line(right_window.buffer_window);
 }
 
 go_to_line(s32 line) {
@@ -1042,15 +1044,20 @@ struct BufferLine {
 buffers: Array<FileBuffer>;
 
 struct BufferWindow {
-    displayed: bool;
     cursor: u32;
     line: u32;
     start_line: u32;
     buffer_index := -1;
+    next: BufferWindow*;
 }
 
-left_window: BufferWindow = { displayed = true; }
-right_window: BufferWindow;
+struct EditorWindow {
+    displayed: bool;
+    buffer_window: BufferWindow*;
+}
+
+left_window: EditorWindow = { displayed = true; }
+right_window: EditorWindow;
 
 enum SelectedWindow {
     Left;
@@ -1060,18 +1067,26 @@ enum SelectedWindow {
 current_window: SelectedWindow;
 
 BufferWindow* get_current_window() {
-    buffer_window: BufferWindow*;
+    editor_window: EditorWindow*;
     switch current_window {
         case SelectedWindow.Left;
-            buffer_window = &left_window;
+            editor_window = &left_window;
         case SelectedWindow.Right;
-            buffer_window = &right_window;
+            editor_window = &right_window;
     }
 
-    return buffer_window;
+    return editor_window.buffer_window;
 }
 
 #private
+
+BufferWindow* allocate_buffer_window(int buffer_index, BufferWindow* next) {
+    buffer_window := new<BufferWindow>();
+    buffer_window.buffer_index = buffer_index;
+    buffer_window.next = next;
+
+    return buffer_window;
+}
 
 BufferLine* allocate_line() {
     pointer := allocate(size_of(BufferLine) + line_buffer_length);

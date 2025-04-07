@@ -10,15 +10,9 @@ string, bool open_file_command(string path) {
 
 [command, w]
 string, bool save_current_buffer() {
-    buffer_index := -1;
-    switch current_window {
-        case SelectedWindow.Left;
-            buffer_index = left_window.buffer_index;
-        case SelectedWindow.Right;
-            buffer_index = right_window.buffer_index;
-    }
+    buffer_window := get_current_window();
 
-    success, lines, bytes, file := save_buffer(buffer_index);
+    success, lines, bytes, file := save_buffer(buffer_window.buffer_index);
     if !success {
         error_result := format_string("Unable to open file \"%\" to write", allocate, file);
         return error_result, true;
