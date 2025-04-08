@@ -236,9 +236,9 @@ open_file_buffer(string path) {
 
     switch current_window {
         case SelectedWindow.Left;
-            left_window.buffer_window = allocate_buffer_window(buffer_index, left_window.buffer_window);
+            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
         case SelectedWindow.Right;
-            right_window.buffer_window = allocate_buffer_window(buffer_index, right_window.buffer_window);
+            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
     }
 }
 
@@ -260,11 +260,38 @@ bool switch_to_buffer(SelectedWindow window) {
     assert(original_window != null && new_window != null);
 
     if !new_window.displayed {
-        *new_window = *original_window;
+        new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
+        new_window.displayed = true;
     }
 
     current_window = window;
     return true;
+}
+
+swap_top_buffer() {
+    editor_window: EditorWindow*;
+    switch current_window {
+        case SelectedWindow.Left;
+            editor_window = &left_window;
+        case SelectedWindow.Right;
+            editor_window = &right_window;
+    }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.next != null {
+        swap_from := editor_window.buffer_window;
+        swap_to := editor_window.buffer_window.next;
+
+        if swap_to.next {
+            swap_to.next.previous = swap_from;
+        }
+
+        swap_from.next = swap_to.next;
+        swap_from.previous = swap_to;
+        swap_to.next = swap_from;
+        swap_to.previous = null;
+
+        editor_window.buffer_window = swap_to;
+    }
 }
 
 // Saving buffers to a file
@@ -1048,6 +1075,7 @@ struct BufferWindow {
     line: u32;
     start_line: u32;
     buffer_index := -1;
+    previous: BufferWindow*;
     next: BufferWindow*;
 }
 
@@ -1080,12 +1108,67 @@ BufferWindow* get_current_window() {
 
 #private
 
+BufferWindow* open_or_create_buffer_window(int buffer_index, BufferWindow* stack_top) {
+    if stack_top != null && stack_top.buffer_index == buffer_index
+        return stack_top;
+
+    buffer_window := stack_top;
+    while buffer_window {
+        if buffer_window.buffer_index == buffer_index {
+            if buffer_window.next {
+                buffer_window.next.previous = buffer_window.previous;
+            }
+            if buffer_window.previous {
+                buffer_window.previous.next = buffer_window.next;
+            }
+
+            buffer_window.next = stack_top;
+            if stack_top {
+                stack_top.previous = buffer_window;
+            }
+
+            return buffer_window;
+        }
+
+        buffer_window = buffer_window.next;
+    }
+
+    return allocate_buffer_window(buffer_index, stack_top);
+}
+
 BufferWindow* allocate_buffer_window(int buffer_index, BufferWindow* next) {
     buffer_window := new<BufferWindow>();
     buffer_window.buffer_index = buffer_index;
     buffer_window.next = next;
+    if next {
+        next.previous = buffer_window;
+    }
 
     return buffer_window;
+}
+
+BufferWindow* copy_buffer_window_stack(BufferWindow* source) {
+    if source == null return null;
+
+    buffer_window := new<BufferWindow>();
+    stack_top := buffer_window;
+    while true {
+        buffer_window.cursor = source.cursor;
+        buffer_window.line = source.line;
+        buffer_window.start_line = source.start_line;
+        buffer_window.buffer_index = source.buffer_index;
+
+        source = source.next;
+        if source == null
+            break;
+
+        next := new<BufferWindow>();
+        buffer_window.next = next;
+        next.previous = buffer_window;
+        buffer_window = next;
+    }
+
+    return stack_top;
 }
 
 BufferLine* allocate_line() {

@@ -53,6 +53,10 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
             }
+            case KeyCode.F11; {
+                // TODO Make this a keybind
+                swap_top_buffer();
+            }
             case KeyCode.F12; {
                 if (state & PressState.Held) != PressState.Held {
                     toggle_performance_stats(mod == ModCode.Control);
