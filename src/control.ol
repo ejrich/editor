@@ -83,6 +83,7 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
     return false;
 }
 
+// Editing keybinds
 [keybind, no_repeat]
 bool normal_mode(PressState state, ModCode mod) {
     edit_mode = EditMode.Normal;
@@ -141,6 +142,7 @@ bool substitute(PressState state, ModCode mod) {
     return true;
 }
 
+// Movement keybinds
 [keybind, no_repeat]
 bool move_up(PressState state, ModCode mod) {
     line_changes := get_repeats();
@@ -280,5 +282,12 @@ bool find_char(PressState state, ModCode mod) {
 [keybind, no_repeat]
 bool until_char(PressState state, ModCode mod) {
     set_key_command(KeyCommand.UntilChar, mod);
+    return true;
+}
+
+// Buffer keybinds
+[keybind, no_repeat]
+bool swap_buffer(PressState state, ModCode mod) {
+    swap_top_buffer();
     return true;
 }

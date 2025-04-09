@@ -45,7 +45,13 @@ write_keybinds() {
 }
 
 bool handle_keybind_event(KeyCode code, PressState state, ModCode mod) {
-    handler_index := keybind_lookup[cast(int, code)];
+    code_value := cast(int, code);
+    mod_value := (cast(int, mod) << 9) | code_value;
+
+    handler_index := keybind_lookup[mod_value];
+    if handler_index == 0 {
+        handler_index = keybind_lookup[code_value];
+    }
     if handler_index == 0 return false;
 
     keybind := keybind_definitions[handler_index - 1];
@@ -102,7 +108,6 @@ parse_keybinds_file(string keybinds_file) {
             i++;
         }
 
-
         if keybinds_file[i] == '\n' || i >= keybinds_file.length {
             if name.length
                 log("Unable to parse keybind at line %, keybind name = %\n", line, name);
@@ -140,6 +145,8 @@ parse_keybinds_file(string keybinds_file) {
                 continue;
             }
 
+            valid, lookup_index := parse_keybind_value(value);
+
             enum_value_found := false;
             key_code_type := cast(EnumTypeInfo*, type_of(KeyCode));
             each enum_value in key_code_type.values {
@@ -162,6 +169,11 @@ parse_keybinds_file(string keybinds_file) {
     free_allocation(keybinds_file.data);
 }
 
+bool, int parse_keybind_value(string value) {
+    // TODO Implement this
+    return false, 0;
+}
+
 interface bool KeybindHandler(PressState state, ModCode mod)
 
 struct KeybindDefinition {
@@ -171,7 +183,7 @@ struct KeybindDefinition {
 }
 
 keybind_definitions: Array<KeybindDefinition>;
-keybind_lookup: Array<int>[0x124];
+keybind_lookup: Array<int>[0xF24];
 
 keybinds_file_path: string;
 

@@ -30,7 +30,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                 }
             }
             case KeyCode.Zero; {
-                if key_command.repeats > 0 {
+                if mod == ModCode.None && key_command.repeats > 0 {
                     add_repeats(code);
                     return;
                 }
@@ -44,7 +44,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             case KeyCode.Seven;
             case KeyCode.Eight;
             case KeyCode.Nine; {
-                add_repeats(code);
+                if mod == ModCode.None {
+                    add_repeats(code);
+                }
                 return;
             }
             case KeyCode.Colon; {

@@ -22,3 +22,4 @@ end_paragraph=CloseBrace
 go_to=G
 find_char=F
 until_char=T
+swap_buffer=Control+Six
