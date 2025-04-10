@@ -30,7 +30,9 @@ draw_buffers() {
 }
 
 draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width) {
-    if window == null return;
+    if window == null {
+        window = &scratch_window;
+    }
 
     line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
@@ -1108,6 +1110,8 @@ BufferWindow* get_current_window() {
 
 #private
 
+scratch_window: BufferWindow;
+
 BufferWindow* open_or_create_buffer_window(int buffer_index, BufferWindow* stack_top) {
     if stack_top != null && stack_top.buffer_index == buffer_index
         return stack_top;
@@ -1382,6 +1386,8 @@ move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
 }
 
 adjust_start_line(BufferWindow* window) {
+    if window == null return;
+
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;

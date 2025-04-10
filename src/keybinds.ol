@@ -27,18 +27,26 @@ write_keybinds() {
 
     each keybind, i in keybind_definitions {
         index := i + 1;
+        mod: ModCode;
         code: KeyCode;
         each handler_index, j in keybind_lookup {
             if handler_index == index {
-                code = cast(KeyCode, j);
+                mod = cast(ModCode, (j & 0xE00) >> 9);
+                code = cast(KeyCode, j & 0x1FF);
                 break;
             }
         }
 
-        if code == KeyCode.Unhandled
-            write_to_file(keybinds_file, "%=\n", keybind.name);
-        else
-            write_to_file(keybinds_file, "%=%\n", keybind.name, code);
+        write_to_file(keybinds_file, "%=", keybind.name);
+
+        if mod & ModCode.Shift
+            write_to_file(keybinds_file, "Shift+");
+        if mod & ModCode.Control
+            write_to_file(keybinds_file, "Control+");
+        if mod & ModCode.Alt
+            write_to_file(keybinds_file, "Alt+");
+
+        write_to_file(keybinds_file, "%\n", code);
     }
 
     close_file(keybinds_file);
@@ -147,17 +155,10 @@ parse_keybinds_file(string keybinds_file) {
 
             valid, lookup_index := parse_keybind_value(value);
 
-            enum_value_found := false;
-            key_code_type := cast(EnumTypeInfo*, type_of(KeyCode));
-            each enum_value in key_code_type.values {
-                if enum_value.name == value {
-                    enum_value_found = true;
-                    keybind_lookup[enum_value.value] = handler_index;
-                    break;
-                }
+            if valid {
+                keybind_lookup[lookup_index] = handler_index;
             }
-
-            if !enum_value_found {
+            else {
                 log("Invalid key code for setting % at line %, value is '%'\n", name, line, value);
             }
         }
@@ -169,9 +170,30 @@ parse_keybinds_file(string keybinds_file) {
     free_allocation(keybinds_file.data);
 }
 
-bool, int parse_keybind_value(string value) {
-    // TODO Implement this
-    return false, 0;
+bool, u32 parse_keybind_value(string value) {
+    mod: ModCode;
+    start := 0;
+    each i in value.length {
+        if value[i] == '+' {
+            mod_string: string = {
+                length = i - start;
+                data = value.data + start;
+            }
+
+            valid, code := get_enum_value<ModCode>(mod_string);
+            if valid
+                mod |= code;
+            else
+                return false, 0;
+
+            start = i + 1;
+        }
+    }
+
+    value.length -= start;
+    value.data = value.data + start;
+    valid, code := get_enum_value<KeyCode>(value);
+    return valid, (cast(u32, mod) << 9) | cast(u32, code);
 }
 
 interface bool KeybindHandler(PressState state, ModCode mod)

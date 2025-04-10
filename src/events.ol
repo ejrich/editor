@@ -46,18 +46,14 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             case KeyCode.Nine; {
                 if mod == ModCode.None {
                     add_repeats(code);
+                    return;
                 }
-                return;
             }
             case KeyCode.Colon; {
                 if (state & PressState.Held) != PressState.Held {
                     start_command_mode();
                     return;
                 }
-            }
-            case KeyCode.F11; {
-                // TODO Make this a keybind
-                swap_top_buffer();
             }
             case KeyCode.F12; {
                 if (state & PressState.Held) != PressState.Held {
