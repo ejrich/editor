@@ -260,6 +260,20 @@ bool end_paragraph(PressState state, ModCode mod) {
 }
 
 [keybind, no_repeat]
+bool screen_half_up(PressState state, ModCode mod) {
+    half_screen := global_font_config.max_lines / 2;
+    move_line(true, true, half_screen);
+    return true;
+}
+
+[keybind, no_repeat]
+bool screen_half_down(PressState state, ModCode mod) {
+    half_screen := global_font_config.max_lines / 2;
+    move_line(false, true, half_screen);
+    return true;
+}
+
+[keybind, no_repeat]
 bool go_to(PressState state, ModCode mod) {
     if mod & ModCode.Shift {
         go_to_line(-1);
