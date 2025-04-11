@@ -174,7 +174,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
             }
         }
 
-        if command_mode {
+        if current_command_mode == CommandMode.Command {
             mode_string = " COMMAND ";
         }
 

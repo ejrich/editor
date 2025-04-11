@@ -36,7 +36,12 @@ string, bool save_all_buffers() {
 }
 
 start_command_mode() {
-    command_mode = true;
+    current_command_mode = CommandMode.Command;
+    clear_buffer();
+}
+
+start_search_mode() {
+    current_command_mode = CommandMode.Search;
     clear_buffer();
 }
 
@@ -46,10 +51,18 @@ draw_command() {
     y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines + 1);
     switch command_prompt_buffer.result {
         case CommandResult.None; {
-            if command_mode {
-                render_text(":", settings.font_size, x, y, appearance.font_color, background_color);
+            start: string;
+            switch current_command_mode {
+                case CommandMode.Command;
+                    start = ":";
+                case CommandMode.Search;
+                    start = "/";
+            }
 
-                x += global_font_config.quad_advance;
+            if start.length {
+                render_text(start, settings.font_size, x, y, appearance.font_color, background_color);
+
+                x += start.length * global_font_config.quad_advance;
                 command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
                 render_line_with_cursor(command_prompt_buffer_str, x, y, command_prompt_buffer.cursor, 1.0);
             }
@@ -66,15 +79,18 @@ draw_command() {
         case CommandResult.CommandNotFound; {
             render_text(settings.font_size, x, y, appearance.font_color, background_color, "Command '%' not found", get_command());
         }
+        case CommandResult.SearchResult; {
+            render_text(settings.font_size, x, y, appearance.font_color, background_color, "/%", get_current_search());
+        }
     }
 }
 
 bool handle_command_press(PressState state, KeyCode code, ModCode mod, string char) {
-    if !command_mode return false;
+    if current_command_mode == CommandMode.None return false;
 
     switch code {
         case KeyCode.Escape;
-            command_mode = false;
+            current_command_mode = CommandMode.None;
         case KeyCode.Backspace; {
             if command_prompt_buffer.length > 0 {
                 if command_prompt_buffer.cursor > 0 {
@@ -87,7 +103,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 }
             }
             else {
-                command_mode = false;
+                current_command_mode = CommandMode.None;
             }
         }
         case KeyCode.Delete; {
@@ -100,7 +116,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 }
             }
             else {
-                command_mode = false;
+                current_command_mode = CommandMode.None;
             }
         }
         case KeyCode.Left; {
@@ -110,8 +126,13 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
             command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, command_prompt_buffer.length);
         }
         case KeyCode.Enter; {
-            command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-            call_command(command);
+            buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+            switch current_command_mode {
+                case CommandMode.Command;
+                    call_command(buffer_string);
+                case CommandMode.Search;
+                    set_search(buffer_string);
+            }
         }
         default;
             if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
@@ -135,7 +156,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
 }
 
 call_command(string command) {
-    defer command_mode = false;
+    defer current_command_mode = CommandMode.None;
 
     // Remove initial padding
     name_start := 0;
@@ -208,15 +229,33 @@ call_command(string command) {
     command_prompt_buffer.result = CommandResult.CommandNotFound;
 }
 
+set_search(string value) {
+    defer current_command_mode = CommandMode.None;
+
+    // TODO Fully implement this
+    allocate_strings(&value);
+    array_insert(&searches, value, allocate, reallocate);
+    search_index = searches.length - 1;
+
+    command_prompt_buffer.result = CommandResult.SearchResult;
+}
+
 enum CommandResult {
     None;
     Success;
     IncorrectArgumentCount;
     IncorrectArgumentTypes;
     CommandNotFound;
+    SearchResult;
 }
 
-command_mode: bool;
+enum CommandMode {
+    None;
+    Command;
+    Search;
+}
+
+current_command_mode: CommandMode;
 
 
 #private
@@ -274,4 +313,13 @@ string get_command() {
 
     name: string = { length = name_end - name_start; data = command.data + name_start; }
     return name;
+}
+
+searches: Array<string>;
+search_index: u32;
+
+string get_current_search() {
+    if searches.length == 0 return empty_string;
+
+    return searches[search_index];
 }
