@@ -52,7 +52,7 @@ write_keybinds() {
     close_file(keybinds_file);
 }
 
-bool handle_keybind_event(KeyCode code, PressState state, ModCode mod) {
+bool handle_keybind_event(KeyCode code, ModCode mod) {
     code_value := cast(int, code);
     mod_value := (cast(int, mod) << 9) | code_value;
 
@@ -66,20 +66,17 @@ bool handle_keybind_event(KeyCode code, PressState state, ModCode mod) {
 
     result: bool;
     if keybind.no_repeat || key_command.repeats == 0 {
-        result = keybind.handler(state, mod);
+        keybind.handler(mod);
     }
     else {
         each i in key_command.repeats {
-            result = keybind.handler(state, mod);
-
-            if !result
-                break;
+            keybind.handler(mod);
         }
     }
 
     reset_key_command();
 
-    return result;
+    return true;
 }
 
 reassign_keybind(KeyCode code, string keybind) {
@@ -196,7 +193,7 @@ bool, u32 parse_keybind_value(string value) {
     return valid, (cast(u32, mod) << 9) | cast(u32, code);
 }
 
-interface bool KeybindHandler(PressState state, ModCode mod)
+interface KeybindHandler(ModCode mod)
 
 struct KeybindDefinition {
     name: string;

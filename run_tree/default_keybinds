@@ -24,4 +24,5 @@ screen_half_down=Control+D
 go_to=G
 find_char=F
 until_char=T
+find=N
 swap_buffer=Control+Six

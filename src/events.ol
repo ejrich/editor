@@ -68,24 +68,24 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                 }
             }
             case KeyCode.Up; {
-                move_up(state, mod);
+                move_up(mod);
                 return;
             }
             case KeyCode.Down; {
-                move_down(state, mod);
+                move_down(mod);
                 return;
             }
             case KeyCode.Left; {
-                move_left(state, mod);
+                move_left(mod);
                 return;
             }
             case KeyCode.Right; {
-                move_right(state, mod);
+                move_right(mod);
                 return;
             }
         }
 
-        handle_keybind_event(code, state, mod);
+        handle_keybind_event(code, mod);
     }
 }
 

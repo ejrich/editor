@@ -85,13 +85,12 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
 
 // Editing keybinds
 [keybind, no_repeat]
-bool normal_mode(PressState state, ModCode mod) {
+normal_mode(ModCode mod) {
     edit_mode = EditMode.Normal;
-    return true;
 }
 
 [keybind, no_repeat]
-bool visual_mode(PressState state, ModCode mod) {
+visual_mode(ModCode mod) {
     target_mode: EditMode;
     switch mod {
         case ModCode.Shift;
@@ -118,47 +117,41 @@ bool visual_mode(PressState state, ModCode mod) {
 
         edit_mode = target_mode;
     }
-    return true;
 }
 
 [keybind, no_repeat]
-bool insert(PressState state, ModCode mod) {
+insert(ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
-    return true;
 }
 
 [keybind, no_repeat]
-bool append(PressState state, ModCode mod) {
+append(ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
-    return true;
 }
 
 [keybind, no_repeat]
-bool substitute(PressState state, ModCode mod) {
+substitute(ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
-    return true;
 }
 
 // Movement keybinds
 [keybind, no_repeat]
-bool move_up(PressState state, ModCode mod) {
+move_up(ModCode mod) {
     line_changes := get_repeats();
     move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
-    return true;
 }
 
 [keybind, no_repeat]
-bool move_down(PressState state, ModCode mod) {
+move_down(ModCode mod) {
     line_changes := get_repeats();
     move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
-    return true;
 }
 
 [keybind, no_repeat]
-bool move_left(PressState state, ModCode mod) {
+move_left(ModCode mod) {
     if mod & ModCode.Control {
         if switch_to_buffer(SelectedWindow.Left) {
             edit_mode = EditMode.Normal;
@@ -168,11 +161,10 @@ bool move_left(PressState state, ModCode mod) {
         cursor_changes := get_repeats();
         move_cursor(true, cursor_changes);
     }
-    return true;
 }
 
 [keybind, no_repeat]
-bool move_right(PressState state, ModCode mod) {
+move_right(ModCode mod) {
     if mod & ModCode.Control {
         if switch_to_buffer(SelectedWindow.Right) {
             edit_mode = EditMode.Normal;
@@ -182,99 +174,84 @@ bool move_right(PressState state, ModCode mod) {
         cursor_changes := get_repeats();
         move_cursor(false, cursor_changes);
     }
-    return true;
 }
 
 [keybind]
-bool next_word(PressState state, ModCode mod) {
+next_word(ModCode mod) {
     move_to_start_of_word(true, (mod & ModCode.Shift) == ModCode.Shift);
-    return true;
 }
 
 [keybind]
-bool end_word(PressState state, ModCode mod) {
+end_word(ModCode mod) {
     move_to_end_of_word((mod & ModCode.Shift) == ModCode.Shift);
-    return true;
 }
 
 [keybind]
-bool previous_word(PressState state, ModCode mod) {
+previous_word(ModCode mod) {
     move_to_start_of_word(false, (mod & ModCode.Shift) == ModCode.Shift);
-    return true;
 }
 
 [keybind, no_repeat]
-bool start_of_line(PressState state, ModCode mod) {
+start_of_line(ModCode mod) {
     move_to_line_boundary(false, false, key_command.command == KeyCommand.GoTo);
-    return true;
 }
 
 [keybind, no_repeat]
-bool start_of_line_text(PressState state, ModCode mod) {
+start_of_line_text(ModCode mod) {
     move_to_line_boundary(false, true, false);
-    return true;
 }
 
 [keybind, no_repeat]
-bool end_of_line(PressState state, ModCode mod) {
+end_of_line(ModCode mod) {
     move_to_line_boundary(true, false, key_command.command == KeyCommand.GoTo);
-    return true;
 }
 
 [keybind, no_repeat]
-bool next_line(PressState state, ModCode mod) {
+next_line(ModCode mod) {
     line_changes := get_repeats();
     move_line(false, false, line_changes, true);
-    return true;
 }
 
 [keybind, no_repeat]
-bool previous_line(PressState state, ModCode mod) {
+previous_line(ModCode mod) {
     line_changes := get_repeats();
     move_line(true, false, line_changes, true);
-    return true;
 }
 
 [keybind]
-bool begin_sentence(PressState state, ModCode mod) {
+begin_sentence(ModCode mod) {
     move_block(false, false);
-    return true;
 }
 
 [keybind]
-bool end_sentence(PressState state, ModCode mod) {
+end_sentence(ModCode mod) {
     move_block(true, false);
-    return true;
 }
 
 [keybind]
-bool begin_paragraph(PressState state, ModCode mod) {
+begin_paragraph(ModCode mod) {
     move_block(false, true);
-    return true;
 }
 
 [keybind]
-bool end_paragraph(PressState state, ModCode mod) {
+end_paragraph(ModCode mod) {
     move_block(true, true);
-    return true;
 }
 
 [keybind, no_repeat]
-bool screen_half_up(PressState state, ModCode mod) {
+screen_half_up(ModCode mod) {
     half_screen := global_font_config.max_lines / 2;
     move_line(true, true, half_screen);
-    return true;
 }
 
 [keybind, no_repeat]
-bool screen_half_down(PressState state, ModCode mod) {
+screen_half_down(ModCode mod) {
     half_screen := global_font_config.max_lines / 2;
     move_line(false, true, half_screen);
-    return true;
 }
 
 [keybind, no_repeat]
-bool go_to(PressState state, ModCode mod) {
+go_to(ModCode mod) {
     if mod & ModCode.Shift {
         go_to_line(-1);
     }
@@ -284,24 +261,27 @@ bool go_to(PressState state, ModCode mod) {
     else {
         set_key_command(KeyCommand.GoTo, ModCode.None);
     }
-    return true;
 }
 
 [keybind, no_repeat]
-bool find_char(PressState state, ModCode mod) {
+find_char(ModCode mod) {
     set_key_command(KeyCommand.FindChar, mod);
-    return true;
 }
 
 [keybind, no_repeat]
-bool until_char(PressState state, ModCode mod) {
+until_char(ModCode mod) {
     set_key_command(KeyCommand.UntilChar, mod);
-    return true;
+}
+
+[keybind]
+find(ModCode mod) {
+    show_current_search_result();
+    value := get_current_search();
+    find_value_in_buffer(value, (mod & ModCode.Shift) != ModCode.Shift);
 }
 
 // Buffer keybinds
 [keybind, no_repeat]
-bool swap_buffer(PressState state, ModCode mod) {
+swap_buffer(ModCode mod) {
     swap_top_buffer();
-    return true;
 }

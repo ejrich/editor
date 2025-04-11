@@ -1052,6 +1052,131 @@ find_character_in_line(bool forward, bool before, string char) {
     }
 }
 
+find_value_in_buffer(string value, bool next) {
+    if value.length == 0 return;
+
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    start_line := clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_current_line(buffer, start_line);
+
+    start_cursor := 0;
+    if line.length
+        start_cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+
+    cursor := start_cursor;
+    line_number := start_line;
+    found, wrapped := false;
+
+    if next {
+        cursor++;
+        while true {
+            // Only check if there are enough characters in the line to match the string
+            while cursor + value.length <= line.length {
+                if line.data.data[cursor] == value[0] {
+                    matched := true;
+                    each i in 1..value.length - 1 {
+                        if line.data.data[cursor + i] != value[i] {
+                            matched = false;
+                            break;
+                        }
+                    }
+
+                    if matched {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if wrapped && line_number == start_line && cursor == start_cursor {
+                    break;
+                }
+
+                cursor++;
+            }
+
+            if found || (wrapped && line_number == start_line) {
+                break;
+            }
+
+            if line.next {
+                line = line.next;
+                cursor = 0;
+                line_number++;
+            }
+            else {
+                wrapped = true;
+                line = buffer.lines;
+                cursor = 0;
+                line_number = 0;
+            }
+        }
+    }
+    else {
+        cursor--;
+        while true {
+            // Only check if there are enough characters in the line to match the string
+            while line.length >= value.length && cursor >= value.length - 1 {
+                if line.data.data[cursor] == value[value.length - 1] {
+                    matched := true;
+                    each i in 1..value.length - 1 {
+                        if line.data.data[cursor - i] != value[value.length - 1 - i] {
+                            matched = false;
+                            break;
+                        }
+                    }
+
+                    if matched {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if wrapped && line_number == start_line && cursor == start_cursor {
+                    break;
+                }
+
+                cursor--;
+            }
+
+            if found || (wrapped && line_number == start_line) {
+                break;
+            }
+
+            if line.previous {
+                line = line.previous;
+
+                cursor = 0;
+                if line.length {
+                    cursor = line.length - 1;
+                }
+                line_number--;
+            }
+            else {
+                wrapped = true;
+                while line.next {
+                    line = line.next;
+                }
+
+                cursor = 0;
+                if line.length {
+                    cursor = line.length - 1;
+                }
+                line_number = buffer.line_count - 1;
+            }
+        }
+    }
+
+    if found {
+        buffer_window.line = line_number;
+        buffer_window.cursor = cursor;
+        adjust_start_line(buffer_window);
+    }
+}
+
 
 // Data structures
 struct FileBuffer {

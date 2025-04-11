@@ -36,13 +36,15 @@ string, bool save_all_buffers() {
 }
 
 start_command_mode() {
-    current_command_mode = CommandMode.Command;
-    clear_buffer();
+    clear_buffer(CommandMode.Command);
 }
 
 start_search_mode() {
-    current_command_mode = CommandMode.Search;
-    clear_buffer();
+    clear_buffer(CommandMode.Search);
+}
+
+show_current_search_result() {
+    command_prompt_buffer.result = CommandResult.SearchResult;
 }
 
 draw_command() {
@@ -237,6 +239,7 @@ set_search(string value) {
     array_insert(&searches, value, allocate, reallocate);
     search_index = searches.length - 1;
 
+    find_value_in_buffer(value, true);
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
 
@@ -257,6 +260,11 @@ enum CommandMode {
 
 current_command_mode: CommandMode;
 
+string get_current_search() {
+    if searches.length == 0 return empty_string;
+
+    return searches[search_index];
+}
 
 #private
 
@@ -281,7 +289,8 @@ struct CommandPromptBuffer {
 
 command_prompt_buffer: CommandPromptBuffer;
 
-clear_buffer() {
+clear_buffer(CommandMode mode) {
+    current_command_mode = mode;
     if command_prompt_buffer.free_result_string {
         free_allocation(command_prompt_buffer.result_string.data);
     }
@@ -317,9 +326,3 @@ string get_command() {
 
 searches: Array<string>;
 search_index: u32;
-
-string get_current_search() {
-    if searches.length == 0 return empty_string;
-
-    return searches[search_index];
-}
