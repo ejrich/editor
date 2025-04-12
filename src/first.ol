@@ -484,8 +484,18 @@ bool ends_with(string value, string ending) {
     if ending.length > value.length return false;
 
     start_index := value.length - ending.length;
-    each i in 0..ending.length - 1 {
+    each i in ending.length {
         if value[start_index + i] != ending[i] return false;
+    }
+
+    return true;
+}
+
+bool starts_with(string value, string start) {
+    if start.length > value.length return false;
+
+    each i in start.length {
+        if value[i] != start[i] return false;
     }
 
     return true;

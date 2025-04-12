@@ -53,7 +53,7 @@ draw_command() {
     y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines + 1);
     switch command_prompt_buffer.result {
         case CommandResult.None; {
-            start: string;
+            start, value: string;
             switch current_command_mode {
                 case CommandMode.Command;
                     start = ":";
@@ -63,10 +63,10 @@ draw_command() {
 
             if start.length {
                 render_text(start, settings.font_size, x, y, appearance.font_color, background_color);
-
                 x += start.length * global_font_config.quad_advance;
-                command_prompt_buffer_str: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-                render_line_with_cursor(command_prompt_buffer_str, x, y, command_prompt_buffer.cursor, 1.0);
+
+                buffer_string, _ := get_buffer_string();
+                render_line_with_cursor(buffer_string, x, y, command_prompt_buffer.cursor, 1.0);
             }
         }
         case CommandResult.Success; {
@@ -94,6 +94,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
         case KeyCode.Escape;
             current_command_mode = CommandMode.None;
         case KeyCode.Backspace; {
+            set_buffer_value();
             if command_prompt_buffer.length > 0 {
                 if command_prompt_buffer.cursor > 0 {
                     if command_prompt_buffer.cursor < command_prompt_buffer.length {
@@ -109,6 +110,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
             }
         }
         case KeyCode.Delete; {
+            set_buffer_value();
             if command_prompt_buffer.length > 0 {
                 if command_prompt_buffer.cursor < command_prompt_buffer.length {
                     if command_prompt_buffer.cursor < command_prompt_buffer.length - 1 {
@@ -121,22 +123,43 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 current_command_mode = CommandMode.None;
             }
         }
-        case KeyCode.Left; {
-            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, command_prompt_buffer.length);
-        }
-        case KeyCode.Right; {
-            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, command_prompt_buffer.length);
-        }
-        case KeyCode.Enter; {
+        case KeyCode.Up; {
             buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
             switch current_command_mode {
                 case CommandMode.Command;
-                    call_command(buffer_string);
+                    find_previous_string(buffer_string, false, command_strings, &command_index);
                 case CommandMode.Search;
-                    set_search(buffer_string);
+                    find_previous_string(buffer_string, false, searches, &search_index);
             }
         }
-        default;
+        case KeyCode.Down; {
+            buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+            switch current_command_mode {
+                case CommandMode.Command;
+                    find_previous_string(buffer_string, true, command_strings, &command_index);
+                case CommandMode.Search;
+                    find_previous_string(buffer_string, true, searches, &search_index);
+            }
+        }
+        case KeyCode.Left; {
+            buffer_string, _ := get_buffer_string();
+            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, buffer_string.length);
+        }
+        case KeyCode.Right; {
+            buffer_string, _ := get_buffer_string();
+            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, buffer_string.length);
+        }
+        case KeyCode.Enter; {
+            buffer_string, allocated := get_buffer_string();
+            switch current_command_mode {
+                case CommandMode.Command;
+                    call_command(buffer_string, allocated);
+                case CommandMode.Search;
+                    set_search(buffer_string, allocated);
+            }
+        }
+        default; {
+            set_buffer_value();
             if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
                 if command_prompt_buffer.length == command_prompt_buffer.cursor {
                     memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
@@ -152,12 +175,13 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 command_prompt_buffer.length += char.length;
                 command_prompt_buffer.cursor += char.length;
             }
+        }
     }
 
     return true;
 }
 
-call_command(string command) {
+call_command(string command, bool allocated) {
     defer current_command_mode = CommandMode.None;
 
     // Remove initial padding
@@ -181,6 +205,12 @@ call_command(string command) {
     name: string = { length = name_end - name_start; data = command.data + name_start; }
 
     if name.length == 0 return;
+
+    // Save the command in history
+    if !allocated {
+        allocate_strings(&command);
+        array_insert(&command_strings, command, allocate, reallocate);
+    }
 
     // Parse the command arguments
     i := name_end + 1;
@@ -231,13 +261,17 @@ call_command(string command) {
     command_prompt_buffer.result = CommandResult.CommandNotFound;
 }
 
-set_search(string value) {
+set_search(string value, bool allocated) {
     defer current_command_mode = CommandMode.None;
 
-    // TODO Fully implement this
-    allocate_strings(&value);
-    array_insert(&searches, value, allocate, reallocate);
-    search_index = searches.length - 1;
+    if allocated {
+        current_search_index = search_index;
+    }
+    else {
+        allocate_strings(&value);
+        array_insert(&searches, value, allocate, reallocate);
+        current_search_index = searches.length - 1;
+    }
 
     find_value_in_buffer(value, true);
     command_prompt_buffer.result = CommandResult.SearchResult;
@@ -263,7 +297,7 @@ current_command_mode: CommandMode;
 string get_current_search() {
     if searches.length == 0 return empty_string;
 
-    return searches[search_index];
+    return searches[current_search_index];
 }
 
 #private
@@ -291,6 +325,8 @@ command_prompt_buffer: CommandPromptBuffer;
 
 clear_buffer(CommandMode mode) {
     current_command_mode = mode;
+    command_index = -1;
+    search_index = -1;
     if command_prompt_buffer.free_result_string {
         free_allocation(command_prompt_buffer.result_string.data);
     }
@@ -299,8 +335,49 @@ clear_buffer(CommandMode mode) {
     command_prompt_buffer = { length = 0; cursor = 0; result = CommandResult.None; result_string = empty_string; free_result_string = false; }
 }
 
+set_buffer_value() {
+    switch current_command_mode {
+        case CommandMode.Command;
+            if command_index >= 0 {
+                command := command_strings[command_index];
+                memory_copy(command_prompt_buffer.buffer.data, command.data, command.length);
+                command_prompt_buffer.length = command.length;
+                command_index = -1;
+            }
+        case CommandMode.Search;
+            if search_index >= 0 {
+                search := searches[search_index];
+                memory_copy(command_prompt_buffer.buffer.data, search.data, search.length);
+                command_prompt_buffer.length = search.length;
+                search_index = -1;
+            }
+    }
+}
+
+string, bool get_buffer_string() {
+    allocated := false;
+    buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+    switch current_command_mode {
+        case CommandMode.Command;
+            if command_index >= 0 {
+                buffer_string = command_strings[command_index];
+                allocated = true;
+            }
+        case CommandMode.Search;
+            if search_index >= 0 {
+                buffer_string = searches[search_index];
+                allocated = true;
+            }
+    }
+
+    return buffer_string, allocated;
+}
+
 string get_command() {
     command: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+    if command_index >= 0 {
+        command = command_strings[command_index];
+    }
 
     // Remove initial padding
     name_start := 0;
@@ -324,5 +401,44 @@ string get_command() {
     return name;
 }
 
+find_previous_string(string value, bool forward, Array<string> values, int* index) {
+    if *index >= 0 {
+        if forward {
+            each i in *index + 1..values.length - 1 {
+                if starts_with(values[i], value) {
+                    *index = i;
+                    command_prompt_buffer.cursor = values[i].length;
+                    return;
+                }
+            }
+
+            *index = -1;
+            command_prompt_buffer.cursor = command_prompt_buffer.length;
+        }
+        else {
+            each i in 0..*index - 1 {
+                if starts_with(values[*index - 1 - i], value) {
+                    *index = *index - 1 - i;
+                    command_prompt_buffer.cursor = values[*index].length;
+                    return;
+                }
+            }
+        }
+    }
+    else if !forward {
+        each i in values.length {
+            if starts_with(values[values.length - 1 - i], value) {
+                *index = values.length - 1 - i;
+                command_prompt_buffer.cursor = values[*index].length;
+                return;
+            }
+        }
+    }
+}
+
+command_strings: Array<string>;
+command_index := -1;
+
 searches: Array<string>;
-search_index: u32;
+search_index := -1;
+current_search_index: u32;
