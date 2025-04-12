@@ -121,20 +121,34 @@ visual_mode(ModCode mod) {
 
 [keybind, no_repeat]
 insert(ModCode mod) {
-    // TODO Properly implement
-    edit_mode = EditMode.Insert;
+    if mod & ModCode.Shift {
+        move_to_line_boundary(false, true, false);
+    }
+    start_insert_mode(false);
 }
 
 [keybind, no_repeat]
 append(ModCode mod) {
-    // TODO Properly implement
-    edit_mode = EditMode.Insert;
+    if mod & ModCode.Shift {
+        move_to_line_boundary(true, false, false);
+    }
+    start_insert_mode(true, 1);
 }
 
 [keybind, no_repeat]
 substitute(ModCode mod) {
     // TODO Properly implement
     edit_mode = EditMode.Insert;
+}
+
+[keybind]
+open_line(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind]
+change(ModCode mod) {
+    // TODO Implement
 }
 
 // Movement keybinds

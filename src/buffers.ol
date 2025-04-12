@@ -511,6 +511,28 @@ string get_visual_mode_selection() {
     return str;
 }
 
+// Insert mode functions
+start_insert_mode(bool allow_eol, s32 change = 0) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    edit_mode = EditMode.Insert;
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_current_line(buffer, buffer_window.line);
+
+    if line.length == 0 {
+        buffer_window.cursor = 0;
+    }
+    else if allow_eol {
+        buffer_window.cursor = clamp(cast(s32, buffer_window.cursor) + change, 0, line.length);
+    }
+    else {
+        buffer_window.cursor = clamp(cast(s32, buffer_window.cursor) + change, 0, line.length - 1);
+    }
+}
 
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
@@ -646,7 +668,12 @@ move_cursor(bool left, u32 cursor_changes) {
             buffer_window.cursor = 0;
         }
         else if buffer_window.cursor >= line.length {
-            buffer_window.cursor = line.length - cursor_changes - 1;
+            if edit_mode != EditMode.Normal {
+                buffer_window.cursor = line.length - cursor_changes;
+            }
+            else {
+                buffer_window.cursor = line.length - cursor_changes - 1;
+            }
         }
         else {
             buffer_window.cursor -= cursor_changes;
@@ -654,7 +681,12 @@ move_cursor(bool left, u32 cursor_changes) {
     }
     else {
         if buffer_window.cursor + cursor_changes >= line.length {
-            buffer_window.cursor = line.length - 1;
+            if edit_mode != EditMode.Normal {
+                buffer_window.cursor = line.length;
+            }
+            else {
+                buffer_window.cursor = line.length - 1;
+            }
         }
         else {
             buffer_window.cursor += cursor_changes;
