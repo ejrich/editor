@@ -138,7 +138,14 @@ append(ModCode mod) {
 [keybind, no_repeat]
 substitute(ModCode mod) {
     // TODO Properly implement
-    edit_mode = EditMode.Insert;
+    if mod & ModCode.Shift {
+        clear_lines();
+    }
+    else {
+        clear_selected();
+    }
+
+    start_insert_mode(true);
 }
 
 [keybind]

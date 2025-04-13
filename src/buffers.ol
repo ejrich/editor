@@ -534,6 +534,118 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
     }
 }
 
+clear_lines() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    start_line, end_line: u32;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+            end_line = buffer_window.line;
+        }
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            if visual_mode_data.line > buffer_window.line {
+                start_line = buffer_window.line;
+                end_line = visual_mode_data.line;
+            }
+            else {
+                start_line = visual_mode_data.line;
+                end_line = buffer_window.line;
+            }
+        }
+    }
+
+    line := get_current_line(buffer, start_line);
+    if start_line == end_line {
+        line.length = 0;
+        buffer_window.cursor = 0;
+    }
+    else {
+        line.length = 0;
+        buffer_window.line = start_line;
+        buffer_window.cursor = 0;
+
+        start := line;
+        new_next := line.next;
+        start_line++;
+
+        while start_line <= end_line {
+            next := new_next.next;
+            // TODO Change this to the line allocator
+            free_allocation(new_next);
+            new_next = next;
+            start_line++;
+            buffer.line_count--;
+        }
+
+        start.next = new_next;
+        if new_next {
+            new_next.previous = start;
+        }
+
+        adjust_start_line(buffer_window);
+    }
+}
+
+clear_selected() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    start_line, end_line: u32;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+            end_line = buffer_window.line;
+        }
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            if visual_mode_data.line > buffer_window.line {
+                start_line = buffer_window.line;
+                end_line = visual_mode_data.line;
+            }
+            else {
+                start_line = visual_mode_data.line;
+                end_line = buffer_window.line;
+            }
+        }
+    }
+
+    line := get_current_line(buffer, start_line);
+    if start_line == end_line {
+        if edit_mode == EditMode.Normal {
+            if line.length == 0 {
+                buffer_window.cursor = 0;
+            }
+            else {
+                buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+                if buffer_window.cursor < line.length - 1 {
+                    memory_copy(line.data.data + buffer_window.cursor, line.data.data + buffer_window.cursor + 1, line.length - 1);
+                }
+
+                line.length--;
+            }
+        }
+        else {
+            // TODO Implement
+        }
+    }
+    else {
+        // TODO Implement
+    }
+}
+
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
