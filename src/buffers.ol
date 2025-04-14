@@ -384,6 +384,34 @@ bool, u32, u32, string save_buffer(int buffer_index) {
 }
 
 // Visual mode helpers
+u32, u32 get_visual_start_and_end_lines(BufferWindow* buffer_window) {
+    start_line, end_line: u32;
+    if visual_mode_data.line > buffer_window.line {
+        start_line = buffer_window.line;
+        end_line = visual_mode_data.line;
+    }
+    else {
+        start_line = visual_mode_data.line;
+        end_line = buffer_window.line;
+    }
+
+    return start_line, end_line;
+}
+
+u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
+    start_cursor, end_cursor: u32;
+    if visual_mode_data.cursor > buffer_window.cursor {
+        start_cursor = buffer_window.cursor;
+        end_cursor = visual_mode_data.cursor;
+    }
+    else {
+        start_cursor = visual_mode_data.cursor;
+        end_cursor = buffer_window.cursor;
+    }
+
+    return start_cursor, end_cursor;
+}
+
 string get_visual_mode_selection() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -574,14 +602,7 @@ delete_lines() {
         case EditMode.Visual;
         case EditMode.VisualLine;
         case EditMode.VisualBlock; {
-            if visual_mode_data.line > buffer_window.line {
-                start_line = buffer_window.line;
-                end_line = visual_mode_data.line;
-            }
-            else {
-                start_line = visual_mode_data.line;
-                end_line = buffer_window.line;
-            }
+            start_line, end_line = get_visual_start_and_end_lines(buffer_window);
         }
     }
 
@@ -613,6 +634,7 @@ delete_lines() {
             new_next.previous = start;
         }
 
+        calculate_line_digits(buffer);
         adjust_start_line(buffer_window);
     }
 }
@@ -625,59 +647,22 @@ delete_selected() {
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
-    // TODO Refactor common things out
     switch edit_mode {
         case EditMode.Normal; {
             line := get_buffer_line(buffer, buffer_window.line);
-            if line.length == 0 {
-                buffer_window.cursor = 0;
-            }
-            else {
-                buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
-                if buffer_window.cursor < line.length - 1 {
-                    memory_copy(line.data.data + buffer_window.cursor, line.data.data + buffer_window.cursor + 1, line.length - 1);
-                }
-
-                line.length--;
-            }
+            cursor := clamp(buffer_window.cursor, 0, line.length - 1);
+            buffer_window.cursor = delete_from_line(line, cursor, cursor);
         }
         case EditMode.Visual; {
             if buffer_window.line == visual_mode_data.line {
                 line := get_buffer_line(buffer, buffer_window.line);
 
-                start_cursor, end_cursor: u32;
                 buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length);
-                if visual_mode_data.cursor > buffer_window.cursor {
-                    start_cursor = buffer_window.cursor;
-                    end_cursor = visual_mode_data.cursor;
-                }
-                else {
-                    start_cursor = visual_mode_data.cursor;
-                    end_cursor = buffer_window.cursor;
-                }
-
-                if end_cursor >= line.length {
-                    line.length = start_cursor;
-                }
-                else {
-                    delete_length := end_cursor - start_cursor + 1;
-                    memory_copy(line.data.data + start_cursor, line.data.data + end_cursor + 1, line.length - delete_length);
-                    line.length -= delete_length;
-                }
-
-                buffer_window.cursor = start_cursor;
+                start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+                buffer_window.cursor = delete_from_line(line, start_cursor, end_cursor);
             }
             else {
-                start_line_number, end_line_number: u32;
-                if visual_mode_data.line > buffer_window.line {
-                    start_line_number = buffer_window.line;
-                    end_line_number = visual_mode_data.line;
-                }
-                else {
-                    start_line_number = visual_mode_data.line;
-                    end_line_number = buffer_window.line;
-                }
-
+                start_line_number, end_line_number := get_visual_start_and_end_lines(buffer_window);
                 start_line := get_buffer_line(buffer, start_line_number);
                 end_line := get_buffer_line(buffer, end_line_number);
 
@@ -693,68 +678,20 @@ delete_selected() {
                         end_cursor = clamp(buffer_window.cursor, 0, end_line.length);
                 }
 
-                start_line.length = start_cursor;
-                if end_cursor < end_line.length {
-                    copy_length := end_line.length - end_cursor - 1;
-                    memory_copy(start_line.data.data + start_cursor, end_line.data.data + end_cursor + 1, copy_length);
-                    start_line.length += copy_length;
-                }
-
-                if start_line.next != end_line {
-                    line_to_free := start_line.next;
-                    while line_to_free != end_line {
-                        line_to_free = line_to_free.next;
-                        // TODO Change this to the line allocator
-                        free_allocation(line_to_free.previous);
-                        buffer.line_count--;
-                    }
-                }
-
-                start_line.next = end_line.next;
-                if start_line.next
-                    start_line.next.previous = start_line;
-
-                // TODO Change this to the line allocator
-                free_allocation(end_line);
-
-                buffer.line_count--;
+                merge_lines(buffer, start_line, end_line, start_cursor, end_cursor);
                 buffer_window.line = start_line_number;
                 buffer_window.cursor = start_cursor;
+
+                adjust_start_line(buffer_window);
             }
         }
         case EditMode.VisualBlock; {
-            start_line, end_line, start_cursor, end_cursor: u32;
-            if visual_mode_data.line > buffer_window.line {
-                start_line = buffer_window.line;
-                end_line = visual_mode_data.line;
-            }
-            else {
-                start_line = visual_mode_data.line;
-                end_line = buffer_window.line;
-            }
-
-            if visual_mode_data.cursor > buffer_window.cursor {
-                start_cursor = buffer_window.cursor;
-                end_cursor = visual_mode_data.cursor;
-            }
-            else {
-                start_cursor = visual_mode_data.cursor;
-                end_cursor = buffer_window.cursor;
-            }
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
 
             line := get_buffer_line(buffer, start_line);
             while start_line <= end_line {
-                if start_cursor < line.length {
-                    if end_cursor >= line.length {
-                        line.length = start_cursor;
-                    }
-                    else {
-                        delete_length := end_cursor - start_cursor + 1;
-                        memory_copy(line.data.data + start_cursor, line.data.data + end_cursor + 1, line.length - delete_length);
-                        line.length -= delete_length;
-                    }
-                }
-
+                delete_from_line(line, start_cursor, end_cursor);
                 line = line.next;
                 start_line++;
             }
@@ -762,6 +699,56 @@ delete_selected() {
             buffer_window.cursor = start_cursor;
         }
     }
+}
+
+u32 delete_from_line(BufferLine* line, u32 start, u32 end) {
+    if line.length == 0 {
+        return 0;
+    }
+
+    if start >= line.length {
+        return line.length;
+    }
+
+    if end >= line.length {
+        line.length = start;
+    }
+    else {
+        delete_length := end - start + 1;
+        memory_copy(line.data.data + start, line.data.data + end + 1, line.length - delete_length);
+        line.length -= delete_length;
+    }
+
+    return start;
+}
+
+merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line) {
+    start_line.length = end_start_line;
+    if beginning_end_line < end_line.length {
+        copy_length := end_line.length - beginning_end_line - 1;
+        memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line + 1, copy_length);
+        start_line.length += copy_length;
+    }
+
+    if start_line.next != end_line {
+        line_to_free := start_line.next;
+        while line_to_free != end_line {
+            line_to_free = line_to_free.next;
+            // TODO Change this to the line allocator
+            free_allocation(line_to_free.previous);
+            buffer.line_count--;
+        }
+    }
+
+    start_line.next = end_line.next;
+    if start_line.next
+        start_line.next.previous = start_line;
+
+    // TODO Change this to the line allocator
+    free_allocation(end_line);
+    buffer.line_count--;
+
+    calculate_line_digits(buffer);
 }
 
 // Event handlers
