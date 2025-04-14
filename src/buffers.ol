@@ -250,6 +250,22 @@ open_file_buffer(string path) {
     }
 }
 
+switch_or_focus_buffer(SelectedWindow window) {
+    if window != current_window {
+        switch_to_buffer(window);
+        return;
+    }
+
+    switch window {
+        case SelectedWindow.Left; {
+            right_window.displayed = false;
+        }
+        case SelectedWindow.Right; {
+            left_window.displayed = false;
+        }
+    }
+}
+
 bool switch_to_buffer(SelectedWindow window) {
     if window == current_window return false;
 
@@ -268,7 +284,8 @@ bool switch_to_buffer(SelectedWindow window) {
     assert(original_window != null && new_window != null);
 
     if !new_window.displayed {
-        new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
+        if new_window.buffer_window == null
+            new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
         new_window.displayed = true;
     }
 

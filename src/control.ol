@@ -171,7 +171,11 @@ move_down(ModCode mod) {
 
 [keybind, no_repeat]
 move_left(ModCode mod) {
-    if mod & ModCode.Control {
+    if mod == (ModCode.Shift | ModCode.Control) {
+        switch_or_focus_buffer(SelectedWindow.Left);
+        edit_mode = EditMode.Normal;
+    }
+    else if mod & ModCode.Control {
         if switch_to_buffer(SelectedWindow.Left) {
             edit_mode = EditMode.Normal;
         }
@@ -184,7 +188,11 @@ move_left(ModCode mod) {
 
 [keybind, no_repeat]
 move_right(ModCode mod) {
-    if mod & ModCode.Control {
+    if mod == (ModCode.Shift | ModCode.Control) {
+        switch_or_focus_buffer(SelectedWindow.Right);
+        edit_mode = EditMode.Normal;
+    }
+    else if mod & ModCode.Control {
         if switch_to_buffer(SelectedWindow.Right) {
             edit_mode = EditMode.Normal;
         }
