@@ -106,12 +106,11 @@ visual_mode(ModCode mod) {
     }
     else {
         if edit_mode == EditMode.Normal {
+            visual_mode_data.line, visual_mode_data.cursor = get_current_position();
             buffer_window := get_current_window();
             if buffer_window {
-                visual_mode_data = {
-                    line = buffer_window.line;
-                    cursor = buffer_window.cursor;
-                }
+                buffer_window.line = visual_mode_data.line;
+                buffer_window.cursor = visual_mode_data.cursor;
             }
         }
 
@@ -137,12 +136,11 @@ append(ModCode mod) {
 
 [keybind, no_repeat]
 substitute(ModCode mod) {
-    // TODO Properly implement
-    if mod & ModCode.Shift {
-        clear_lines();
+    if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
+        delete_lines();
     }
     else {
-        clear_selected();
+        delete_selected();
     }
 
     start_insert_mode(true);
