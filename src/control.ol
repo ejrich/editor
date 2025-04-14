@@ -146,12 +146,13 @@ substitute(ModCode mod) {
     start_insert_mode(true);
 }
 
-[keybind]
+[keybind, no_repeat]
 open_line(ModCode mod) {
-    // TODO Implement
+    add_new_line((mod & ModCode.Shift) == ModCode.Shift);
+    start_insert_mode(false);
 }
 
-[keybind]
+[keybind, no_repeat]
 change(ModCode mod) {
     // TODO Implement
 }

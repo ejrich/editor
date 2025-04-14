@@ -751,6 +751,43 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
     calculate_line_digits(buffer);
 }
 
+add_new_line(bool above) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, buffer_window.line);
+    new_line := allocate_line();
+
+    if above {
+        if line.previous {
+            line.previous.next = new_line;
+            line.previous = new_line;
+            new_line.next = line;
+        }
+        else {
+            buffer.lines = new_line;
+            new_line.next = line;
+            line.previous = new_line;
+        }
+    }
+    else {
+        if line.next {
+            line.next.previous = new_line;
+        }
+        new_line.next = line.next;
+        line.next = new_line;
+
+        buffer_window.line++;
+    }
+
+    buffer.line_count++;
+    calculate_line_digits(buffer);
+    adjust_start_line(buffer_window);
+}
+
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
