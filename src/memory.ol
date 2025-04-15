@@ -1,8 +1,10 @@
 // Memory allocation
 init_memory() {
     arena_head = create_arena(0);
+    allocate_line_arenas();
 }
 
+// General allocation
 T* new<T>() #inline {
     value: T;
     size := size_of(T);
@@ -90,7 +92,7 @@ free_allocation(void* pointer) {
 }
 
 deallocate_arenas() {
-    // print_arenas();
+    print_arenas();
 
     arena := arena_head;
     while arena {
@@ -133,6 +135,62 @@ print_arenas() {
     log("% arenas allocated, % mb memory\n", i, total_allocated / 1000000.0);
 }
 
+// Line allocation
+BufferLine* allocate_line() {
+    line_memory_size := size_of(BufferLine) + line_buffer_length; #const
+    lines_to_allocate := 0x10000; #const
+
+    each line_arena, i in line_arenas {
+        if !line_arena.initialized {
+            line_arena.initialized = true;
+            line_arena.index = i;
+            line_arena.first_available = 0;
+            line_arena.data = allocate_memory(line_memory_size * lines_to_allocate);
+
+            each j in lines_to_allocate {
+                line: BufferLine* = line_arena.data + (j * line_memory_size);
+                line.arena_index = i;
+                line.index = j;
+                line.data.length = line_buffer_length;
+                line.data.data = cast(void*, line) + size_of(BufferLine);
+            }
+        }
+
+        if line_arena.first_available < lines_to_allocate {
+            line: BufferLine* = line_arena.data + (line_arena.first_available * line_memory_size);
+            line.allocated = true;
+
+            available_line := false;
+            each j in line_arena.first_available + 1..lines_to_allocate - 1 {
+                target_line: BufferLine* = line_arena.data + (j * line_memory_size);
+                if !target_line.allocated {
+                    available_line = true;
+                    line_arena.first_available = j;
+                    break;
+                }
+            }
+
+            if !available_line {
+                line_arena.first_available = lines_to_allocate;
+            }
+
+            return line;
+        }
+    }
+
+    assert(false, "Unable to allocate new line arena");
+    return null;
+}
+
+free_line(BufferLine* line) {
+    line_arena := &line_arenas[line.arena_index];
+    line.allocated = false;
+    if line.index < line_arena.first_available {
+        line_arena.first_available = line.index;
+    }
+}
+
+// Temporary allocation (resets every frame)
 void* temp_allocate(u64 size) {
     cursor := temporary_buffer_cursor;
     assert(cursor + size < temp_buffer_size);
@@ -163,6 +221,7 @@ temp_buffer_size := 50 * 1024 * 1024; #const
 temporary_buffer: CArray<u8>[temp_buffer_size];
 temporary_buffer_cursor := 0;
 
+// General allocation
 struct Arena {
     first_block: MemoryBlock*;
     next: Arena*;
@@ -170,7 +229,7 @@ struct Arena {
 }
 
 min_block_size := 1024; #const
-default_arena_size: u64 = 500 * 1024 * 1024; #const
+default_arena_size: u64 = 50 * 1024 * 1024; #const
 
 arena_head: Arena*;
 
@@ -278,4 +337,18 @@ bool merge_blocks(MemoryBlock* check_block, MemoryBlock* previous, MemoryBlock* 
     }
 
     return false;
+}
+
+// Line allocation
+struct LineArena {
+    initialized: bool;
+    index: u8;
+    first_available: u32;
+    data: void*;
+}
+
+line_arenas: Array<LineArena>;
+
+allocate_line_arenas() {
+    array_resize(&line_arenas, 0x100, allocate);
 }

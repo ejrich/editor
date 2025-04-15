@@ -1526,6 +1526,9 @@ struct FileBuffer {
 line_buffer_length := 500; #const
 
 struct BufferLine {
+    allocated: bool;
+    arena_index: u8;
+    index: u16;
     length: u32;
     data: string;
     previous: BufferLine*;
@@ -1651,14 +1654,6 @@ BufferWindow* copy_buffer_window_stack(BufferWindow* source) {
     }
 
     return stack_top;
-}
-
-BufferLine* allocate_line() {
-    pointer := allocate(size_of(BufferLine) + line_buffer_length);
-    line: BufferLine* = pointer;
-    line.data.length = line_buffer_length;
-    line.data.data = pointer + size_of(BufferLine);
-    return line;
 }
 
 BufferWindow*, FileBuffer* get_current_window_and_buffer() {
