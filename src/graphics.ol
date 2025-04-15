@@ -1643,7 +1643,7 @@ create_graphics_pipeline(ShaderName shader, bool use_existing = false) {
         dstColorBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         colorBlendOp = VkBlendOp.VK_BLEND_OP_ADD;
         srcAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_SRC_ALPHA;
-        dstAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        dstAlphaBlendFactor = VkBlendFactor.VK_BLEND_FACTOR_ONE;
         alphaBlendOp = VkBlendOp.VK_BLEND_OP_ADD;
     }
 

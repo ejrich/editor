@@ -52,6 +52,25 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     if window.buffer_index < 0 return;
 
     buffer := buffers[window.buffer_index];
+    line_background_quad: QuadInstanceData = {
+        color = {
+            x = appearance.background_color.x;
+            y = appearance.background_color.y;
+            z = appearance.background_color.z;
+            w = 1.0;
+        }
+        position = {
+            x = x + global_font_config.quad_advance * buffer.line_count_digits / 2.0;
+            y = global_font_config.line_height;
+            z = 0.4;
+        }
+        flags = QuadFlags.Solid;
+        width = global_font_config.quad_advance * buffer.line_count_digits;
+        height = global_font_config.line_height * global_font_config.max_lines;
+    }
+
+    draw_quad(&line_background_quad, 1);
+
     start_line := clamp(window.start_line, 0, buffer.line_count - 1);
     cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
     digits := buffer.line_count_digits;
