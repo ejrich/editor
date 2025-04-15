@@ -90,9 +90,10 @@ enum PostMovementCommand {
 
 struct PostMovementCommandData {
     command: PostMovementCommand;
-    line: u32;
-    cursor: u32;
+    start_line: u32;
+    start_cursor: u32;
     changed_by_line: bool;
+    include_end_cursor: bool;
 }
 
 post_movement_command: PostMovementCommandData;
@@ -101,8 +102,10 @@ set_post_movement_command(PostMovementCommand command) {
     line, cursor := get_current_position();
     post_movement_command = {
         command = command;
-        line = line;
-        cursor = cursor;
+        start_line = line;
+        start_cursor = cursor;
+        changed_by_line = false;
+        include_end_cursor = false;
     }
 }
 
@@ -112,21 +115,32 @@ handle_post_movement_command() {
     }
 
     line, cursor := get_current_position();
-    if post_movement_command.line == line && post_movement_command.cursor == cursor {
+    if post_movement_command.start_line == line && post_movement_command.start_cursor == cursor {
         return;
     }
 
     switch post_movement_command.command {
         case PostMovementCommand.Change; {
-            // TODO Implement
+            if post_movement_command.changed_by_line {
+                delete_lines(post_movement_command.start_line, line, false);
+            }
+            else {
+                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
+            }
+            start_insert_mode(true);
         }
     }
 
+    reset_post_movement_command();
+}
+
+reset_post_movement_command() {
     post_movement_command = {
         command = PostMovementCommand.None;
-        line = 0;
-        cursor = 0;
+        start_line = 0;
+        start_cursor = 0;
         changed_by_line = false;
+        include_end_cursor = false;
     }
 }
 
@@ -184,7 +198,7 @@ append(ModCode mod) {
 [keybind, no_repeat]
 substitute(ModCode mod) {
     if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-        delete_lines();
+        delete_lines(false);
     }
     else {
         delete_selected();
@@ -212,7 +226,7 @@ change(ModCode mod) {
     }
     else {
         if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-            delete_lines();
+            delete_lines(false);
         }
         else {
             delete_selected();
@@ -225,12 +239,14 @@ change(ModCode mod) {
 // Movement keybinds
 [keybind, no_repeat]
 move_up(ModCode mod) {
+    post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
     move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
 }
 
 [keybind, no_repeat]
 move_down(ModCode mod) {
+    post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
     move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
 }
@@ -239,12 +255,9 @@ move_down(ModCode mod) {
 move_left(ModCode mod) {
     if mod == (ModCode.Shift | ModCode.Control) {
         switch_or_focus_buffer(SelectedWindow.Left);
-        edit_mode = EditMode.Normal;
     }
     else if mod & ModCode.Control {
-        if switch_to_buffer(SelectedWindow.Left) {
-            edit_mode = EditMode.Normal;
-        }
+        switch_to_buffer(SelectedWindow.Left);
     }
     else {
         cursor_changes := get_repeats();
@@ -256,12 +269,9 @@ move_left(ModCode mod) {
 move_right(ModCode mod) {
     if mod == (ModCode.Shift | ModCode.Control) {
         switch_or_focus_buffer(SelectedWindow.Right);
-        edit_mode = EditMode.Normal;
     }
     else if mod & ModCode.Control {
-        if switch_to_buffer(SelectedWindow.Right) {
-            edit_mode = EditMode.Normal;
-        }
+        switch_to_buffer(SelectedWindow.Right);
     }
     else {
         cursor_changes := get_repeats();
@@ -276,6 +286,7 @@ next_word(ModCode mod) {
 
 [keybind]
 end_word(ModCode mod) {
+    post_movement_command.include_end_cursor = true;
     move_to_end_of_word((mod & ModCode.Shift) == ModCode.Shift);
 }
 

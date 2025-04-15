@@ -266,8 +266,8 @@ switch_or_focus_buffer(SelectedWindow window) {
     }
 }
 
-bool switch_to_buffer(SelectedWindow window) {
-    if window == current_window return false;
+switch_to_buffer(SelectedWindow window) {
+    if window == current_window return;
 
     original_window, new_window: EditorWindow*;
     switch window {
@@ -289,8 +289,11 @@ bool switch_to_buffer(SelectedWindow window) {
         new_window.displayed = true;
     }
 
+    reset_key_command();
+    reset_post_movement_command();
+    edit_mode = EditMode.Normal;
+
     current_window = window;
-    return true;
 }
 
 swap_top_buffer() {
@@ -585,7 +588,7 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
     }
 }
 
-delete_lines() {
+delete_lines(bool delete_all) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -606,37 +609,25 @@ delete_lines() {
         }
     }
 
-    line := get_buffer_line(buffer, start_line);
-    if start_line == end_line {
-        line.length = 0;
-        buffer_window.cursor = 0;
+    delete_lines(buffer_window, buffer, start_line, end_line, delete_all);
+}
+
+delete_lines(u32 line_1, u32 line_2, bool delete_all) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    start_line, end_line: u32;
+    if line_1 > line_2 {
+        start_line = line_2;
+        end_line = line_1;
     }
     else {
-        line.length = 0;
-        buffer_window.line = start_line;
-        buffer_window.cursor = 0;
-
-        start := line;
-        new_next := line.next;
-        start_line++;
-
-        while start_line <= end_line {
-            next := new_next.next;
-            // TODO Change this to the line allocator
-            free_allocation(new_next);
-            new_next = next;
-            start_line++;
-            buffer.line_count--;
-        }
-
-        start.next = new_next;
-        if new_next {
-            new_next.previous = start;
-        }
-
-        calculate_line_digits(buffer);
-        adjust_start_line(buffer_window);
+        start_line = line_1;
+        end_line = line_2;
     }
+    delete_lines(buffer_window, buffer, start_line, end_line, delete_all);
 }
 
 delete_selected() {
@@ -701,6 +692,52 @@ delete_selected() {
     }
 }
 
+delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    if line_1 == line_2 {
+        line := get_buffer_line(buffer, line_1);
+
+        start_cursor, end_cursor: u32;
+        if cursor_1 > cursor_2 {
+            start_cursor = cursor_2;
+            end_cursor = cursor_1;
+        }
+        else {
+            start_cursor = cursor_1;
+            end_cursor = cursor_2;
+        }
+        buffer_window.cursor = delete_from_line(line, start_cursor, end_cursor, delete_end_cursor);
+    }
+    else {
+        start_line_number, start_cursor, end_line_number, end_cursor: u32;
+        if line_1 > line_2 {
+            start_line_number = line_2;
+            start_cursor = cursor_2;
+            end_line_number = line_1;
+            end_cursor = cursor_1;
+        }
+        else {
+            start_line_number = line_1;
+            start_cursor = cursor_1;
+            end_line_number = line_2;
+            end_cursor = cursor_2;
+        }
+
+        start_line := get_buffer_line(buffer, start_line_number);
+        end_line := get_buffer_line(buffer, end_line_number);
+
+        merge_lines(buffer, start_line, end_line, start_cursor, end_cursor, delete_end_cursor);
+        buffer_window.line = start_line_number;
+        buffer_window.cursor = start_cursor;
+
+        adjust_start_line(buffer_window);
+    }
+}
+
 clear_remaining_line() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -719,7 +756,7 @@ clear_remaining_line() {
     }
 }
 
-u32 delete_from_line(BufferLine* line, u32 start, u32 end) {
+u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_cursor = true) {
     if line.length == 0 {
         return 0;
     }
@@ -732,41 +769,17 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end) {
         line.length = start;
     }
     else {
-        delete_length := end - start + 1;
-        memory_copy(line.data.data + start, line.data.data + end + 1, line.length - delete_length);
+        delete_length := end - start;
+        if delete_end_cursor {
+            end++;
+            delete_length++;
+        }
+
+        memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
         line.length -= delete_length;
     }
 
     return start;
-}
-
-merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line) {
-    start_line.length = end_start_line;
-    if beginning_end_line < end_line.length {
-        copy_length := end_line.length - beginning_end_line - 1;
-        memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line + 1, copy_length);
-        start_line.length += copy_length;
-    }
-
-    if start_line.next != end_line {
-        line_to_free := start_line.next;
-        while line_to_free != end_line {
-            line_to_free = line_to_free.next;
-            // TODO Change this to the line allocator
-            free_allocation(line_to_free.previous);
-            buffer.line_count--;
-        }
-    }
-
-    start_line.next = end_line.next;
-    if start_line.next
-        start_line.next.previous = start_line;
-
-    // TODO Change this to the line allocator
-    free_allocation(end_line);
-    buffer.line_count--;
-
-    calculate_line_digits(buffer);
 }
 
 add_new_line(bool above) {
@@ -1740,6 +1753,75 @@ calculate_line_digits(FileBuffer* buffer) {
     buffer.line_count_digits = digit_count;
 }
 
+// Functions for merging/deleting lines
+merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true) {
+    start_line.length = end_start_line;
+    if beginning_end_line < end_line.length {
+        copy_length := end_line.length - beginning_end_line;
+        if delete_end_cursor {
+            copy_length--;
+            beginning_end_line++;
+        }
+        memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line, copy_length);
+        start_line.length += copy_length;
+    }
+
+    if start_line.next != end_line {
+        line_to_free := start_line.next;
+        while line_to_free != end_line {
+            line_to_free = line_to_free.next;
+            // TODO Change this to the line allocator
+            free_allocation(line_to_free.previous);
+            buffer.line_count--;
+        }
+    }
+
+    start_line.next = end_line.next;
+    if start_line.next
+        start_line.next.previous = start_line;
+
+    // TODO Change this to the line allocator
+    free_allocation(end_line);
+    buffer.line_count--;
+
+    calculate_line_digits(buffer);
+}
+
+delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line, bool delete_all) {
+    line := get_buffer_line(buffer, start_line);
+    if start_line == end_line {
+        line.length = 0;
+        buffer_window.cursor = 0;
+    }
+    else {
+        line.length = 0;
+        buffer_window.line = start_line;
+        buffer_window.cursor = 0;
+
+        start := line;
+        new_next := line.next;
+        start_line++;
+
+        while start_line <= end_line {
+            next := new_next.next;
+            // TODO Change this to the line allocator
+            free_allocation(new_next);
+            new_next = next;
+            start_line++;
+            buffer.line_count--;
+        }
+
+        start.next = new_next;
+        if new_next {
+            new_next.previous = start;
+        }
+
+        calculate_line_digits(buffer);
+        adjust_start_line(buffer_window);
+    }
+}
+
+// Movement helpers
 scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     if window.buffer_index < 0 {
         window.line = 0;
