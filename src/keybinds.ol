@@ -76,6 +76,8 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
 
     reset_key_command();
 
+    handle_post_movement_command();
+
     return true;
 }
 

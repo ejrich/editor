@@ -83,6 +83,53 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
     return false;
 }
 
+enum PostMovementCommand {
+    None;
+    Change;
+}
+
+struct PostMovementCommandData {
+    command: PostMovementCommand;
+    line: u32;
+    cursor: u32;
+    changed_by_line: bool;
+}
+
+post_movement_command: PostMovementCommandData;
+
+set_post_movement_command(PostMovementCommand command) {
+    line, cursor := get_current_position();
+    post_movement_command = {
+        command = command;
+        line = line;
+        cursor = cursor;
+    }
+}
+
+handle_post_movement_command() {
+    if post_movement_command.command == PostMovementCommand.None {
+        return;
+    }
+
+    line, cursor := get_current_position();
+    if post_movement_command.line == line && post_movement_command.cursor == cursor {
+        return;
+    }
+
+    switch post_movement_command.command {
+        case PostMovementCommand.Change; {
+            // TODO Implement
+        }
+    }
+
+    post_movement_command = {
+        command = PostMovementCommand.None;
+        line = 0;
+        cursor = 0;
+        changed_by_line = false;
+    }
+}
+
 // Editing keybinds
 [keybind, no_repeat]
 normal_mode(ModCode mod) {
@@ -154,7 +201,25 @@ open_line(ModCode mod) {
 
 [keybind, no_repeat]
 change(ModCode mod) {
-    // TODO Implement
+    if edit_mode == EditMode.Normal {
+        if mod & ModCode.Shift {
+            clear_remaining_line();
+        }
+        else {
+            set_post_movement_command(PostMovementCommand.Change);
+            return;
+        }
+    }
+    else {
+        if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
+            delete_lines();
+        }
+        else {
+            delete_selected();
+        }
+    }
+
+    start_insert_mode(true);
 }
 
 // Movement keybinds

@@ -701,6 +701,24 @@ delete_selected() {
     }
 }
 
+clear_remaining_line() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, buffer_window.line);
+
+    if line.length == 0 {
+        buffer_window.cursor = 0;
+    }
+    else {
+        buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+        line.length = buffer_window.cursor;
+    }
+}
+
 u32 delete_from_line(BufferLine* line, u32 start, u32 end) {
     if line.length == 0 {
         return 0;
