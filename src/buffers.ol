@@ -248,6 +248,12 @@ open_file_buffer(string path) {
                 if char == '\n' {
                     add_new_line = true;
                 }
+                else if char == '\t' {
+                    assert(line.length + settings.tab_size < line_buffer_length);
+                    each j in settings.tab_size {
+                        line.data[line.length++] = ' ';
+                    }
+                }
                 else {
                     assert(line.length < line_buffer_length);
                     line.data[line.length++] = char;
@@ -818,13 +824,24 @@ delete_from_cursor(bool back) {
                 buffer_window.line--;
             }
         }
-        else if cursor == line.length {
-            line.length--;
-        }
         else {
-            memory_copy(line.data.data + cursor - 1, line.data.data + cursor, line.length - cursor);
-            line.length--;
-            buffer_window.cursor = cursor - 1;
+            delete_length := 1;
+            if is_whitespace_before_cursor(line, cursor) {
+                delete_length = cursor % settings.tab_size;
+                if delete_length == 0 {
+                    delete_length = settings.tab_size;
+                }
+            }
+
+            if cursor == line.length {
+                line.length -= delete_length;
+                buffer_window.cursor = cursor - delete_length;
+            }
+            else {
+                memory_copy(line.data.data + cursor - delete_length, line.data.data + cursor, line.length - cursor);
+                line.length -= delete_length;
+                buffer_window.cursor = cursor - delete_length;
+            }
         }
     }
     else {
@@ -840,6 +857,16 @@ delete_from_cursor(bool back) {
             line.length--;
         }
     }
+}
+
+bool is_whitespace_before_cursor(BufferLine* line, u32 cursor) {
+    each i in cursor {
+        if line.data[i] != ' ' {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_cursor = true) {
@@ -877,10 +904,14 @@ add_new_line(bool above, bool split = false) {
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
     new_line := allocate_line();
+    line_to_copy_indentation := line;
 
+    // Add the new line to the lines linked list
     if above {
         if line.previous {
+            line_to_copy_indentation = line.previous;
             line.previous.next = new_line;
+            new_line.previous = line.previous;
             line.previous = new_line;
             new_line.next = line;
         }
@@ -900,14 +931,57 @@ add_new_line(bool above, bool split = false) {
                 buffer_window.cursor = 0;
             }
         }
-
         if line.next {
             line.next.previous = new_line;
         }
+        new_line.previous = line;
         new_line.next = line.next;
         line.next = new_line;
 
         buffer_window.line++;
+    }
+
+    // Indent the new line
+    {
+        indent_length := 0;
+        parsing_indents := true;
+        has_open_brace := false;
+        each i in line_to_copy_indentation.length {
+            char := line_to_copy_indentation.data[i];
+            if parsing_indents {
+                if char == ' ' {
+                    indent_length++;
+                }
+                else {
+                    parsing_indents = false;
+                }
+            }
+            else {
+                if char == '{' {
+                    has_open_brace = true;
+                }
+                else if has_open_brace && char == '}' {
+                    has_open_brace = false;
+                }
+            }
+        }
+
+        if has_open_brace indent_length += settings.tab_size;
+
+        if indent_length {
+            if new_line.length {
+                each i in new_line.length {
+                    new_line.data[line.length + indent_length - 1 - i] = new_line.data[line.length - 1 - i];
+                }
+            }
+
+            each i in indent_length {
+                new_line.data[i] = ' ';
+            }
+
+            new_line.length += indent_length;
+            buffer_window.cursor = indent_length;
+        }
     }
 
     buffer.line_count++;

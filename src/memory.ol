@@ -92,7 +92,7 @@ free_allocation(void* pointer) {
 }
 
 deallocate_arenas() {
-    print_arenas();
+    // print_arenas();
 
     arena := arena_head;
     while arena {

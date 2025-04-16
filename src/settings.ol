@@ -363,6 +363,13 @@ load_settings() {
         free_allocation(settings_file.data);
     }
 
+    // Override any invalid settings
+    {
+        if settings.tab_size == 0 {
+            settings.tab_size = default_tab_size;
+        }
+    }
+
     if number_of_settings_found < settings_type.fields.length {
         write_settings();
     }
@@ -413,9 +420,11 @@ write_settings() {
 
 settings_file_path: string;
 
+default_tab_size: u32 = 4; #const
+
 get_default_settings() {
     settings = {
-        tab_size = 4;
+        tab_size = default_tab_size;
         window_width = display_width;
         window_height = display_height;
         font = default_font;

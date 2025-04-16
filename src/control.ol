@@ -210,7 +210,7 @@ substitute(ModCode mod) {
 [keybind, no_repeat]
 open_line(ModCode mod) {
     add_new_line((mod & ModCode.Shift) == ModCode.Shift);
-    start_insert_mode(false);
+    start_insert_mode(true);
 }
 
 [keybind, no_repeat]
