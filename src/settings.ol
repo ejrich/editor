@@ -1,4 +1,5 @@
 struct Settings {
+    tab_size: u8;
     window_width: u32;
     window_height: u32;
     font: string;
@@ -414,6 +415,7 @@ settings_file_path: string;
 
 get_default_settings() {
     settings = {
+        tab_size = 4;
         window_width = display_width;
         window_height = display_height;
         font = default_font;

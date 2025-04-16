@@ -12,8 +12,32 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
 
     if state & PressState.Down {
         if edit_mode == EditMode.Insert {
-            // TODO Implement insert mode
+            switch code {
+                case KeyCode.Backspace; {
+                    delete_from_cursor(true);
+                    return;
+                }
+                case KeyCode.Tab; {
+                    tab_array: Array<u8>[settings.tab_size];
+                    each space in tab_array {
+                        space = ' ';
+                    }
+                    tab_string: string = { length = tab_array.length; data = tab_array.data; }
+                    add_text_to_line(tab_string);
+                    return;
+                }
+                case KeyCode.Enter; {
+                    add_new_line(false, true);
+                    return;
+                }
+                case KeyCode.Delete; {
+                    delete_from_cursor(false);
+                    return;
+                }
+            }
+
             if cast(u32, code) >= ' ' && char.length > 0 {
+                add_text_to_line(char);
                 return;
             }
         }

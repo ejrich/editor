@@ -159,6 +159,7 @@ BufferLine* allocate_line() {
         if line_arena.first_available < lines_to_allocate {
             line: BufferLine* = line_arena.data + (line_arena.first_available * line_memory_size);
             line.allocated = true;
+            line.length = 0;
 
             available_line := false;
             each j in line_arena.first_available + 1..lines_to_allocate - 1 {

@@ -242,10 +242,6 @@ global_font_config: GlobalFontConfig;
 library: FT_Library*;
 
 u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1) {
-    if cursor == text.length && render_cursor {
-        draw_cursor(x + text.length * font_texture.quad_advance, y, appearance.cursor_color);
-    }
-
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     x_start := x;
@@ -292,6 +288,10 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
 
         x += font_texture.quad_advance;
         i++;
+    }
+
+    if cursor == text.length && render_cursor {
+        draw_cursor(x, y, appearance.cursor_color);
     }
 
     // Issue the draw call(s) for the characters
