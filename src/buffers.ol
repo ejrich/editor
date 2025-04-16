@@ -904,12 +904,10 @@ add_new_line(bool above, bool split = false) {
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
     new_line := allocate_line();
-    line_to_copy_indentation := line;
 
     // Add the new line to the lines linked list
     if above {
         if line.previous {
-            line_to_copy_indentation = line.previous;
             line.previous.next = new_line;
             new_line.previous = line.previous;
             line.previous = new_line;
@@ -941,48 +939,7 @@ add_new_line(bool above, bool split = false) {
         buffer_window.line++;
     }
 
-    // Indent the new line
-    {
-        indent_length := 0;
-        parsing_indents := true;
-        has_open_brace := false;
-        each i in line_to_copy_indentation.length {
-            char := line_to_copy_indentation.data[i];
-            if parsing_indents {
-                if char == ' ' {
-                    indent_length++;
-                }
-                else {
-                    parsing_indents = false;
-                }
-            }
-            else {
-                if char == '{' {
-                    has_open_brace = true;
-                }
-                else if has_open_brace && char == '}' {
-                    has_open_brace = false;
-                }
-            }
-        }
-
-        if has_open_brace indent_length += settings.tab_size;
-
-        if indent_length {
-            if new_line.length {
-                each i in new_line.length {
-                    new_line.data[line.length + indent_length - 1 - i] = new_line.data[line.length - 1 - i];
-                }
-            }
-
-            each i in indent_length {
-                new_line.data[i] = ' ';
-            }
-
-            new_line.length += indent_length;
-            buffer_window.cursor = indent_length;
-        }
-    }
+    indent_line(buffer_window, new_line);
 
     buffer.line_count++;
     calculate_line_digits(buffer);
@@ -1980,6 +1937,74 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
 
         calculate_line_digits(buffer);
         adjust_start_line(buffer_window);
+    }
+
+    if !delete_all {
+        indent_line(buffer_window, line);
+    }
+}
+
+indent_line(BufferWindow* buffer_window, BufferLine* line) {
+    indent_length := 0;
+    parsing_indents := true;
+    has_open_brace := false;
+
+    line_to_copy_indentation := line.previous;
+    while line_to_copy_indentation {
+        if line_to_copy_indentation.length
+            break;
+
+        line_to_copy_indentation = line_to_copy_indentation.previous;
+    }
+
+    if line_to_copy_indentation == null {
+        line_to_copy_indentation = line.next;
+        while line_to_copy_indentation {
+            if line_to_copy_indentation.length
+                break;
+
+            line_to_copy_indentation = line_to_copy_indentation.next;
+        }
+    }
+
+    if line_to_copy_indentation {
+        each i in line_to_copy_indentation.length {
+            char := line_to_copy_indentation.data[i];
+            if parsing_indents {
+                if char == ' ' {
+                    indent_length++;
+                }
+                else {
+                    parsing_indents = false;
+                }
+            }
+            else {
+                if char == '{' {
+                    has_open_brace = true;
+                }
+                else if has_open_brace && char == '}' {
+                    has_open_brace = false;
+                }
+            }
+        }
+    }
+
+    if has_open_brace
+        indent_length += settings.tab_size;
+
+    if indent_length {
+        if line.length {
+            each i in line.length {
+                line.data[line.length + indent_length - 1 - i] = line.data[line.length - 1 - i];
+            }
+        }
+
+        each i in indent_length {
+            line.data[i] = ' ';
+        }
+
+        line.length += indent_length;
+        buffer_window.cursor = indent_length;
     }
 }
 
