@@ -369,11 +369,13 @@ go_to(ModCode mod) {
 
 [keybind, no_repeat]
 find_char(ModCode mod) {
+    post_movement_command.include_end_cursor = true;
     set_key_command(KeyCommand.FindChar, mod);
 }
 
 [keybind, no_repeat]
 until_char(ModCode mod) {
+    post_movement_command.include_end_cursor = true;
     set_key_command(KeyCommand.UntilChar, mod);
 }
 
