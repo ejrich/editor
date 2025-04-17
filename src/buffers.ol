@@ -938,9 +938,28 @@ join_lines(u32 lines) {
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
-    line := get_buffer_line(buffer, buffer_window.line);
 
-    // TODO Implement
+    start_line: u32;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+        }
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            start, end := get_visual_start_and_end_lines(buffer_window);
+            start_line = start;
+            lines = end - start + 1;
+            edit_mode = EditMode.Normal;
+            buffer_window.line = start;
+        }
+    }
+
+    line := get_buffer_line(buffer, start_line);
+    while line.next != null && lines > 0 {
+        merge_lines(buffer, line, line.next, line.length, 0, false, true);
+        lines--;
+    }
 }
 
 add_new_line(bool above, bool split = false) {
@@ -1965,16 +1984,38 @@ calculate_line_digits(FileBuffer* buffer) {
 }
 
 // Functions for merging/deleting lines
-merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true) {
+merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true, bool joining = false) {
     start_line.length = end_start_line;
     if beginning_end_line < end_line.length {
-        copy_length := end_line.length - beginning_end_line;
-        if delete_end_cursor {
-            copy_length--;
-            beginning_end_line++;
+        copy_length: u32;
+        if joining {
+            beginning_end_line = 0;
+            while beginning_end_line < end_line.length {
+                if end_line.data[beginning_end_line] != ' '
+                    break;
+
+                beginning_end_line++;
+            }
+
+            copy_length = end_line.length - beginning_end_line;
+            if copy_length {
+                start_line.data[start_line.length] = ' ';
+                start_line.length++;
+                end_start_line++;
+            }
         }
-        memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line, copy_length);
-        start_line.length += copy_length;
+        else {
+            copy_length = end_line.length - beginning_end_line;
+            if delete_end_cursor {
+                copy_length--;
+                beginning_end_line++;
+            }
+        }
+
+        if copy_length {
+            memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line, copy_length);
+            start_line.length += copy_length;
+        }
     }
 
     if start_line.next != end_line {
@@ -2033,6 +2074,7 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
     }
 }
 
+// Formatting helpers
 indent_line(BufferWindow* buffer_window, BufferLine* line) {
     indent_length := 0;
     parsing_indents := true;
