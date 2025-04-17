@@ -319,9 +319,14 @@ move_up(ModCode mod) {
 
 [keybind, no_repeat]
 move_down(ModCode mod) {
-    post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
-    move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
+    if mod & ModCode.Shift {
+        join_lines(line_changes);
+    }
+    else {
+        post_movement_command.changed_by_line = true;
+        move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
+    }
 }
 
 [keybind, no_repeat]
