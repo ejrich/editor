@@ -714,6 +714,7 @@ delete_lines(u32 line_1, u32 line_2, bool delete_all) {
         start_line = line_1;
         end_line = line_2;
     }
+
     delete_lines(buffer_window, buffer, start_line, end_line, delete_all);
 }
 
@@ -2080,8 +2081,33 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
 delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line, bool delete_all) {
     line := get_buffer_line(buffer, start_line);
     if start_line == end_line {
-        line.length = 0;
-        buffer_window.cursor = 0;
+        if delete_all {
+            if line.previous == null {
+                if line.next == null {
+                    line.length = 0;
+                    buffer_window.cursor = 0;
+                    return;
+                }
+                else {
+                    buffer.lines = line.next;
+                    line.next.previous = null;
+                }
+            }
+            else {
+                line.previous.next = line.next;
+                line.next.previous = line.previous;
+            }
+
+            free_line(line);
+            buffer.line_count--;
+
+            calculate_line_digits(buffer);
+            adjust_start_line(buffer_window);
+        }
+        else {
+            line.length = 0;
+            buffer_window.cursor = 0;
+        }
     }
     else {
         buffer_window.line = start_line;

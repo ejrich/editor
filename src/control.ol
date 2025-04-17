@@ -114,6 +114,7 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
 enum PostMovementCommand {
     None;
     Change;
+    Delete;
 }
 
 struct PostMovementCommandData {
@@ -156,6 +157,14 @@ handle_post_movement_command() {
                 delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
             }
             start_insert_mode(true);
+        }
+        case PostMovementCommand.Delete; {
+            if post_movement_command.changed_by_line {
+                delete_lines(post_movement_command.start_line, line, true);
+            }
+            else {
+                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
+            }
         }
     }
 
@@ -205,6 +214,9 @@ visual_mode(ModCode mod) {
 
         edit_mode = target_mode;
     }
+
+    reset_key_command();
+    reset_post_movement_command();
 }
 
 [keybind, no_repeat]
@@ -294,7 +306,29 @@ unindent(ModCode mod) {
 
 [keybind, no_repeat]
 delete(ModCode mod) {
-    // TODO Implement
+    if edit_mode == EditMode.Normal {
+        if mod & ModCode.Shift {
+            clear_remaining_line();
+        }
+        else if post_movement_command.command == PostMovementCommand.Delete {
+            line_changes := get_repeats();
+            delete_lines(post_movement_command.start_line, post_movement_command.start_line + line_changes - 1, true);
+            reset_post_movement_command();
+        }
+        else {
+            set_post_movement_command(PostMovementCommand.Delete);
+        }
+    }
+    else {
+        if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
+            delete_lines(true);
+        }
+        else {
+            delete_selected();
+        }
+
+        edit_mode = EditMode.Normal;
+    }
 }
 
 [keybind, no_repeat]
