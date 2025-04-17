@@ -347,6 +347,40 @@ swap_top_buffer() {
     }
 }
 
+close_window(bool save) {
+    editor_window, other_window: EditorWindow*;
+    switch current_window {
+        case SelectedWindow.Left; {
+            editor_window = &left_window;
+            other_window = &left_window;
+            current_window = SelectedWindow.Right;
+        }
+        case SelectedWindow.Right; {
+            editor_window = &right_window;
+            other_window = &right_window;
+            current_window = SelectedWindow.Left;
+        }
+    }
+
+    buffer_window := editor_window.buffer_window;
+    while buffer_window {
+        if save {
+            save_buffer(buffer_window.buffer_index);
+        }
+
+        next := buffer_window.next;
+        free_allocation(buffer_window);
+        buffer_window = next;
+    }
+
+    editor_window.buffer_window = null;
+    editor_window.displayed = false;
+
+    if !other_window.displayed {
+        signal_shutdown();
+    }
+}
+
 // Saving buffers to a file
 bool, u32, u32, string save_buffer(int buffer_index) {
     if buffer_index < 0 || buffer_index >= buffers.length
@@ -597,6 +631,8 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
         return;
     }
 
+    reset_key_command();
+    reset_post_movement_command();
     edit_mode = EditMode.Insert;
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
@@ -956,6 +992,47 @@ handle_buffer_scroll(ScrollDirection direction) {
     else if right_window.displayed && (!left_window.displayed || x > 0.0) {
         scroll_buffer(right_window.buffer_window, direction == ScrollDirection.Up);
     }
+}
+
+enum ScrollTo {
+    Top;
+    Middle;
+    Bottom;
+}
+
+scroll_to_position(ScrollTo scroll_position) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    switch scroll_position {
+        case ScrollTo.Top;
+            buffer_window.start_line = buffer_window.line;
+        case ScrollTo.Middle; {
+            buffer_window.start_line = buffer_window.line;
+            lines_to_offset := global_font_config.max_lines / 2;
+            max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
+
+            line := get_buffer_line(buffer, buffer_window.line);
+            while line.previous {
+                line = line.previous;
+                lines_rendered := calculate_rendered_lines(max_chars, line.length);
+                if lines_rendered > lines_to_offset {
+                    break;
+                }
+
+                lines_to_offset -= lines_rendered;
+                buffer_window.start_line--;
+            }
+        }
+        case ScrollTo.Bottom;
+            buffer_window.start_line = 0;
+    }
+
+    adjust_start_line(buffer_window);
 }
 
 resize_buffers() {

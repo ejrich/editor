@@ -20,6 +20,8 @@ enum KeyCommand {
     FindChar;
     UntilChar;
     GoTo;
+    ScrollTo;
+    Quit;
 }
 
 struct KeyCommandData {
@@ -75,6 +77,32 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
         }
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
+            reset_key_command();
+            return true;
+        }
+        case KeyCommand.ScrollTo; {
+            switch code {
+                case KeyCode.T;
+                    scroll_to_position(ScrollTo.Top);
+                case KeyCode.Z;
+                    scroll_to_position(ScrollTo.Middle);
+                case KeyCode.B;
+                    scroll_to_position(ScrollTo.Bottom);
+            }
+
+            reset_key_command();
+            return true;
+        }
+        case KeyCommand.Quit; {
+            switch code {
+                case KeyCode.Q; {
+                    close_window(false);
+                }
+                case KeyCode.Z; {
+                    close_window(true);
+                }
+            }
+
             reset_key_command();
             return true;
         }
@@ -234,6 +262,51 @@ change(ModCode mod) {
     }
 
     start_insert_mode(true);
+}
+
+[keybind, no_repeat]
+delete_char(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+indent(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+unindent(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+delete(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+replace(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+copy(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+paste(ModCode mod) {
+    // TODO Implement
+}
+
+[keybind, no_repeat]
+scroll_to(ModCode mod) {
+    set_key_command(KeyCommand.ScrollTo, mod);
+}
+
+[keybind, no_repeat]
+quit(ModCode mod) {
+    set_key_command(KeyCommand.Quit, mod);
 }
 
 // Movement keybinds
