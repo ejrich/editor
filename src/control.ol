@@ -266,7 +266,20 @@ change(ModCode mod) {
 
 [keybind, no_repeat]
 delete_char(ModCode mod) {
-    // TODO Implement
+    if edit_mode == EditMode.Normal {
+        repeats := get_repeats();
+        delete_cursor((mod & ModCode.Shift) == ModCode.Shift, repeats);
+    }
+    else {
+        if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
+            delete_lines(true);
+        }
+        else {
+            delete_selected();
+        }
+
+        edit_mode = EditMode.Normal;
+    }
 }
 
 [keybind, no_repeat]

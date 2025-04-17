@@ -895,6 +895,46 @@ delete_from_cursor(bool back) {
     }
 }
 
+delete_cursor(bool back, u32 cursor_changes) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, buffer_window.line);
+
+    if line.length == 0 {
+        buffer_window.cursor = 0;
+    }
+    else {
+        buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+
+        if back {
+            if buffer_window.cursor <= cursor_changes {
+                memory_copy(line.data.data, line.data.data + buffer_window.cursor, line.length - buffer_window.cursor);
+                line.length -= buffer_window.cursor;
+                buffer_window.cursor = 0;
+            }
+            else {
+                memory_copy(line.data.data + buffer_window.cursor - cursor_changes, line.data.data + buffer_window.cursor, line.length - buffer_window.cursor);
+                line.length -= cursor_changes;
+                buffer_window.cursor -= cursor_changes;
+            }
+        }
+        else {
+            if buffer_window.cursor + cursor_changes >= line.length {
+                line.length = buffer_window.cursor;
+                buffer_window.cursor = line.length - 1;
+            }
+            else {
+                memory_copy(line.data.data + buffer_window.cursor, line.data.data + buffer_window.cursor + cursor_changes, line.length - cursor_changes);
+                line.length -= cursor_changes;
+            }
+        }
+    }
+}
+
 bool is_whitespace_before_cursor(BufferLine* line, u32 cursor) {
     each i in cursor {
         if line.data[i] != ' ' {
@@ -2044,9 +2084,11 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
         buffer_window.cursor = 0;
     }
     else {
-        line.length = 0;
         buffer_window.line = start_line;
-        buffer_window.cursor = 0;
+        if !delete_all {
+            line.length = 0;
+            buffer_window.cursor = 0;
+        }
 
         start := line;
         new_next := line.next;
@@ -2060,9 +2102,24 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
             buffer.line_count--;
         }
 
-        start.next = new_next;
-        if new_next {
-            new_next.previous = start;
+        if delete_all {
+            if start.previous == null {
+                buffer.lines = new_next;
+                new_next.previous = null;
+            }
+            else {
+                start.previous.next = new_next;
+                new_next.previous = start.previous;
+            }
+
+            free_line(start);
+            buffer.line_count--;
+        }
+        else {
+            start.next = new_next;
+            if new_next {
+                new_next.previous = start;
+            }
         }
 
         calculate_line_digits(buffer);
