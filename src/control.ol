@@ -296,12 +296,14 @@ delete_char(ModCode mod) {
 
 [keybind, no_repeat]
 indent(ModCode mod) {
-    // TODO Implement
+    indentations := get_repeats();
+    change_indentation(true, indentations);
 }
 
 [keybind, no_repeat]
 unindent(ModCode mod) {
-    // TODO Implement
+    indentations := get_repeats();
+    change_indentation(false, indentations);
 }
 
 [keybind, no_repeat]

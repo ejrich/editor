@@ -1054,6 +1054,57 @@ add_new_line(bool above, bool split = false) {
     adjust_start_line(buffer_window);
 }
 
+change_indentation(bool indent, u32 indentations) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    start_line, end_line: u32;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+            end_line = buffer_window.line;
+        }
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            start_line, end_line = get_visual_start_and_end_lines(buffer_window);
+        }
+    }
+
+    line := get_buffer_line(buffer, start_line);
+    indent_size := settings.tab_size * indentations;
+    while line != null && start_line <= end_line {
+        if indent {
+            indent_line(line, indent_size);
+        }
+        else {
+            available_whitespace: u32;
+            while available_whitespace < line.length {
+                if line.data[available_whitespace] != ' '
+                    break;
+
+                available_whitespace++;
+            }
+
+            if available_whitespace {
+                if available_whitespace < indent_size {
+                    indent_size = available_whitespace;
+                }
+
+                memory_copy(line.data.data, line.data.data + indent_size, line.length - indent_size);
+                line.length -= indent_size;
+            }
+        }
+
+        line = line.next;
+        start_line++;
+    }
+}
+
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
@@ -2207,19 +2258,23 @@ indent_line(BufferWindow* buffer_window, BufferLine* line) {
         indent_length += settings.tab_size;
 
     if indent_length {
-        if line.length {
-            each i in line.length {
-                line.data[line.length + indent_length - 1 - i] = line.data[line.length - 1 - i];
-            }
-        }
-
-        each i in indent_length {
-            line.data[i] = ' ';
-        }
-
-        line.length += indent_length;
+        indent_line(line, indent_length);
         buffer_window.cursor = indent_length;
     }
+}
+
+indent_line(BufferLine* line, u32 indent_length) {
+    if line.length {
+        each i in line.length {
+            line.data[line.length + indent_length - 1 - i] = line.data[line.length - 1 - i];
+        }
+    }
+
+    each i in indent_length {
+        line.data[i] = ' ';
+    }
+
+    line.length += indent_length;
 }
 
 // Movement helpers
