@@ -20,6 +20,7 @@ enum KeyCommand {
     FindChar;
     UntilChar;
     GoTo;
+    Replace;
     ScrollTo;
     Quit;
 }
@@ -77,6 +78,12 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
         }
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
+            reset_key_command();
+            return true;
+        }
+        case KeyCommand.Replace; {
+            replace_characters(char[0]);
+            edit_mode = EditMode.Normal;
             reset_key_command();
             return true;
         }
@@ -335,7 +342,7 @@ delete(ModCode mod) {
 
 [keybind, no_repeat]
 replace(ModCode mod) {
-    // TODO Implement
+    set_key_command(KeyCommand.Replace, mod);
 }
 
 [keybind, no_repeat]

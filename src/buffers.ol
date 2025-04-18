@@ -1105,6 +1105,104 @@ change_indentation(bool indent, u32 indentations) {
     }
 }
 
+replace_characters(u8 char) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    switch edit_mode {
+        case EditMode.Normal; {
+            line := get_buffer_line(buffer, buffer_window.line);
+            if line.length {
+                buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+                line.data[buffer_window.cursor] = char;
+            }
+        }
+        case EditMode.Visual; {
+            if buffer_window.line == visual_mode_data.line {
+                line := get_buffer_line(buffer, buffer_window.line);
+
+                if line.length {
+                    buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+                    start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+
+                    each i in start_cursor..end_cursor {
+                        line.data[i] = char;
+                    }
+                }
+            }
+            else {
+                start_line_number, end_line_number := get_visual_start_and_end_lines(buffer_window);
+                start_line := get_buffer_line(buffer, start_line_number);
+                end_line := get_buffer_line(buffer, end_line_number);
+
+                start_cursor, end_cursor: u32;
+                if visual_mode_data.line > buffer_window.line {
+                    if start_line.length
+                        start_cursor = clamp(buffer_window.cursor, 0, start_line.length - 1);
+                    end_cursor = visual_mode_data.cursor;
+                }
+                else {
+                    start_cursor = visual_mode_data.cursor;
+                    if end_line.length
+                        end_cursor = clamp(buffer_window.cursor, 0, end_line.length - 1);
+                }
+
+                line_number := start_line_number;
+                each i in start_cursor..start_line.length - 1 {
+                    start_line.data[i] = char;
+                }
+                start_line = start_line.next;
+                line_number++;
+
+                while line_number < end_line_number {
+                    each i in start_line.length {
+                        start_line.data[i] = char;
+                    }
+
+                    start_line = start_line.next;
+                    line_number++;
+                }
+
+                each i in 0..end_cursor {
+                    start_line.data[i] = char;
+                }
+            }
+        }
+        case EditMode.VisualLine; {
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            line := get_buffer_line(buffer, start_line);
+
+            while start_line <= end_line {
+                each i in line.length {
+                    line.data[i] = char;
+                }
+
+                line = line.next;
+                start_line++;
+            }
+        }
+        case EditMode.VisualBlock; {
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+
+            line := get_buffer_line(buffer, start_line);
+            while start_line <= end_line {
+                i := start_cursor;
+                while i < line.length && i <= end_cursor {
+                    line.data[i++] = char;
+                }
+
+                line = line.next;
+                start_line++;
+            }
+        }
+    }
+}
+
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
