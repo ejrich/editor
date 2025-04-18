@@ -474,6 +474,61 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     return start_cursor, end_cursor;
 }
 
+enum CopyMode {
+    Normal;
+    Lines;
+    Block;
+}
+
+// TODO Implement these
+save_string_to_clipboard(string value, CopyMode mode) {
+}
+
+copy_remaining_line() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, buffer_window.line);
+
+    copy_string: string;
+    if line.length {
+
+    }
+
+    save_string_to_clipboard(copy_string, CopyMode.Normal);
+}
+
+copy_lines(u32 start_line, u32 end_line) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+}
+
+copy_selected() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+}
+
+copy_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+}
+
+copy_selected_lines() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+}
+
 string get_visual_mode_selection() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {

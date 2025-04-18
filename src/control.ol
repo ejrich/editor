@@ -70,21 +70,20 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
     if char.length == 0
         return false;
 
+    defer reset_key_command();
+
     switch key_command.command {
         case KeyCommand.FindChar; {
             find_character_in_line(!key_command.shifted, false, char);
-            reset_key_command();
             return true;
         }
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
-            reset_key_command();
             return true;
         }
         case KeyCommand.Replace; {
             replace_characters(char[0]);
             edit_mode = EditMode.Normal;
-            reset_key_command();
             return true;
         }
         case KeyCommand.ScrollTo; {
@@ -97,7 +96,6 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                     scroll_to_position(ScrollTo.Bottom);
             }
 
-            reset_key_command();
             return true;
         }
         case KeyCommand.Quit; {
@@ -110,7 +108,6 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                 }
             }
 
-            reset_key_command();
             return true;
         }
     }
@@ -122,6 +119,7 @@ enum PostMovementCommand {
     None;
     Change;
     Delete;
+    Copy;
 }
 
 struct PostMovementCommandData {
@@ -171,6 +169,19 @@ handle_post_movement_command() {
             }
             else {
                 delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
+            }
+        }
+        case PostMovementCommand.Copy; {
+            if post_movement_command.changed_by_line {
+                if line > post_movement_command.start_line {
+                    copy_lines(post_movement_command.start_line, line);
+                }
+                else {
+                    copy_lines(line, post_movement_command.start_line);
+                }
+            }
+            else {
+                copy_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor);
             }
         }
     }
@@ -318,6 +329,7 @@ delete(ModCode mod) {
     if edit_mode == EditMode.Normal {
         if mod & ModCode.Shift {
             clear_remaining_line();
+            reset_post_movement_command();
         }
         else if post_movement_command.command == PostMovementCommand.Delete {
             line_changes := get_repeats();
@@ -347,7 +359,30 @@ replace(ModCode mod) {
 
 [keybind, no_repeat]
 copy(ModCode mod) {
-    // TODO Implement
+    if edit_mode == EditMode.Normal {
+        if mod & ModCode.Shift {
+            copy_remaining_line();
+            reset_post_movement_command();
+        }
+        else if post_movement_command.command == PostMovementCommand.Copy {
+            line_changes := get_repeats();
+            copy_lines(post_movement_command.start_line, post_movement_command.start_line + line_changes - 1);
+            reset_post_movement_command();
+        }
+        else {
+            set_post_movement_command(PostMovementCommand.Copy);
+        }
+    }
+    else {
+        if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
+            copy_selected_lines();
+        }
+        else {
+            copy_selected();
+        }
+
+        edit_mode = EditMode.Normal;
+    }
 }
 
 [keybind, no_repeat]
