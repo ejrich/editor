@@ -474,16 +474,6 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     return start_cursor, end_cursor;
 }
 
-enum CopyMode {
-    Normal;
-    Lines;
-    Block;
-}
-
-// TODO Implement these
-save_string_to_clipboard(string value, CopyMode mode) {
-}
-
 copy_remaining_line() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -495,10 +485,16 @@ copy_remaining_line() {
 
     copy_string: string;
     if line.length {
+        buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+        copy_string = {
+            length = line.length - buffer_window.cursor;
+            data = line.data.data + buffer_window.cursor;
+        }
 
+        allocate_strings(&copy_string);
     }
 
-    save_string_to_clipboard(copy_string, CopyMode.Normal);
+    save_string_to_clipboard(copy_string, ClipboardMode.Normal);
 }
 
 copy_lines(u32 start_line, u32 end_line) {
@@ -506,8 +502,40 @@ copy_lines(u32 start_line, u32 end_line) {
     if buffer_window == null || buffer == null {
         return;
     }
+
+    line := get_buffer_line(buffer, start_line);
+    copy_length: u32;
+    {
+        current_line := line;
+        line_number := start_line;
+        while line_number <= end_line {
+            copy_length += current_line.length + 1;
+            current_line = current_line.next;
+            line_number++;
+        }
+    }
+
+    copy_string: string = { length = copy_length; data = allocate(copy_length); }
+    {
+        current_line := line;
+        line_number := start_line;
+        i := 0;
+        new_line := '\n';
+        while line_number <= end_line {
+            memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
+            memory_copy(copy_string.data + i + current_line.length, &new_line, 1);
+
+            i += current_line.length + 1;
+
+            current_line = current_line.next;
+            line_number++;
+        }
+    }
+
+    save_string_to_clipboard(copy_string, ClipboardMode.Lines);
 }
 
+// TODO Implement these
 copy_selected() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {

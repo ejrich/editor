@@ -397,6 +397,26 @@ else #if os == OS.Windows {
                 height: u32 = (lParam & 0xFFFF0000) >> 16;
                 resize_window(width, height);
             }
+            case MessageType.WM_CLIPBOARDUPDATE; {
+                if ignore_next_clipboard_event {
+                    ignore_next_clipboard_event = false;
+                }
+                else {
+                    success := OpenClipboard(window.handle);
+                    if success {
+                        clipboard_handle := GetClipboardData(ClipboardFormat.CF_TEXT);
+
+                        clipboard_pointer := GlobalLock(clipboard_handle);
+                        clipboard_string := convert_c_string(clipboard_pointer);
+
+                        allocate_strings(&clipboard_string);
+                        set_clipboard(clipboard_string);
+
+                        GlobalUnlock(clipboard_handle);
+                        CloseClipboard();
+                    }
+                }
+            }
             default;
                 result = DefWindowProcA(handle, message, wParam, lParam);
         }

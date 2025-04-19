@@ -70,21 +70,21 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
     if char.length == 0
         return false;
 
-    defer reset_key_command();
+    result := false;
 
     switch key_command.command {
         case KeyCommand.FindChar; {
             find_character_in_line(!key_command.shifted, false, char);
-            return true;
+            result = true;
         }
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
-            return true;
+            result = true;
         }
         case KeyCommand.Replace; {
             replace_characters(char[0]);
             edit_mode = EditMode.Normal;
-            return true;
+            result = true;
         }
         case KeyCommand.ScrollTo; {
             switch code {
@@ -96,7 +96,7 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                     scroll_to_position(ScrollTo.Bottom);
             }
 
-            return true;
+            result = true;
         }
         case KeyCommand.Quit; {
             switch code {
@@ -108,11 +108,15 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                 }
             }
 
-            return true;
+            result = true;
         }
     }
 
-    return false;
+    if result {
+        reset_key_command();
+    }
+
+    return result;
 }
 
 enum PostMovementCommand {

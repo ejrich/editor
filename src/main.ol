@@ -1,5 +1,6 @@
 #import atomic
 #import "buffers.ol"
+#import "clipboard.ol"
 #import "control.ol"
 #import "commands.ol"
 #import "events.ol"
@@ -206,6 +207,7 @@ init_subsystems() {
 
     create_window();
     init_thread_pool();
+    init_clipboard();
     init_graphics();
     init_text();
 }
