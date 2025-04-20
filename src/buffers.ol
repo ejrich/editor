@@ -474,27 +474,14 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     return start_cursor, end_cursor;
 }
 
-copy_remaining_line() {
+copy_selected_lines() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
-    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
-    line := get_buffer_line(buffer, buffer_window.line);
-
-    copy_string: string;
-    if line.length {
-        buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
-        copy_string = {
-            length = line.length - buffer_window.cursor;
-            data = line.data.data + buffer_window.cursor;
-        }
-
-        allocate_strings(&copy_string);
-    }
-
-    save_string_to_clipboard(copy_string, ClipboardMode.Normal);
+    start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+    copy_lines(start_line, end_line);
 }
 
 copy_lines(u32 start_line, u32 end_line) {
@@ -535,12 +522,79 @@ copy_lines(u32 start_line, u32 end_line) {
     save_string_to_clipboard(copy_string, ClipboardMode.Lines);
 }
 
-// TODO Implement these
 copy_selected() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+
+    switch edit_mode {
+        case EditMode.Visual; {
+            copy_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, visual_mode_data.line, visual_mode_data.cursor);
+        }
+        case EditMode.VisualBlock; {
+            copy_string: string;
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+
+            line := get_buffer_line(buffer, start_line);
+            current_line := line;
+            line_number := start_line;
+            while line_number <= end_line {
+                if start_cursor >= current_line.length {
+                    copy_string.length++;
+                }
+                else {
+                    end := clamp(end_cursor, start_cursor, current_line.length - 1);
+                    copy_string.length += end - start_cursor + 1;
+                    if line_number != end_line {
+                        copy_string.length++;
+                    }
+                }
+
+                current_line = current_line.next;
+                line_number++;
+            }
+
+            copy_string.data = allocate(copy_string.length);
+
+            current_line = line;
+            line_number = start_line;
+            i: u32;
+            while line_number <= end_line {
+                if start_cursor >= current_line.length {
+                    copy_string.data[i] = '\n';
+                    i++;
+                }
+                else {
+                    end := clamp(end_cursor, start_cursor, current_line.length - 1);
+                    memory_copy(copy_string.data + i, current_line.data.data + start_cursor, end - start_cursor + 1);
+                    i += end - start_cursor + 1;
+                    if line_number != end_line {
+                        copy_string.data[i] = '\n';
+                        i++;
+                    }
+                }
+
+                current_line = current_line.next;
+                line_number++;
+            }
+
+            save_string_to_clipboard(copy_string, ClipboardMode.Block);
+        }
+    }
+}
+
+copy_remaining_line() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    copy_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, buffer_window.line, 0xFFFFFFF);
 }
 
 copy_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2) {
@@ -548,13 +602,104 @@ copy_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2) {
     if buffer_window == null || buffer == null {
         return;
     }
+
+    copy_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2);
 }
 
-copy_selected_lines() {
-    buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
-        return;
+copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2) {
+    copy_string: string;
+
+    if line_1 == line_2 {
+        line := get_buffer_line(buffer, line_1);
+
+        if line.length {
+            start_cursor, end_cursor: u32;
+            if cursor_1 < cursor_2 {
+                start_cursor = clamp(cursor_1, 0, line.length - 1);
+                end_cursor = clamp(cursor_2, 0, line.length - 1);
+            }
+            else {
+                start_cursor = clamp(cursor_2, 0, line.length - 1);
+                end_cursor = clamp(cursor_1, 0, line.length - 1);
+            }
+
+            copy_string = {
+                length = end_cursor - start_cursor + 1;
+                data = line.data.data + start_cursor;
+            }
+
+            allocate_strings(&copy_string);
+        }
     }
+    else {
+        start_line_number, start_cursor, end_line_number, end_cursor: u32;
+        if line_1 < line_2 {
+            start_line_number = line_1;
+            end_line_number = line_2;
+        }
+        else {
+            start_line_number = line_2;
+            end_line_number = line_1;
+        }
+
+        start_line := get_buffer_line(buffer, start_line_number);
+        end_line := get_buffer_line(buffer, end_line_number);
+
+        if line_1 < line_2 {
+            if start_line.length
+                start_cursor = clamp(cursor_1, 0, start_line.length - 1);
+            if end_line.length
+                end_cursor = clamp(cursor_2, 0, end_line.length - 1);
+        }
+        else {
+            if start_line.length
+                start_cursor = clamp(cursor_2, 0, start_line.length - 1);
+            if end_line.length
+                end_cursor = clamp(cursor_1, 0, end_line.length - 1);
+        }
+
+        current_line := start_line;
+        line_number := start_line_number;
+        while line_number++ <= end_line_number {
+            if current_line == start_line {
+                copy_string.length += current_line.length - start_cursor + 1;
+            }
+            else if current_line == end_line {
+                copy_string.length += end_cursor + 1;
+            }
+            else {
+                copy_string.length += current_line.length + 1;
+            }
+
+            current_line = current_line.next;
+        }
+
+        copy_string.data = allocate(copy_string.length);
+
+        current_line = start_line;
+        line_number = start_line_number;
+        i: u32;
+        while line_number++ <= end_line_number {
+            if current_line == start_line {
+                length := current_line.length - start_cursor;
+                memory_copy(copy_string.data + i, current_line.data.data + start_cursor, length);
+                copy_string.data[i + length] = '\n';
+                i += length + 1;
+            }
+            else if current_line == end_line {
+                memory_copy(copy_string.data + i, current_line.data.data, end_cursor + 1);
+            }
+            else {
+                memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
+                copy_string.data[i + current_line.length] = '\n';
+                i += current_line.length + 1;
+            }
+
+            current_line = current_line.next;
+        }
+    }
+
+    save_string_to_clipboard(copy_string, ClipboardMode.Normal);
 }
 
 string get_visual_mode_selection() {
@@ -816,36 +961,7 @@ delete_selected() {
             buffer_window.cursor = delete_from_line(line, cursor, cursor);
         }
         case EditMode.Visual; {
-            if buffer_window.line == visual_mode_data.line {
-                line := get_buffer_line(buffer, buffer_window.line);
-
-                buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length);
-                start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
-                buffer_window.cursor = delete_from_line(line, start_cursor, end_cursor);
-            }
-            else {
-                start_line_number, end_line_number := get_visual_start_and_end_lines(buffer_window);
-                start_line := get_buffer_line(buffer, start_line_number);
-                end_line := get_buffer_line(buffer, end_line_number);
-
-                start_cursor, end_cursor: u32;
-                if visual_mode_data.line > buffer_window.line {
-                    if start_line.length
-                        start_cursor = clamp(buffer_window.cursor, 0, start_line.length);
-                    end_cursor = visual_mode_data.cursor;
-                }
-                else {
-                    start_cursor = visual_mode_data.cursor;
-                    if end_line.length
-                        end_cursor = clamp(buffer_window.cursor, 0, end_line.length);
-                }
-
-                merge_lines(buffer, start_line, end_line, start_cursor, end_cursor);
-                buffer_window.line = start_line_number;
-                buffer_window.cursor = start_cursor;
-
-                adjust_start_line(buffer_window);
-            }
+            delete_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, visual_mode_data.line, visual_mode_data.cursor, true);
         }
         case EditMode.VisualBlock; {
             start_line, end_line := get_visual_start_and_end_lines(buffer_window);
@@ -869,6 +985,10 @@ delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_
         return;
     }
 
+    delete_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor);
+}
+
+delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor) {
     if line_1 == line_2 {
         line := get_buffer_line(buffer, line_1);
 
@@ -885,21 +1005,30 @@ delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_
     }
     else {
         start_line_number, start_cursor, end_line_number, end_cursor: u32;
-        if line_1 > line_2 {
-            start_line_number = line_2;
-            start_cursor = cursor_2;
-            end_line_number = line_1;
-            end_cursor = cursor_1;
+        if line_1 < line_2 {
+            start_line_number = line_1;
+            end_line_number = line_2;
         }
         else {
-            start_line_number = line_1;
-            start_cursor = cursor_1;
-            end_line_number = line_2;
-            end_cursor = cursor_2;
+            start_line_number = line_2;
+            end_line_number = line_1;
         }
 
         start_line := get_buffer_line(buffer, start_line_number);
         end_line := get_buffer_line(buffer, end_line_number);
+
+        if line_1 < line_2 {
+            if start_line.length
+                start_cursor = clamp(cursor_1, 0, start_line.length);
+            if end_line.length
+                end_cursor = clamp(cursor_2, 0, end_line.length);
+        }
+        else {
+            if start_line.length
+                start_cursor = clamp(cursor_2, 0, start_line.length);
+            if end_line.length
+                end_cursor = clamp(cursor_1, 0, end_line.length);
+        }
 
         merge_lines(buffer, start_line, end_line, start_cursor, end_cursor, delete_end_cursor);
         buffer_window.line = start_line_number;

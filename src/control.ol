@@ -177,11 +177,11 @@ handle_post_movement_command() {
         }
         case PostMovementCommand.Copy; {
             if post_movement_command.changed_by_line {
-                if line > post_movement_command.start_line {
-                    copy_lines(post_movement_command.start_line, line);
+                if line < post_movement_command.start_line {
+                    copy_lines(line, post_movement_command.start_line);
                 }
                 else {
-                    copy_lines(line, post_movement_command.start_line);
+                    copy_lines(post_movement_command.start_line, line);
                 }
             }
             else {
