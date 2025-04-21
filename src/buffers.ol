@@ -491,32 +491,37 @@ copy_lines(u32 start_line, u32 end_line) {
     }
 
     line := get_buffer_line(buffer, start_line);
-    copy_length: u32;
-    {
-        current_line := line;
-        line_number := start_line;
-        while line_number <= end_line {
-            copy_length += current_line.length + 1;
-            current_line = current_line.next;
-            line_number++;
+    copy_string: string;
+
+    current_line := line;
+    line_number := start_line;
+    while line_number <= end_line {
+        copy_string.length += current_line.length;
+
+        if line_number != end_line {
+            copy_string.length++;
         }
+
+        current_line = current_line.next;
+        line_number++;
     }
 
-    copy_string: string = { length = copy_length; data = allocate(copy_length); }
-    {
-        current_line := line;
-        line_number := start_line;
-        i := 0;
-        new_line := '\n';
-        while line_number <= end_line {
-            memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
-            memory_copy(copy_string.data + i + current_line.length, &new_line, 1);
+    copy_string.data = allocate(copy_string.length);
 
-            i += current_line.length + 1;
+    current_line = line;
+    line_number = start_line;
+    i := 0;
+    while line_number <= end_line {
+        memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
+        i += current_line.length;
 
-            current_line = current_line.next;
-            line_number++;
+        if line_number != end_line {
+            copy_string[i] = '\n';
+            i++;
         }
+
+        current_line = current_line.next;
+        line_number++;
     }
 
     save_string_to_clipboard(copy_string, ClipboardMode.Lines);
@@ -702,154 +707,124 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
     save_string_to_clipboard(copy_string, ClipboardMode.Normal);
 }
 
-string get_visual_mode_selection() {
+paste_by_cursor(bool before) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
-        return empty_string;
+        return;
     }
 
-    str: string;
-    if visual_mode_data.line == buffer_window.line {
-        line := get_buffer_line(buffer, buffer_window.line);
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, buffer_window.line);
 
-        switch edit_mode {
-            case EditMode.Visual;
-            case EditMode.VisualBlock; {
-                cursor := clamp(buffer_window.cursor, 0, line.length - 1);
-                if visual_mode_data.cursor < cursor {
-                    str = {
-                        length = cursor - visual_mode_data.cursor + 1;
-                        data = line.data.data + visual_mode_data.cursor;
-                    }
-                }
-                else {
-                    str = {
-                        length = visual_mode_data.cursor - cursor + 1;
-                        data = line.data.data + cursor;
-                    }
+    clipboard_lines: Array<string>[clipboard.value_lines];
+    current_line := 0;
+    clipboard_lines[current_line] = { length = 0; data = clipboard.value.data; }
+    each i in clipboard.value.length {
+        if clipboard.value[i] == '\n' {
+            current_line++;
+            if current_line < clipboard_lines.length {
+                clipboard_lines[current_line] = {
+                    length = 0;
+                    data = clipboard.value.data + i + 1;
                 }
             }
-            case EditMode.VisualLine;
-                str = { length = line.length; data = line.data.data; }
-        }
-
-        allocate_strings(&str);
-        return str;
-    }
-
-    start_line, start_cursor, end_line, end_cursor: u32;
-    if visual_mode_data.line < buffer_window.line {
-        start_line = visual_mode_data.line;
-        start_cursor = visual_mode_data.cursor;
-        end_line = buffer_window.line;
-        end_cursor = buffer_window.cursor;
-    }
-    else {
-        start_line = buffer_window.line;
-        start_cursor = buffer_window.cursor;
-        end_line = visual_mode_data.line;
-        end_cursor = visual_mode_data.cursor;
-    }
-
-    if edit_mode == EditMode.VisualBlock {
-        if visual_mode_data.cursor <= buffer_window.cursor {
-            start_cursor = visual_mode_data.cursor;
-            end_cursor = buffer_window.cursor;
         }
         else {
-            start_cursor = buffer_window.cursor;
-            end_cursor = visual_mode_data.cursor;
+            clipboard_lines[current_line].length++;
         }
     }
 
-    line := get_buffer_line(buffer, start_line);
+    switch clipboard.mode {
+        case ClipboardMode.Normal; {
+            if clipboard_lines.length == 1 {
+                clipboard_line := clipboard_lines[0];
+                if line.length {
+                    buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+                    start_cursor := buffer_window.cursor;
+                    if !before start_cursor++;
 
-    line_number := start_line;
-    current_line := line;
-    while line_number <= end_line {
-        switch edit_mode {
-            case EditMode.Visual; {
-                if line_number == start_line {
-                    str.length += current_line.length - start_cursor + 1;
-                }
-                else if line_number == end_line {
-                    str.length += end_cursor + 1;
+                    each i in line.length - start_cursor {
+                        line.data[line.length + clipboard_line.length - 1 - i] = line.data[line.length - 1 - i];
+                    }
+
+                    memory_copy(line.data.data + start_cursor, clipboard_line.data, clipboard_line.length);
+                    line.length += clipboard_line.length;
+                    buffer_window.cursor = start_cursor + clipboard_line.length;
                 }
                 else {
-                    str.length += current_line.length + 1;
+                    memory_copy(line.data.data, clipboard_line.data, clipboard_line.length);
+                    line.length = clipboard_line.length;
+                    buffer_window.cursor = line.length - 1;
                 }
             }
-            case EditMode.VisualLine; {
-                str.length += current_line.length + 1;
-            }
-            case EditMode.VisualBlock; {
-                if start_cursor >= current_line.length {
-                    str.length++;
+            else {
+                if line.length {
+                    buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
+                    if !before buffer_window.cursor++;
+
+                    end_line := add_new_line(buffer_window, buffer, line, false, true);
+
+                    each i in clipboard_lines.length - 1 {
+                        clipboard_line := clipboard_lines[i];
+                        memory_copy(line.data.data + line.length, clipboard_line.data, clipboard_line.length);
+                        line.length += clipboard_line.length;
+
+                        if i < clipboard_lines.length - 2 {
+                            line = add_new_line(buffer_window, buffer, line, false, false);
+                        }
+                    }
+
+                    end_clipboard_line := clipboard_lines[clipboard_lines.length - 1];
+
+                    each i in end_line.length {
+                        end_line.data[end_line.length + end_clipboard_line.length - 1 - i] = end_line.data[end_line.length - 1 - i];
+                    }
+
+                    memory_copy(end_line.data.data, end_clipboard_line.data, end_clipboard_line.length);
+                    end_line.length += end_clipboard_line.length;
+                    buffer_window.cursor = end_clipboard_line.length;
                 }
                 else {
-                    end := clamp(end_cursor, start_cursor, current_line.length - 1);
-                    str.length += end - start_cursor + 1;
-                    if line_number != end_line {
-                        str.length++;
+                    each clipboard_line, i in clipboard_lines {
+                        memory_copy(line.data.data, clipboard_line.data, clipboard_line.length);
+                        line.length = clipboard_line.length;
+
+                        if i < clipboard_lines.length - 1 {
+                            line = add_new_line(buffer_window, buffer, line, false, false);
+                        }
                     }
                 }
+
+                adjust_start_line(buffer_window);
             }
         }
+        case ClipboardMode.Lines; {
+            new_line := add_new_line(buffer_window, buffer, line, before, false);
+            each clipboard_line, i in clipboard_lines {
+                memory_copy(new_line.data.data, clipboard_line.data, clipboard_line.length);
+                new_line.length = clipboard_line.length;
 
-        current_line = current_line.next;
-        line_number++;
-    }
-
-    str.data = allocate(str.length);
-
-    line_number = start_line;
-    i: u32;
-    while line_number <= end_line {
-        switch edit_mode {
-            case EditMode.Visual; {
-                if line_number == start_line {
-                    length := line.length - start_cursor;
-                    memory_copy(str.data + i, line.data.data + start_cursor, length);
-                    str.data[i + length] = '\n';
-                    i += length + 1;
-                }
-                else if line_number == end_line {
-                    memory_copy(str.data + i, line.data.data, end_cursor + 1);
-                    i += end_cursor + 1;
-                }
-                else {
-                    memory_copy(str.data + i, line.data.data, line.length);
-                    str.data[i + line.length] = '\n';
-                    i += line.length + 1;
-                }
-            }
-            case EditMode.VisualLine; {
-                memory_copy(str.data + i, line.data.data, line.length);
-                str.data[i + line.length] = '\n';
-                i += line.length + 1;
-            }
-            case EditMode.VisualBlock; {
-                if start_cursor >= line.length {
-                    str.data[i] = '\n';
-                    i++;
-                }
-                else {
-                    end := clamp(end_cursor, start_cursor, line.length - 1);
-                    memory_copy(str.data + i, line.data.data + start_cursor, end - start_cursor + 1);
-                    i += end - start_cursor + 1;
-                    if line_number != end_line {
-                        str.data[i] = '\n';
-                        i++;
-                    }
+                if i < clipboard_lines.length - 1 {
+                    new_line = add_new_line(buffer_window, buffer, new_line, false, false);
                 }
             }
         }
-
-        line = line.next;
-        line_number++;
+        case ClipboardMode.Block; {
+            // TODO Implement
+        }
     }
 
-    return str;
+    calculate_line_digits(buffer);
+    adjust_start_line(buffer_window);
+}
+
+paste_over_selected() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    // TODO Implement
 }
 
 // Insert mode functions
@@ -877,6 +852,7 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
     }
 }
 
+// TODO Make this a general helper function that can be used in other functions
 add_text_to_line(string char) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -1223,9 +1199,17 @@ add_new_line(bool above, bool split = false) {
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
+
+    new_line := add_new_line(buffer_window, buffer, line, above, split);
+    indent_line(buffer_window, new_line);
+
+    calculate_line_digits(buffer);
+    adjust_start_line(buffer_window);
+}
+
+BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, bool above, bool split) {
     new_line := allocate_line();
 
-    // Add the new line to the lines linked list
     if above {
         if line.previous {
             line.previous.next = new_line;
@@ -1259,11 +1243,8 @@ add_new_line(bool above, bool split = false) {
         buffer_window.line++;
     }
 
-    indent_line(buffer_window, new_line);
-
     buffer.line_count++;
-    calculate_line_digits(buffer);
-    adjust_start_line(buffer_window);
+    return new_line;
 }
 
 change_indentation(bool indent, u32 indentations) {

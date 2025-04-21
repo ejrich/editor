@@ -391,7 +391,13 @@ copy(ModCode mod) {
 
 [keybind, no_repeat]
 paste(ModCode mod) {
-    // TODO Implement
+    if edit_mode == EditMode.Normal {
+        paste_by_cursor((mod & ModCode.Shift) == ModCode.Shift);
+    }
+    else {
+        paste_over_selected();
+        edit_mode = EditMode.Normal;
+    }
 }
 
 [keybind, no_repeat]

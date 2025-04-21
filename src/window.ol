@@ -402,19 +402,7 @@ else #if os == OS.Windows {
                     ignore_next_clipboard_event = false;
                 }
                 else {
-                    success := OpenClipboard(window.handle);
-                    if success {
-                        clipboard_handle := GetClipboardData(ClipboardFormat.CF_TEXT);
-
-                        clipboard_pointer := GlobalLock(clipboard_handle);
-                        clipboard_string := convert_c_string(clipboard_pointer);
-
-                        allocate_strings(&clipboard_string);
-                        set_clipboard(clipboard_string);
-
-                        GlobalUnlock(clipboard_handle);
-                        CloseClipboard();
-                    }
+                    get_current_clipboard();
                 }
             }
             default;
