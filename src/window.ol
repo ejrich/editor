@@ -33,6 +33,10 @@ init_display() {
         }
 
         XRRFreeMonitors(monitors);
+
+        UTF8_STRING = XInternAtom(window.handle, "UTF8_STRING", 0);
+        CLIPBOARD = XInternAtom(window.handle, "CLIPBOARD", 0);
+        XSEL_DATA = XInternAtom(window.handle, "XSEL_DATA", 0);
     }
     else #if os == OS.Windows {
         SetProcessDPIAware();
@@ -51,7 +55,7 @@ create_window() {
         default_window := XDefaultRootWindow(window.handle);
         attributes: XSetWindowAttributes = {
             background_pixel = 0x0;
-            event_mask = 0x0023200F;
+            event_mask = cast(s64, XInputMasks.AllEventMask);
             colormap = XCreateColormap(window.handle, default_window, vis.visual, 0);
         }
 
@@ -60,6 +64,8 @@ create_window() {
 
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
+
+        XConvertSelection(window.handle, CLIPBOARD, UTF8_STRING, XSEL_DATA, window.window, 0);
 
         XMapRaised(window.handle, window.window);
     }
@@ -185,10 +191,73 @@ handle_inputs() {
                     x, y := convert_coordinates(event.xmotion.x, event.xmotion.y);
                     handle_mouse_move(x, y);
                 }
-                case XEventType.ConfigureNotify;
+                case XEventType.ConfigureNotify; {
                     if settings.window_width != event.xconfigure.width || settings.window_height != event.xconfigure.height {
                         resize_window(event.xconfigure.width, event.xconfigure.height);
                     }
+                }
+                case XEventType.FocusIn; {
+                    selection_owner := XGetSelectionOwner(window.handle, CLIPBOARD);
+                    if selection_owner != window.window {
+                        request_event: XSelectionRequestEvent = {
+                            type = XEventType.SelectionRequest;
+                            serial = event.xfocus.serial;
+                            send_event = event.xfocus.send_event;
+                            display = window.handle;
+                            owner = selection_owner;
+                            requestor = window.window;
+                            selection = CLIPBOARD;
+                            target = UTF8_STRING;
+                            property = CLIPBOARD;
+                            time = 0;
+                        }
+                        XSendEvent(window.handle, selection_owner, 0, 0, cast(XEvent*, &request_event));
+                    }
+                }
+                case XEventType.SelectionRequest; {
+                    request := event.xselectionrequest;
+                    if XGetSelectionOwner(window.handle, CLIPBOARD) == window.window && request.selection == CLIPBOARD {
+                        if request.property != 0 {
+                            if request.target != UTF8_STRING
+                                XChangeProperty(request.display, request.requestor, request.property, 4, 32, 0, cast(u8*, &UTF8_STRING), 1);
+                            else
+                                XChangeProperty(request.display, request.requestor, request.property, request.target, 8, 0, clipboard.value.data, clipboard.value.length);
+                        }
+                        send_event: XSelectionEvent = {
+                            type = XEventType.SelectionNotify;
+                            serial = request.serial;
+                            send_event = request.send_event;
+                            display = request.display;
+                            requestor = request.requestor;
+                            selection = request.selection;
+                            target = request.target;
+                            property = request.property;
+                            time = request.time;
+                        }
+                        XSendEvent(window.handle, request.requestor, 0, 0, cast(XEvent*, &send_event));
+                    }
+                }
+                case XEventType.SelectionNotify; {
+                    selection := event.xselection;
+                    if selection.property != 0 {
+                        actual_type, bytes_after, count: u64;
+                        actual_format: s32;
+                        data: u8*;
+                        XGetWindowProperty(selection.display, selection.requestor, selection.property, 0, 0xFFFFFFFF, 0, 0, &actual_type, &actual_format, &count, &bytes_after, &data);
+
+                        if actual_type == UTF8_STRING {
+                            clipboard_string: string = { length = count; data = data; }
+                            if clipboard_string != clipboard.value {
+                                allocate_strings(&clipboard_string);
+                                set_clipboard(clipboard_string);
+                            }
+                        }
+
+                        if data {
+                            XFree(data);
+                        }
+                    }
+                }
             }
         }
     }
@@ -223,6 +292,12 @@ float, float get_cursor_position() {
     }
 
     return x, y;
+}
+
+#if os == OS.Linux {
+    UTF8_STRING: s64;
+    CLIPBOARD: s64;
+    XSEL_DATA: s64;
 }
 
 #private
