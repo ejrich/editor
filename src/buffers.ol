@@ -714,6 +714,54 @@ paste_by_cursor(bool before) {
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
+    paste_clipboard(buffer_window, buffer, before, false);
+}
+
+paste_over_selected() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    switch edit_mode {
+        case EditMode.VisualLine; {
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            delete_lines(buffer_window, buffer, start_line, end_line, false, false);
+            paste_clipboard(buffer_window, buffer, true, true);
+        }
+        case EditMode.Visual; {
+            delete_selected();
+            if clipboard.mode == ClipboardMode.Lines {
+                line := get_buffer_line(buffer, buffer_window.line);
+                add_new_line(buffer_window, buffer, line, false, true);
+                buffer_window.line--;
+            }
+            paste_clipboard(buffer_window, buffer, false, false);
+        }
+        case EditMode.VisualBlock; {
+            if clipboard.mode == ClipboardMode.Normal && clipboard.value_lines == 1 {
+                start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+                start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+
+                line := get_buffer_line(buffer, start_line);
+                while start_line <= end_line {
+                    if start_cursor < line.length {
+                        delete_from_line(line, start_cursor, end_cursor);
+                        add_text_to_line(line, clipboard.value, start_cursor);
+                    }
+                    line = line.next;
+                    start_line++;
+                }
+            }
+            else {
+                delete_selected();
+                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false);
+            }
+        }
+    }
+}
+
+paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines) {
     line := get_buffer_line(buffer, buffer_window.line);
 
     clipboard_lines: Array<string>[clipboard.value_lines];
@@ -774,8 +822,10 @@ paste_by_cursor(bool before) {
             }
         }
         case ClipboardMode.Lines; {
-            new_line := add_new_line(buffer_window, buffer, line, before, false);
-            paste_lines(buffer_window, buffer, new_line, clipboard_lines);
+            if !over_lines {
+                line = add_new_line(buffer_window, buffer, line, before, false);
+            }
+            paste_lines(buffer_window, buffer, line, clipboard_lines);
         }
         case ClipboardMode.Block; {
             // TODO Implement
@@ -784,15 +834,6 @@ paste_by_cursor(bool before) {
 
     calculate_line_digits(buffer);
     adjust_start_line(buffer_window);
-}
-
-paste_over_selected() {
-    buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
-        return;
-    }
-
-    // TODO Implement
 }
 
 paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines) {
@@ -2375,7 +2416,7 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
     calculate_line_digits(buffer);
 }
 
-delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line, bool delete_all) {
+delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line, bool delete_all, bool indent = true) {
     line := get_buffer_line(buffer, start_line);
     if start_line == end_line {
         if delete_all {
@@ -2449,7 +2490,7 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
         adjust_start_line(buffer_window);
     }
 
-    if !delete_all {
+    if !delete_all && indent {
         indent_line(buffer_window, line);
     }
 }
