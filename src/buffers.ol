@@ -548,15 +548,9 @@ copy_selected() {
             current_line := line;
             line_number := start_line;
             while line_number <= end_line {
-                if start_cursor >= current_line.length {
+                copy_string.length += end_cursor - start_cursor + 1;
+                if line_number != end_line {
                     copy_string.length++;
-                }
-                else {
-                    end := clamp(end_cursor, start_cursor, current_line.length - 1);
-                    copy_string.length += end - start_cursor + 1;
-                    if line_number != end_line {
-                        copy_string.length++;
-                    }
                 }
 
                 current_line = current_line.next;
@@ -569,18 +563,19 @@ copy_selected() {
             line_number = start_line;
             i: u32;
             while line_number <= end_line {
-                if start_cursor >= current_line.length {
-                    copy_string.data[i] = '\n';
+                each j in start_cursor..end_cursor {
+                    if j >= current_line.length {
+                        copy_string[i] = ' ';
+                    }
+                    else {
+                        copy_string[i] = current_line.data[j];
+                    }
                     i++;
                 }
-                else {
-                    end := clamp(end_cursor, start_cursor, current_line.length - 1);
-                    memory_copy(copy_string.data + i, current_line.data.data + start_cursor, end - start_cursor + 1);
-                    i += end - start_cursor + 1;
-                    if line_number != end_line {
-                        copy_string.data[i] = '\n';
-                        i++;
-                    }
+
+                if line_number != end_line {
+                    copy_string.data[i] = '\n';
+                    i++;
                 }
 
                 current_line = current_line.next;
@@ -736,7 +731,7 @@ paste_over_selected() {
                 add_new_line(buffer_window, buffer, line, false, true);
                 buffer_window.line--;
             }
-            paste_clipboard(buffer_window, buffer, false, false);
+            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false);
         }
         case EditMode.VisualBlock; {
             if clipboard.mode == ClipboardMode.Normal && clipboard.value_lines == 1 {
@@ -755,6 +750,9 @@ paste_over_selected() {
             }
             else {
                 delete_selected();
+                start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+                buffer_window.line = start_line;
+
                 paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false);
             }
         }
@@ -828,7 +826,23 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
             paste_lines(buffer_window, buffer, line, clipboard_lines);
         }
         case ClipboardMode.Block; {
-            // TODO Implement
+            if over_lines {
+                paste_lines(buffer_window, buffer, line, clipboard_lines);
+            }
+            else {
+                if !before buffer_window.cursor++;
+
+                each clipboard_line, i in clipboard_lines {
+                    add_text_to_line(line, clipboard_line, buffer_window.cursor, true);
+
+                    if line.next {
+                        line = line.next;
+                    }
+                    else if i < clipboard_lines.length - 1 {
+                        line = add_new_line(buffer_window, buffer, line, false, false);
+                    }
+                }
+            }
         }
     }
 
@@ -881,7 +895,13 @@ add_text_to_line(string text) {
     buffer_window.cursor = add_text_to_line(line, text, buffer_window.cursor);
 }
 
-u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0) {
+u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = false) {
+    if fill && cursor > line.length {
+        each i in cursor - line.length {
+            line.data[line.length++] = ' ';
+        }
+    }
+
     new_cursor: u32;
     if line.length + text.length > line_buffer_length {
         // TODO Allocate additional lines
