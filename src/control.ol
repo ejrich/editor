@@ -35,6 +35,8 @@ struct KeyCommandData {
 key_command: KeyCommandData;
 
 set_key_command(KeyCommand command, ModCode mod) {
+    reset_post_movement_command();
+
     key_command = {
         command = command;
         can_reset = false;
@@ -137,6 +139,8 @@ struct PostMovementCommandData {
 post_movement_command: PostMovementCommandData;
 
 set_post_movement_command(PostMovementCommand command) {
+    reset_key_command();
+
     line, cursor := get_current_position();
     post_movement_command = {
         command = command;
@@ -391,6 +395,9 @@ copy(ModCode mod) {
 
 [keybind, no_repeat]
 paste(ModCode mod) {
+    reset_key_command();
+    reset_post_movement_command();
+
     if edit_mode == EditMode.Normal {
         paste_by_cursor((mod & ModCode.Shift) == ModCode.Shift);
     }
@@ -569,4 +576,7 @@ find(ModCode mod) {
 [keybind, no_repeat]
 swap_buffer(ModCode mod) {
     swap_top_buffer();
+
+    reset_key_command();
+    reset_post_movement_command();
 }
