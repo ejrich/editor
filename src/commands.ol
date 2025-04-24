@@ -43,6 +43,10 @@ start_search_mode() {
     clear_buffer(CommandMode.Search);
 }
 
+start_replace_mode() {
+    clear_buffer(CommandMode.FindAndReplace);
+}
+
 show_current_search_result() {
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
@@ -59,6 +63,8 @@ draw_command() {
                     start = ":";
                 case CommandMode.Search;
                     start = "/";
+                case CommandMode.FindAndReplace;
+                    start = "Replace:";
             }
 
             if start.length {
@@ -130,6 +136,8 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     find_previous_string(buffer_string, false, command_strings, &command_index);
                 case CommandMode.Search;
                     find_previous_string(buffer_string, false, searches, &search_index);
+                case CommandMode.FindAndReplace;
+                    find_previous_string(buffer_string, false, replacements, &replacement_index);
             }
         }
         case KeyCode.Down; {
@@ -139,6 +147,8 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     find_previous_string(buffer_string, true, command_strings, &command_index);
                 case CommandMode.Search;
                     find_previous_string(buffer_string, true, searches, &search_index);
+                case CommandMode.FindAndReplace;
+                    find_previous_string(buffer_string, true, replacements, &replacement_index);
             }
         }
         case KeyCode.Left; {
@@ -156,6 +166,8 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     call_command(buffer_string, allocated);
                 case CommandMode.Search;
                     set_search(buffer_string, allocated);
+                case CommandMode.FindAndReplace;
+                    find_and_replace(buffer_string, allocated);
             }
         }
         default; {
@@ -277,6 +289,72 @@ set_search(string value, bool allocated) {
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
 
+find_and_replace(string value, bool allocated) {
+    defer current_command_mode = CommandMode.None;
+
+    if value.length == 0 return;
+
+    find_string: string = { data = value.data; }
+    escape := false;
+    i := 0;
+    while i < value.length {
+        char := value[i++];
+        if char == '\\' {
+            escape = !escape;
+        }
+        else if char == '/' && !escape {
+            break;
+        }
+        else if escape {
+            escape = false;
+        }
+        find_string.length++;
+    }
+
+    if find_string.length == 0 return;
+
+    if !allocated {
+        allocate_strings(&value);
+        array_insert(&replacements, value, allocate, reallocate);
+    }
+
+    replace_string: string = { data = value.data + find_string.length + 1; }
+    escape = false;
+    while i < value.length {
+        char := value[i++];
+        if char == '\\' {
+            escape = !escape;
+        }
+        else if char == '/' && !escape {
+            break;
+        }
+        else if escape {
+            escape = false;
+        }
+        replace_string.length++;
+    }
+
+    options: FindAndReplaceOptions;
+    switch edit_mode {
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock;
+            options |= FindAndReplaceOptions.Visual;
+    }
+
+    while i < value.length {
+        char := value[i++];
+        switch char {
+            case 'c';
+            case 'C';
+                options |= FindAndReplaceOptions.Confirm;
+        }
+    }
+
+    log("Find: '%', Replace: '%', Options: %\n", find_string, replace_string, options);
+    // TODO Implement this
+}
+
 enum CommandResult {
     None;
     Success;
@@ -290,6 +368,7 @@ enum CommandMode {
     None;
     Command;
     Search;
+    FindAndReplace;
 }
 
 current_command_mode: CommandMode;
@@ -363,6 +442,13 @@ set_buffer_value() {
                 command_prompt_buffer.length = search.length;
                 search_index = -1;
             }
+        case CommandMode.FindAndReplace;
+            if replacement_index >= 0 {
+                replacement := replacements[replacement_index];
+                memory_copy(command_prompt_buffer.buffer.data, replacement.data, replacement.length);
+                command_prompt_buffer.length = replacement.length;
+                replacement_index = -1;
+            }
     }
 }
 
@@ -378,6 +464,11 @@ string, bool get_buffer_string() {
         case CommandMode.Search;
             if search_index >= 0 {
                 buffer_string = searches[search_index];
+                allocated = true;
+            }
+        case CommandMode.FindAndReplace;
+            if replacement_index >= 0 {
+                buffer_string = replacements[replacement_index];
                 allocated = true;
             }
     }
@@ -454,3 +545,13 @@ command_index := -1;
 searches: Array<string>;
 search_index := -1;
 current_search_index: u32;
+
+replacements: Array<string>;
+replacement_index := -1;
+
+[flags]
+enum FindAndReplaceOptions {
+    None    = 0x0;
+    Visual  = 0x1;
+    Confirm = 0x2;
+}

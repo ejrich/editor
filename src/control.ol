@@ -362,7 +362,12 @@ delete(ModCode mod) {
 
 [keybind, no_repeat]
 replace(ModCode mod) {
-    set_key_command(KeyCommand.Replace, mod);
+    if mod & ModCode.Shift {
+        start_replace_mode();
+    }
+    else {
+        set_key_command(KeyCommand.Replace, mod);
+    }
 }
 
 [keybind, no_repeat]
