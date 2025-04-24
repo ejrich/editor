@@ -474,6 +474,32 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     return start_cursor, end_cursor;
 }
 
+string get_selected_text() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return empty_string;
+    }
+
+    start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+    result: string;
+
+    if start_line == end_line {
+        line := get_buffer_line(buffer, start_line);
+        if edit_mode == EditMode.VisualLine {
+            result = { length = line.length; data = line.data.data; }
+        }
+        else {
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+            result = {
+                length = end_cursor - start_cursor + 1;
+                data = line.data.data + start_cursor;
+            }
+        }
+    }
+
+    return result;
+}
+
 copy_selected_lines() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {

@@ -333,6 +333,18 @@ clear_buffer(CommandMode mode) {
 
     clear_memory(command_prompt_buffer.buffer.data, command_prompt_buffer_length);
     command_prompt_buffer = { length = 0; cursor = 0; result = CommandResult.None; result_string = empty_string; free_result_string = false; }
+
+    if mode != CommandMode.Command {
+        switch edit_mode {
+            case EditMode.Visual;
+            case EditMode.VisualLine;
+            case EditMode.VisualBlock; {
+                selection := get_selected_text();
+                memory_copy(command_prompt_buffer.buffer.data, selection.data, selection.length);
+                command_prompt_buffer = { length = selection.length; cursor = selection.length; }
+            }
+        }
+    }
 }
 
 set_buffer_value() {
