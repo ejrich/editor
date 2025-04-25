@@ -294,21 +294,33 @@ find_and_replace(string value, bool allocated) {
 
     if value.length == 0 return;
 
-    find_string: string = { data = value.data; }
+    find_string_buffer: Array<u8>[value.length];
+    find_string: string = { data = find_string_buffer.data; }
     escape := false;
     i := 0;
     while i < value.length {
         char := value[i++];
-        if char == '\\' {
-            escape = !escape;
-        }
-        else if char == '/' && !escape {
-            break;
-        }
-        else if escape {
+        if escape {
+            escaped_char: u8;
+            switch char {
+                case 'n';  escaped_char = '\n';
+                case 't';  escaped_char = '\t';
+                case '\\'; escaped_char = '\\';
+                case '/';  escaped_char = '/';
+                default;   escaped_char = char;
+            }
+            find_string_buffer[find_string.length++] = escaped_char;
             escape = false;
         }
-        find_string.length++;
+        else if char == '\\' {
+            escape = true;
+        }
+        else if char == '/' {
+            break;
+        }
+        else {
+            find_string_buffer[find_string.length++] = char;
+        }
     }
 
     if find_string.length == 0 return;
@@ -318,20 +330,32 @@ find_and_replace(string value, bool allocated) {
         array_insert(&replacements, value, allocate, reallocate);
     }
 
-    replace_string: string = { data = value.data + find_string.length + 1; }
+    replace_string_buffer: Array<u8>[value.length - i];
+    replace_string: string = { data = replace_string_buffer.data; }
     escape = false;
     while i < value.length {
         char := value[i++];
-        if char == '\\' {
-            escape = !escape;
-        }
-        else if char == '/' && !escape {
-            break;
-        }
-        else if escape {
+        if escape {
+            escaped_char: u8;
+            switch char {
+                case 'n';  escaped_char = '\n';
+                case 't';  escaped_char = '\t';
+                case '\\'; escaped_char = '\\';
+                case '/';  escaped_char = '/';
+                default;   escaped_char = char;
+            }
+            replace_string_buffer[replace_string.length++] = escaped_char;
             escape = false;
         }
-        replace_string.length++;
+        else if char == '\\' {
+            escape = true;
+        }
+        else if char == '/' {
+            break;
+        }
+        else {
+            replace_string_buffer[replace_string.length++] = char;
+        }
     }
 
     options: FindAndReplaceOptions;
