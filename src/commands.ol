@@ -359,13 +359,6 @@ find_and_replace(string value, bool allocated) {
     }
 
     options: FindAndReplaceOptions;
-    switch edit_mode {
-        case EditMode.Visual;
-        case EditMode.VisualLine;
-        case EditMode.VisualBlock;
-            options |= FindAndReplaceOptions.Visual;
-    }
-
     while i < value.length {
         char := value[i++];
         switch char {
@@ -376,7 +369,8 @@ find_and_replace(string value, bool allocated) {
     }
 
     log("Find: '%', Replace: '%', Options: %\n", find_string, replace_string, options);
-    // TODO Implement this
+
+    replace_value_in_buffer(find_string, replace_string);
 }
 
 enum CommandResult {
@@ -576,6 +570,5 @@ replacement_index := -1;
 [flags]
 enum FindAndReplaceOptions {
     None    = 0x0;
-    Visual  = 0x1;
-    Confirm = 0x2;
+    Confirm = 0x1;
 }

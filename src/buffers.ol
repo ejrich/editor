@@ -2197,6 +2197,107 @@ find_value_in_buffer(string value, bool next) {
     }
 }
 
+replace_value_in_buffer(string value, string new_value) {
+    if value.length == 0 return;
+
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    switch edit_mode {
+        case EditMode.Visual; {
+            replace_value_in_buffer(buffer_window, buffer, value, new_value, buffer_window.line, buffer_window.cursor, visual_mode_data.line, visual_mode_data.cursor, false);
+        }
+        case EditMode.VisualLine; {
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            replace_value_in_buffer(buffer_window, buffer, value, new_value, start_line, 0, end_line, 0xFFFFFFF, false);
+        }
+        case EditMode.VisualBlock; {
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+            replace_value_in_buffer(buffer_window, buffer, value, new_value, start_line, start_cursor, end_line, end_cursor, true);
+        }
+        default; {
+            replace_value_in_buffer(buffer_window, buffer, value, new_value, 0, 0, buffer.line_count - 1, 0xFFFFFFF, false);
+        }
+    }
+
+    edit_mode = EditMode.Normal;
+    adjust_start_line(buffer_window);
+}
+
+replace_value_in_buffer(BufferWindow* buffer_window, FileBuffer* buffer, string value, string new_value, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool block) {
+    start_line, end_line, start_cursor, end_cursor: u32;
+
+    if block || line_1 < line_2 {
+        start_line = line_1;
+        start_cursor = cursor_1;
+        end_line = line_2;
+        end_cursor = cursor_2;
+    }
+    else if line_1 == line_2 {
+        start_line = line_1;
+        end_line = line_1;
+        if cursor_1 < cursor_2 {
+            start_cursor = cursor_1;
+            end_cursor = cursor_2;
+        }
+        else {
+            start_cursor = cursor_2;
+            end_cursor = cursor_1;
+        }
+    }
+    else {
+        start_line = line_2;
+        start_cursor = cursor_2;
+        end_line = line_1;
+        end_cursor = cursor_1;
+    }
+
+    line_number := start_line;
+    cursor := start_cursor;
+
+    line := get_buffer_line(buffer, line_number);
+
+    while line != null && line_number <= end_line {
+        end_index := line.length;
+        if (block || line_number == end_line) && end_cursor < line.length {
+            end_index = end_cursor + 1;
+        }
+
+        // Only check if there are enough characters in the line to match the string
+        while cursor + value.length <= end_index {
+            if line.data.data[cursor] == value[0] {
+                matched := true;
+                each i in 1..value.length - 1 {
+                    if line.data.data[cursor + i] != value[i] {
+                        matched = false;
+                        break;
+                    }
+                }
+
+                if matched {
+                    delete_from_line(line, cursor, cursor + value.length, false);
+                    add_text_to_line(line, new_value, cursor);
+                    cursor += new_value.length - 1;
+                    // TODO Fully implement this with new lines
+                }
+            }
+
+            cursor++;
+        }
+
+        line = line.next;
+        cursor = 0;
+        line_number++;
+
+        if block {
+            cursor = start_cursor;
+        }
+    }
+}
+
 
 // Data structures
 struct FileBuffer {
