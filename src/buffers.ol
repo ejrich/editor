@@ -1342,6 +1342,27 @@ BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, Buffer
     return new_line;
 }
 
+BufferLine* add_new_line(FileBuffer* buffer, BufferLine* line, u32 cursor) {
+    new_line := allocate_line();
+
+    if cursor <= line.length {
+        new_line_string: string = { length = line.length - cursor; data = line.data.data + cursor; }
+        line.length = cursor;
+
+        add_text_to_line(new_line, new_line_string);
+    }
+
+    if line.next {
+        line.next.previous = new_line;
+    }
+    new_line.previous = line;
+    new_line.next = line.next;
+    line.next = new_line;
+
+    buffer.line_count++;
+    return new_line;
+}
+
 change_indentation(bool indent, u32 indentations) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -2228,8 +2249,32 @@ replace_value_in_buffer(string value, string new_value) {
 }
 
 replace_value_in_buffer(BufferWindow* buffer_window, FileBuffer* buffer, string value, string new_value, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool block) {
-    start_line, end_line, start_cursor, end_cursor: u32;
+    lines := 1;
+    each i in new_value.length {
+        if new_value[i] == '\n' {
+            lines++;
+        }
+    }
+    new_value_lines: Array<string>[lines];
+    if lines == 1 {
+        new_value_lines[0] = new_value;
+    }
+    else {
+        index := 0;
+        str: string = { data = new_value.data; }
+        each i in new_value.length {
+            if new_value[i] == '\n' {
+                new_value_lines[index++] = str;
+                str = { length = 0; data = new_value.data + i + 1; }
+            }
+            else {
+                str.length++;
+            }
+        }
+        new_value_lines[index++] = str;
+    }
 
+    start_line, end_line, start_cursor, end_cursor: u32;
     if block || line_1 < line_2 {
         start_line = line_1;
         start_cursor = cursor_1;
@@ -2279,9 +2324,24 @@ replace_value_in_buffer(BufferWindow* buffer_window, FileBuffer* buffer, string 
 
                 if matched {
                     delete_from_line(line, cursor, cursor + value.length, false);
-                    add_text_to_line(line, new_value, cursor);
-                    cursor += new_value.length - 1;
-                    // TODO Fully implement this with new lines
+                    if lines == 1 {
+                        add_text_to_line(line, new_value, cursor);
+                        cursor += new_value.length - 1;
+                    }
+                    else {
+                        each i in lines {
+                            line_text := new_value_lines[i];
+                            if line_text.length {
+                                add_text_to_line(line, line_text, cursor);
+                                cursor += line_text.length;
+                            }
+
+                            if i < lines - 1 {
+                                line = add_new_line(buffer, line, cursor);
+                                cursor = 0;
+                            }
+                        }
+                    }
                 }
             }
 

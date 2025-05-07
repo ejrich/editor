@@ -368,8 +368,6 @@ find_and_replace(string value, bool allocated) {
         }
     }
 
-    log("Find: '%', Replace: '%', Options: %\n", find_string, replace_string, options);
-
     replace_value_in_buffer(find_string, replace_string);
 }
 
