@@ -2228,92 +2228,138 @@ struct FindAndReplaceData {
     end_line: u32;
     end_cursor: u32;
     block: bool;
+    line: BufferLine*;
     line_number: u32;
     cursor: u32;
 }
 
-bool begin_replace_value_in_buffer(FindAndReplaceData* data, string value, string new_value) {
+find_and_replace_data: FindAndReplaceData;
+
+bool begin_replace_value_in_buffer(string value, string new_value) {
     if value.length == 0 return false;
 
-    data.buffer_window, data.buffer = get_current_window_and_buffer();
-    if data.buffer_window == null || data.buffer == null {
+    find_and_replace_data.buffer_window, find_and_replace_data.buffer = get_current_window_and_buffer();
+    if find_and_replace_data.buffer_window == null || find_and_replace_data.buffer == null {
         return false;
     }
 
-    data.value = value;
-    data.new_value = new_value;
+    find_and_replace_data.value = value;
+    find_and_replace_data.new_value = new_value;
+    find_and_replace_data.block = false;
 
     switch edit_mode {
         case EditMode.Visual; {
-            if data.buffer_window.line == visual_mode_data.line {
-                data.start_line = data.buffer_window.line;
-                data.end_line = data.buffer_window.line;
-                if data.buffer_window.cursor < visual_mode_data.cursor {
-                    data.start_cursor = data.buffer_window.cursor;
-                    data.end_cursor = visual_mode_data.cursor;
+            if find_and_replace_data.buffer_window.line == visual_mode_data.line {
+                find_and_replace_data.start_line = find_and_replace_data.buffer_window.line;
+                find_and_replace_data.end_line = find_and_replace_data.buffer_window.line;
+                if find_and_replace_data.buffer_window.cursor < visual_mode_data.cursor {
+                    find_and_replace_data.start_cursor = find_and_replace_data.buffer_window.cursor;
+                    find_and_replace_data.end_cursor = visual_mode_data.cursor;
                 }
                 else {
-                    data.start_cursor = visual_mode_data.cursor;
-                    data.end_cursor = data.buffer_window.cursor;
+                    find_and_replace_data.start_cursor = visual_mode_data.cursor;
+                    find_and_replace_data.end_cursor = find_and_replace_data.buffer_window.cursor;
                 }
             }
-            else if data.buffer_window.line < visual_mode_data.line {
-                data.start_line = data.buffer_window.line;
-                data.start_cursor = data.buffer_window.cursor;
-                data.end_line = visual_mode_data.line;
-                data.end_cursor = visual_mode_data.cursor;
+            else if find_and_replace_data.buffer_window.line < visual_mode_data.line {
+                find_and_replace_data.start_line = find_and_replace_data.buffer_window.line;
+                find_and_replace_data.start_cursor = find_and_replace_data.buffer_window.cursor;
+                find_and_replace_data.end_line = visual_mode_data.line;
+                find_and_replace_data.end_cursor = visual_mode_data.cursor;
             }
             else {
-                data.start_line = visual_mode_data.line;
-                data.start_cursor = visual_mode_data.cursor;
-                data.end_line = data.buffer_window.line;
-                data.end_cursor = data.buffer_window.cursor;
+                find_and_replace_data.start_line = visual_mode_data.line;
+                find_and_replace_data.start_cursor = visual_mode_data.cursor;
+                find_and_replace_data.end_line = find_and_replace_data.buffer_window.line;
+                find_and_replace_data.end_cursor = find_and_replace_data.buffer_window.cursor;
             }
         }
         case EditMode.VisualLine; {
-            data.start_line, data.end_line = get_visual_start_and_end_lines(data.buffer_window);
-            data.start_cursor = 0;
-            data.end_cursor = 0xFFFFFFF;
+            find_and_replace_data.start_line, find_and_replace_data.end_line = get_visual_start_and_end_lines(find_and_replace_data.buffer_window);
+            find_and_replace_data.start_cursor = 0;
+            find_and_replace_data.end_cursor = 0xFFFFFFF;
         }
         case EditMode.VisualBlock; {
-            data.start_line, data.end_line = get_visual_start_and_end_lines(data.buffer_window);
-            data.start_cursor, data.end_cursor = get_visual_start_and_end_cursors(data.buffer_window);
-            data.block = true;
+            find_and_replace_data.start_line, find_and_replace_data.end_line = get_visual_start_and_end_lines(find_and_replace_data.buffer_window);
+            find_and_replace_data.start_cursor, find_and_replace_data.end_cursor = get_visual_start_and_end_cursors(find_and_replace_data.buffer_window);
+            find_and_replace_data.block = true;
         }
         default; {
-            data.start_line = 0;
-            data.start_cursor = 0;
-            data.end_line = data.buffer.line_count - 1;
-            data.end_cursor = 0xFFFFFFF;
+            find_and_replace_data.start_line = 0;
+            find_and_replace_data.start_cursor = 0;
+            find_and_replace_data.end_line = find_and_replace_data.buffer.line_count - 1;
+            find_and_replace_data.end_cursor = 0xFFFFFFF;
         }
     }
+
+    find_and_replace_data.line_number = find_and_replace_data.start_line;
+    find_and_replace_data.cursor = find_and_replace_data.start_cursor;
+    find_and_replace_data.line = get_buffer_line(find_and_replace_data.buffer, find_and_replace_data.line_number);
 
     return true;
 }
 
-end_replace(FindAndReplaceData* data) {
-    edit_mode = EditMode.Normal;
-    adjust_start_line(data.buffer_window);
+bool find_next_value_in_buffer(bool move_cursor = true) {
+    while find_and_replace_data.line != null && find_and_replace_data.line_number <= find_and_replace_data.end_line {
+        end_index := find_and_replace_data.line.length;
+        if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
+            end_index = find_and_replace_data.end_cursor + 1;
+        }
+
+        // Only check if there are enough characters in the line to match the string
+        while find_and_replace_data.cursor + find_and_replace_data.value.length <= end_index {
+            if find_and_replace_data.line.data.data[find_and_replace_data.cursor] == find_and_replace_data.value[0] {
+                matched := true;
+                each i in 1..find_and_replace_data.value.length - 1 {
+                    if find_and_replace_data.line.data.data[find_and_replace_data.cursor + i] != find_and_replace_data.value[i] {
+                        matched = false;
+                        break;
+                    }
+                }
+
+                if matched {
+                    if move_cursor {
+                        find_and_replace_data.buffer_window.line = find_and_replace_data.line_number;
+                        find_and_replace_data.buffer_window.cursor = find_and_replace_data.cursor;
+                        adjust_start_line(find_and_replace_data.buffer_window);
+                    }
+                    return true;
+                }
+            }
+
+            find_and_replace_data.cursor++;
+        }
+
+        find_and_replace_data.line = find_and_replace_data.line.next;
+        find_and_replace_data.cursor = 0;
+        find_and_replace_data.line_number++;
+
+        if find_and_replace_data.block {
+            find_and_replace_data.cursor = find_and_replace_data.start_cursor;
+        }
+    }
+
+    return false;
 }
 
-replace_value_in_buffer(FindAndReplaceData* data) {
+replace_value_in_buffer() {
     lines := 1;
-    each i in data.new_value.length {
-        if data.new_value[i] == '\n' {
+    each i in find_and_replace_data.new_value.length {
+        if find_and_replace_data.new_value[i] == '\n' {
             lines++;
         }
     }
     new_value_lines: Array<string>[lines];
     if lines == 1 {
-        new_value_lines[0] = data.new_value;
+        new_value_lines[0] = find_and_replace_data.new_value;
     }
     else {
         index := 0;
-        str: string = { data = data.new_value.data; }
-        each i in data.new_value.length {
-            if data.new_value[i] == '\n' {
+        str: string = { data = find_and_replace_data.new_value.data; }
+        each i in find_and_replace_data.new_value.length {
+            if find_and_replace_data.new_value[i] == '\n' {
                 new_value_lines[index++] = str;
-                str = { length = 0; data = data.new_value.data + i + 1; }
+                str = { length = 0; data = find_and_replace_data.new_value.data + i + 1; }
             }
             else {
                 str.length++;
@@ -2322,60 +2368,23 @@ replace_value_in_buffer(FindAndReplaceData* data) {
         new_value_lines[index++] = str;
     }
 
-    data.line_number = data.start_line;
-    data.cursor = data.start_cursor;
-
-    line := get_buffer_line(data.buffer, data.line_number);
-
-    while line != null && data.line_number <= data.end_line {
-        end_index := line.length;
-        if (data.block || data.line_number == data.end_line) && data.end_cursor < line.length {
-            end_index = data.end_cursor + 1;
-        }
-
-        // Only check if there are enough characters in the line to match the string
-        while data.cursor + data.value.length <= end_index {
-            if line.data.data[data.cursor] == data.value[0] {
-                matched := true;
-                each i in 1..data.value.length - 1 {
-                    if line.data.data[data.cursor + i] != data.value[i] {
-                        matched = false;
-                        break;
-                    }
-                }
-
-                if matched {
-                    delete_from_line(line, data.cursor, data.cursor + data.value.length, false);
-                    if lines == 1 {
-                        add_text_to_line(line, data.new_value, data.cursor);
-                        data.cursor += data.new_value.length - 1;
-                    }
-                    else {
-                        each i in lines {
-                            line_text := new_value_lines[i];
-                            if line_text.length {
-                                add_text_to_line(line, line_text, data.cursor);
-                                data.cursor += line_text.length;
-                            }
-
-                            if i < lines - 1 {
-                                line = add_new_line(data.buffer, line, data.cursor);
-                                data.cursor = 0;
-                            }
-                        }
-                    }
-                }
+    delete_from_line(find_and_replace_data.line, find_and_replace_data.cursor, find_and_replace_data.cursor + find_and_replace_data.value.length, false);
+    if lines == 1 {
+        add_text_to_line(find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
+        find_and_replace_data.cursor += find_and_replace_data.new_value.length - 1;
+    }
+    else {
+        each i in lines {
+            line_text := new_value_lines[i];
+            if line_text.length {
+                add_text_to_line(find_and_replace_data.line, line_text, find_and_replace_data.cursor);
+                find_and_replace_data.cursor += line_text.length;
             }
 
-            data.cursor++;
-        }
-
-        line = line.next;
-        data.cursor = 0;
-        data.line_number++;
-
-        if data.block {
-            data.cursor = data.start_cursor;
+            if i < lines - 1 {
+                find_and_replace_data.line = add_new_line(find_and_replace_data.buffer, find_and_replace_data.line, find_and_replace_data.cursor);
+                find_and_replace_data.cursor = 0;
+            }
         }
     }
 }
@@ -2454,6 +2463,75 @@ u32, u32 get_current_position() {
 
     return line_number, cursor;
 }
+
+adjust_start_line(BufferWindow* window) {
+    if window == null return;
+
+    if window.buffer_index < 0 {
+        window.line = 0;
+        window.start_line = 0;
+        return;
+    }
+
+    if settings.scroll_offset > global_font_config.max_lines {
+        window.start_line = window.line;
+        return;
+    }
+
+    window.start_line = clamp(window.start_line, 0, window.line);
+
+    buffer := buffers[window.buffer_index];
+    starting_line := buffer.lines;
+    line_number := 0;
+    while starting_line != null && line_number != window.start_line {
+        starting_line = starting_line.next;
+        line_number++;
+    }
+
+    if starting_line == null return;
+
+    current_line := starting_line;
+    max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
+    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
+    while current_line != null && line_number != window.line {
+        current_line = current_line.next;
+        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+        line_number++;
+    }
+
+    if rendered_lines <= settings.scroll_offset {
+        while starting_line.previous != null && rendered_lines <= settings.scroll_offset {
+            window.start_line--;
+            starting_line = starting_line.previous;
+            rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
+        }
+    }
+    else if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
+        // Check that there are more lines to scroll to
+        end_line := current_line.next;
+        rendered_lines_after_current: u32;
+        while end_line != null {
+            rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
+            end_line = end_line.next;
+
+            if rendered_lines_after_current >= settings.scroll_offset {
+                break;
+            }
+        }
+
+        allowed_scroll_offset := settings.scroll_offset;
+        if rendered_lines_after_current < settings.scroll_offset {
+            allowed_scroll_offset = rendered_lines_after_current;
+        }
+
+        while starting_line != null && rendered_lines + allowed_scroll_offset > global_font_config.max_lines {
+            window.start_line++;
+            rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
+            starting_line = starting_line.next;
+        }
+    }
+}
+
 
 #private
 
@@ -2925,74 +3003,6 @@ move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
     }
 
     buffer := buffers[window.buffer_index];
-}
-
-adjust_start_line(BufferWindow* window) {
-    if window == null return;
-
-    if window.buffer_index < 0 {
-        window.line = 0;
-        window.start_line = 0;
-        return;
-    }
-
-    if settings.scroll_offset > global_font_config.max_lines {
-        window.start_line = window.line;
-        return;
-    }
-
-    window.start_line = clamp(window.start_line, 0, window.line);
-
-    buffer := buffers[window.buffer_index];
-    starting_line := buffer.lines;
-    line_number := 0;
-    while starting_line != null && line_number != window.start_line {
-        starting_line = starting_line.next;
-        line_number++;
-    }
-
-    if starting_line == null return;
-
-    current_line := starting_line;
-    max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
-    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
-    while current_line != null && line_number != window.line {
-        current_line = current_line.next;
-        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
-        line_number++;
-    }
-
-    if rendered_lines <= settings.scroll_offset {
-        while starting_line.previous != null && rendered_lines <= settings.scroll_offset {
-            window.start_line--;
-            starting_line = starting_line.previous;
-            rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
-        }
-    }
-    else if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
-        // Check that there are more lines to scroll to
-        end_line := current_line.next;
-        rendered_lines_after_current: u32;
-        while end_line != null {
-            rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
-            end_line = end_line.next;
-
-            if rendered_lines_after_current >= settings.scroll_offset {
-                break;
-            }
-        }
-
-        allowed_scroll_offset := settings.scroll_offset;
-        if rendered_lines_after_current < settings.scroll_offset {
-            allowed_scroll_offset = rendered_lines_after_current;
-        }
-
-        while starting_line != null && rendered_lines + allowed_scroll_offset > global_font_config.max_lines {
-            window.start_line++;
-            rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
-            starting_line = starting_line.next;
-        }
-    }
 }
 
 u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {

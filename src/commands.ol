@@ -62,9 +62,11 @@ draw_command() {
                 case CommandMode.Command;
                     start = ":";
                 case CommandMode.Search;
-                    start = "/";
+                    start = "Search:";
                 case CommandMode.FindAndReplace;
                     start = "Replace:";
+                case CommandMode.FindAndReplaceConfirm;
+                    start = "Confirm Replacement:";
             }
 
             if start.length {
@@ -96,99 +98,131 @@ draw_command() {
 bool handle_command_press(PressState state, KeyCode code, ModCode mod, string char) {
     if current_command_mode == CommandMode.None return false;
 
-    switch code {
-        case KeyCode.Escape;
-            current_command_mode = CommandMode.None;
-        case KeyCode.Backspace; {
-            set_buffer_value();
-            if command_prompt_buffer.length > 0 {
-                if command_prompt_buffer.cursor > 0 {
-                    if command_prompt_buffer.cursor < command_prompt_buffer.length {
-                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor - 1, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.length - command_prompt_buffer.cursor);
-                    }
-
-                    command_prompt_buffer.cursor--;
-                    command_prompt_buffer.length--;
+    if current_command_mode == CommandMode.FindAndReplaceConfirm {
+        switch code {
+            case KeyCode.Escape;
+            case KeyCode.Backspace;
+            case KeyCode.Delete;
+            case KeyCode.Q; {
+                end_replace();
+            }
+            case KeyCode.A; {
+                replace_value_in_buffer();
+                while find_next_value_in_buffer() {
+                    replace_value_in_buffer();
+                }
+                end_replace();
+            }
+            case KeyCode.N; {
+                find_and_replace_data.cursor += find_and_replace_data.value.length;
+                if !find_next_value_in_buffer() {
+                    end_replace();
                 }
             }
-            else {
-                current_command_mode = CommandMode.None;
-            }
-        }
-        case KeyCode.Delete; {
-            set_buffer_value();
-            if command_prompt_buffer.length > 0 {
-                if command_prompt_buffer.cursor < command_prompt_buffer.length {
-                    if command_prompt_buffer.cursor < command_prompt_buffer.length - 1 {
-                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor + 1, command_prompt_buffer.length - command_prompt_buffer.cursor);
-                    }
-                    command_prompt_buffer.length--;
+            case KeyCode.Y; {
+                replace_value_in_buffer();
+                if !find_next_value_in_buffer() {
+                    end_replace();
                 }
-            }
-            else {
-                current_command_mode = CommandMode.None;
-            }
-        }
-        case KeyCode.Up; {
-            buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-            switch current_command_mode {
-                case CommandMode.Command;
-                    find_previous_string(buffer_string, false, command_strings, &command_index);
-                case CommandMode.Search;
-                    find_previous_string(buffer_string, false, searches, &search_index);
-                case CommandMode.FindAndReplace;
-                    find_previous_string(buffer_string, false, replacements, &replacement_index);
-            }
-        }
-        case KeyCode.Down; {
-            buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
-            switch current_command_mode {
-                case CommandMode.Command;
-                    find_previous_string(buffer_string, true, command_strings, &command_index);
-                case CommandMode.Search;
-                    find_previous_string(buffer_string, true, searches, &search_index);
-                case CommandMode.FindAndReplace;
-                    find_previous_string(buffer_string, true, replacements, &replacement_index);
-            }
-        }
-        case KeyCode.Left; {
-            buffer_string, _ := get_buffer_string();
-            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, buffer_string.length);
-        }
-        case KeyCode.Right; {
-            buffer_string, _ := get_buffer_string();
-            command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, buffer_string.length);
-        }
-        case KeyCode.Enter; {
-            buffer_string, allocated := get_buffer_string();
-            switch current_command_mode {
-                case CommandMode.Command;
-                    call_command(buffer_string, allocated);
-                case CommandMode.Search;
-                    set_search(buffer_string, allocated);
-                case CommandMode.FindAndReplace;
-                    find_and_replace(buffer_string, allocated);
-            }
-        }
-        default; {
-            set_buffer_value();
-            if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
-                if command_prompt_buffer.length == command_prompt_buffer.cursor {
-                    memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
-                }
-                else {
-                    each i in command_prompt_buffer.length - command_prompt_buffer.cursor {
-                        index := command_prompt_buffer.length - i - 1;
-                        command_prompt_buffer.buffer[index + char.length] = command_prompt_buffer.buffer[index];
-                    }
-                    memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, char.data, char.length);
-                }
-
-                command_prompt_buffer.length += char.length;
-                command_prompt_buffer.cursor += char.length;
             }
         }
     }
+    else {
+        switch code {
+            case KeyCode.Escape;
+                current_command_mode = CommandMode.None;
+            case KeyCode.Backspace; {
+                set_buffer_value();
+                if command_prompt_buffer.length > 0 {
+                    if command_prompt_buffer.cursor > 0 {
+                        if command_prompt_buffer.cursor < command_prompt_buffer.length {
+                            memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor - 1, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.length - command_prompt_buffer.cursor);
+                        }
+
+                        command_prompt_buffer.cursor--;
+                        command_prompt_buffer.length--;
+                    }
+                }
+                else {
+                    current_command_mode = CommandMode.None;
+                }
+            }
+            case KeyCode.Delete; {
+                set_buffer_value();
+                if command_prompt_buffer.length > 0 {
+                    if command_prompt_buffer.cursor < command_prompt_buffer.length {
+                        if command_prompt_buffer.cursor < command_prompt_buffer.length - 1 {
+                            memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor + 1, command_prompt_buffer.length - command_prompt_buffer.cursor);
+                        }
+                        command_prompt_buffer.length--;
+                    }
+                }
+                else {
+                    current_command_mode = CommandMode.None;
+                }
+            }
+            case KeyCode.Up; {
+                buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+                switch current_command_mode {
+                    case CommandMode.Command;
+                        find_previous_string(buffer_string, false, command_strings, &command_index);
+                    case CommandMode.Search;
+                        find_previous_string(buffer_string, false, searches, &search_index);
+                    case CommandMode.FindAndReplace;
+                        find_previous_string(buffer_string, false, replacements, &replacement_index);
+                }
+            }
+            case KeyCode.Down; {
+                buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
+                switch current_command_mode {
+                    case CommandMode.Command;
+                        find_previous_string(buffer_string, true, command_strings, &command_index);
+                    case CommandMode.Search;
+                        find_previous_string(buffer_string, true, searches, &search_index);
+                    case CommandMode.FindAndReplace;
+                        find_previous_string(buffer_string, true, replacements, &replacement_index);
+                }
+            }
+            case KeyCode.Left; {
+                buffer_string, _ := get_buffer_string();
+                command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, buffer_string.length);
+            }
+            case KeyCode.Right; {
+                buffer_string, _ := get_buffer_string();
+                command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, buffer_string.length);
+            }
+            case KeyCode.Enter; {
+                buffer_string, allocated := get_buffer_string();
+                switch current_command_mode {
+                    case CommandMode.Command;
+                        call_command(buffer_string, allocated);
+                    case CommandMode.Search;
+                        set_search(buffer_string, allocated);
+                    case CommandMode.FindAndReplace;
+                        find_and_replace(buffer_string, allocated);
+                }
+            }
+            default; {
+                set_buffer_value();
+                if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
+                    if command_prompt_buffer.length == command_prompt_buffer.cursor {
+                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
+                    }
+                    else {
+                        each i in command_prompt_buffer.length - command_prompt_buffer.cursor {
+                            index := command_prompt_buffer.length - i - 1;
+                            command_prompt_buffer.buffer[index + char.length] = command_prompt_buffer.buffer[index];
+                        }
+                        memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, char.data, char.length);
+                    }
+
+                    command_prompt_buffer.length += char.length;
+                    command_prompt_buffer.cursor += char.length;
+                }
+            }
+        }
+    }
+
 
     return true;
 }
@@ -290,9 +324,10 @@ set_search(string value, bool allocated) {
 }
 
 find_and_replace(string value, bool allocated) {
-    defer current_command_mode = CommandMode.None;
-
-    if value.length == 0 return;
+    if value.length == 0 {
+        current_command_mode = CommandMode.None;
+        return;
+    }
 
     find_string_buffer: Array<u8>[value.length];
     find_string: string = { data = find_string_buffer.data; }
@@ -323,7 +358,10 @@ find_and_replace(string value, bool allocated) {
         }
     }
 
-    if find_string.length == 0 return;
+    if find_string.length == 0 {
+        current_command_mode = CommandMode.None;
+        return;
+    }
 
     if !allocated {
         allocate_strings(&value);
@@ -368,11 +406,35 @@ find_and_replace(string value, bool allocated) {
         }
     }
 
-    data: FindAndReplaceData;
-    if begin_replace_value_in_buffer(&data, find_string, replace_string) {
-        replace_value_in_buffer(&data);
-        end_replace(&data);
+    if begin_replace_value_in_buffer(find_string, replace_string) {
+        if options & FindAndReplaceOptions.Confirm {
+            if find_next_value_in_buffer() {
+                edit_mode = EditMode.Normal;
+                allocate_strings(&find_and_replace_data.value, &find_and_replace_data.new_value);
+                current_command_mode = CommandMode.FindAndReplaceConfirm;
+                return;
+            }
+            else {
+                end_replace(false);
+            }
+        }
+        else {
+            while find_next_value_in_buffer(false) {
+                replace_value_in_buffer();
+            }
+            end_replace(false);
+        }
     }
+
+    current_command_mode = CommandMode.None;
+}
+
+end_replace(bool free = true) {
+    if free free_allocation(find_and_replace_data.value.data);
+
+    current_command_mode = CommandMode.None;
+    edit_mode = EditMode.Normal;
+    adjust_start_line(find_and_replace_data.buffer_window);
 }
 
 enum CommandResult {
@@ -389,6 +451,7 @@ enum CommandMode {
     Command;
     Search;
     FindAndReplace;
+    FindAndReplaceConfirm;
 }
 
 current_command_mode: CommandMode;
