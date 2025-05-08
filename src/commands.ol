@@ -368,7 +368,11 @@ find_and_replace(string value, bool allocated) {
         }
     }
 
-    replace_value_in_buffer(find_string, replace_string);
+    data: FindAndReplaceData;
+    if begin_replace_value_in_buffer(&data, find_string, replace_string) {
+        replace_value_in_buffer(&data);
+        end_replace(&data);
+    }
 }
 
 enum CommandResult {
