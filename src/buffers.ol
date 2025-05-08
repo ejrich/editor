@@ -2300,20 +2300,85 @@ bool begin_replace_value_in_buffer(string value, string new_value) {
 }
 
 bool find_next_value_in_buffer(bool move_cursor = true) {
-    while find_and_replace_data.line != null && find_and_replace_data.line_number <= find_and_replace_data.end_line {
+    lines := 1;
+    each i in find_and_replace_data.value.length {
+        if find_and_replace_data.value[i] == '\n' {
+            lines++;
+        }
+    }
+
+    if lines > 1 && find_and_replace_data.block return false;
+
+    value_lines: Array<string>[lines];
+    if lines == 1 {
+        value_lines[0] = find_and_replace_data.value;
+    }
+    else {
+        index := 0;
+        str: string = { data = find_and_replace_data.value.data; }
+        each i in find_and_replace_data.value.length {
+            if find_and_replace_data.value[i] == '\n' {
+                value_lines[index++] = str;
+                str = { length = 0; data = find_and_replace_data.value.data + i + 1; }
+            }
+            else {
+                str.length++;
+            }
+        }
+        value_lines[index++] = str;
+    }
+
+    while find_and_replace_data.line != null && find_and_replace_data.line_number + lines - 1 <= find_and_replace_data.end_line {
         end_index := find_and_replace_data.line.length;
         if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
             end_index = find_and_replace_data.end_cursor + 1;
         }
 
         // Only check if there are enough characters in the line to match the string
-        while find_and_replace_data.cursor + find_and_replace_data.value.length <= end_index {
+        while find_and_replace_data.cursor + value_lines[0].length <= end_index {
             if find_and_replace_data.line.data.data[find_and_replace_data.cursor] == find_and_replace_data.value[0] {
                 matched := true;
-                each i in 1..find_and_replace_data.value.length - 1 {
-                    if find_and_replace_data.line.data.data[find_and_replace_data.cursor + i] != find_and_replace_data.value[i] {
-                        matched = false;
-                        break;
+                if lines == 1 {
+                    each i in 1..find_and_replace_data.value.length - 1 {
+                        if find_and_replace_data.line.data.data[find_and_replace_data.cursor + i] != find_and_replace_data.value[i] {
+                            matched = false;
+                            break;
+                        }
+                    }
+                }
+                else {
+                    current_line := find_and_replace_data.line;
+                    cursor := find_and_replace_data.cursor;
+                    each line, i in value_lines {
+                        if i < lines - 1 {
+                            if current_line.length - cursor == line.length {
+                                each j in line.length {
+                                    if current_line.data.data[cursor + j] != line[j] {
+                                        matched = false;
+                                        break;
+                                    }
+                                }
+
+                                if !matched {
+                                    break;
+                                }
+                            }
+                            else {
+                                matched = false;
+                                break;
+                            }
+
+                            current_line = current_line.next;
+                            cursor = 0;
+                        }
+                        else {
+                            each j in line.length {
+                                if current_line.data.data[cursor + j] != line[j] {
+                                    matched = false;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -2343,17 +2408,50 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
 }
 
 replace_value_in_buffer() {
+    // Delete the current text
     lines := 1;
-    each i in find_and_replace_data.new_value.length {
-        if find_and_replace_data.new_value[i] == '\n' {
+    each i in find_and_replace_data.value.length {
+        if find_and_replace_data.value[i] == '\n' {
             lines++;
         }
     }
-    new_value_lines: Array<string>[lines];
+
     if lines == 1 {
-        new_value_lines[0] = find_and_replace_data.new_value;
+        delete_from_line(find_and_replace_data.line, find_and_replace_data.cursor, find_and_replace_data.cursor + find_and_replace_data.value.length, false);
     }
     else {
+        last_delete_length := 0;
+        line_to_merge := find_and_replace_data.line;
+        each i in find_and_replace_data.value.length {
+            if find_and_replace_data.value[i] == '\n' {
+                last_delete_length = 0;
+                line_to_merge = line_to_merge.next;
+            }
+            else {
+                last_delete_length++;
+            }
+        }
+
+        merge_lines(find_and_replace_data.buffer, find_and_replace_data.line, line_to_merge, find_and_replace_data.cursor, last_delete_length, false);
+
+        find_and_replace_data.end_line -= lines - 1;
+        find_and_replace_data.line_number -= lines - 1;
+    }
+
+    // Replace with the new text
+    new_lines := 1;
+    each i in find_and_replace_data.new_value.length {
+        if find_and_replace_data.new_value[i] == '\n' {
+            new_lines++;
+        }
+    }
+
+    if new_lines == 1 {
+        add_text_to_line(find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
+        find_and_replace_data.cursor += find_and_replace_data.new_value.length - 1;
+    }
+    else {
+        new_value_lines: Array<string>[new_lines];
         index := 0;
         str: string = { data = find_and_replace_data.new_value.data; }
         each i in find_and_replace_data.new_value.length {
@@ -2366,26 +2464,22 @@ replace_value_in_buffer() {
             }
         }
         new_value_lines[index++] = str;
-    }
 
-    delete_from_line(find_and_replace_data.line, find_and_replace_data.cursor, find_and_replace_data.cursor + find_and_replace_data.value.length, false);
-    if lines == 1 {
-        add_text_to_line(find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
-        find_and_replace_data.cursor += find_and_replace_data.new_value.length - 1;
-    }
-    else {
-        each i in lines {
+        each i in new_lines {
             line_text := new_value_lines[i];
             if line_text.length {
                 add_text_to_line(find_and_replace_data.line, line_text, find_and_replace_data.cursor);
                 find_and_replace_data.cursor += line_text.length;
             }
 
-            if i < lines - 1 {
+            if i < new_lines - 1 {
                 find_and_replace_data.line = add_new_line(find_and_replace_data.buffer, find_and_replace_data.line, find_and_replace_data.cursor);
                 find_and_replace_data.cursor = 0;
             }
         }
+
+        find_and_replace_data.end_line += new_lines - 1;
+        find_and_replace_data.line_number += new_lines - 1;
     }
 }
 
