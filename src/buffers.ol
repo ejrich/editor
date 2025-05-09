@@ -2231,6 +2231,8 @@ struct FindAndReplaceData {
     line: BufferLine*;
     line_number: u32;
     cursor: u32;
+    index: u32;
+    end_index: u32;
 }
 
 find_and_replace_data: FindAndReplaceData;
@@ -2294,7 +2296,9 @@ bool begin_replace_value_in_buffer(string value, string new_value) {
 
     find_and_replace_data.line_number = find_and_replace_data.start_line;
     find_and_replace_data.cursor = find_and_replace_data.start_cursor;
+    find_and_replace_data.index = find_and_replace_data.start_cursor;
     find_and_replace_data.line = get_buffer_line(find_and_replace_data.buffer, find_and_replace_data.line_number);
+    set_end_index();
 
     return true;
 }
@@ -2329,13 +2333,8 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
     }
 
     while find_and_replace_data.line != null && find_and_replace_data.line_number + lines - 1 <= find_and_replace_data.end_line {
-        end_index := find_and_replace_data.line.length;
-        if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
-            end_index = find_and_replace_data.end_cursor + 1;
-        }
-
         // Only check if there are enough characters in the line to match the string
-        while find_and_replace_data.cursor + value_lines[0].length <= end_index {
+        while find_and_replace_data.index + value_lines[0].length <= find_and_replace_data.end_index {
             if find_and_replace_data.line.data.data[find_and_replace_data.cursor] == find_and_replace_data.value[0] {
                 matched := true;
                 if lines == 1 {
@@ -2393,18 +2392,29 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
             }
 
             find_and_replace_data.cursor++;
+            find_and_replace_data.index++;
         }
 
         find_and_replace_data.line = find_and_replace_data.line.next;
         find_and_replace_data.cursor = 0;
+        find_and_replace_data.index = 0;
         find_and_replace_data.line_number++;
 
         if find_and_replace_data.block {
             find_and_replace_data.cursor = find_and_replace_data.start_cursor;
         }
+
+        set_end_index();
     }
 
     return false;
+}
+
+set_end_index() {
+    find_and_replace_data.end_index = find_and_replace_data.line.length;
+    if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
+        find_and_replace_data.end_index = find_and_replace_data.end_cursor + 1;
+    }
 }
 
 replace_value_in_buffer() {
@@ -2418,6 +2428,7 @@ replace_value_in_buffer() {
 
     if lines == 1 {
         delete_from_line(find_and_replace_data.line, find_and_replace_data.cursor, find_and_replace_data.cursor + find_and_replace_data.value.length, false);
+        find_and_replace_data.index += find_and_replace_data.value.length;
     }
     else {
         last_delete_length := 0;
@@ -2432,10 +2443,17 @@ replace_value_in_buffer() {
             }
         }
 
+        line_to_merge_length := line_to_merge.length;
+
         merge_lines(find_and_replace_data.buffer, find_and_replace_data.line, line_to_merge, find_and_replace_data.cursor, last_delete_length, false);
 
         find_and_replace_data.end_line -= lines - 1;
-        find_and_replace_data.line_number -= lines - 1;
+
+        find_and_replace_data.index = last_delete_length;
+        find_and_replace_data.end_index = line_to_merge_length;
+        if find_and_replace_data.line_number == find_and_replace_data.end_line && find_and_replace_data.end_cursor < line_to_merge_length {
+            find_and_replace_data.end_index = find_and_replace_data.end_cursor + 1;
+        }
     }
 
     // Replace with the new text
@@ -2448,7 +2466,7 @@ replace_value_in_buffer() {
 
     if new_lines == 1 {
         add_text_to_line(find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
-        find_and_replace_data.cursor += find_and_replace_data.new_value.length - 1;
+        find_and_replace_data.cursor += find_and_replace_data.new_value.length;
     }
     else {
         new_value_lines: Array<string>[new_lines];
@@ -2465,8 +2483,7 @@ replace_value_in_buffer() {
         }
         new_value_lines[index++] = str;
 
-        each i in new_lines {
-            line_text := new_value_lines[i];
+        each line_text, i in new_value_lines {
             if line_text.length {
                 add_text_to_line(find_and_replace_data.line, line_text, find_and_replace_data.cursor);
                 find_and_replace_data.cursor += line_text.length;
