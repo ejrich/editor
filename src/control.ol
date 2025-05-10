@@ -462,6 +462,10 @@ quit(ModCode mod) {
 // Movement keybinds
 [keybind, no_repeat]
 move_up(ModCode mod) {
+    if edit_mode == EditMode.BlockInsert {
+        edit_mode = EditMode.Insert;
+    }
+
     post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
     move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
@@ -469,6 +473,10 @@ move_up(ModCode mod) {
 
 [keybind, no_repeat]
 move_down(ModCode mod) {
+    if edit_mode == EditMode.BlockInsert {
+        edit_mode = EditMode.Insert;
+    }
+
     line_changes := get_repeats();
     if mod & ModCode.Shift {
         join_lines(line_changes);
