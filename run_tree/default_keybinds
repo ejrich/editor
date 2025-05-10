@@ -39,3 +39,5 @@ find_char=F
 until_char=T
 find=N
 swap_buffer=Control+Six
+jump_back=Control+O
+jump_forward=Control+I

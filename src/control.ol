@@ -640,3 +640,15 @@ swap_buffer(ModCode mod) {
     reset_key_command();
     reset_post_movement_command();
 }
+
+[keybind, no_repeat]
+jump_back(ModCode mod) {
+    jumps := get_repeats();
+    go_to_jump(false, jumps);
+}
+
+[keybind, no_repeat]
+jump_forward(ModCode mod) {
+    jumps := get_repeats();
+    go_to_jump(true, jumps);
+}
