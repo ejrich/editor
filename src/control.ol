@@ -252,10 +252,10 @@ insert(ModCode mod) {
         switch edit_mode {
             case EditMode.Visual;
             case EditMode.VisualLine;
-                move_to_visual_mode_boundary();
+                move_to_visual_mode_boundary(false);
             case EditMode.VisualBlock; {
                 init_block_insert_mode();
-                move_to_visual_mode_boundary();
+                move_to_visual_mode_boundary(false);
                 start_block_insert_mode();
                 return;
             }
@@ -269,7 +269,19 @@ insert(ModCode mod) {
 [keybind, no_repeat]
 append(ModCode mod) {
     if mod & ModCode.Shift {
-        move_to_line_boundary(true, false, false);
+        switch edit_mode {
+            case EditMode.Visual;
+            case EditMode.VisualLine;
+                move_to_visual_mode_boundary(true);
+            case EditMode.VisualBlock; {
+                init_block_insert_mode();
+                move_to_visual_mode_boundary(true);
+                start_block_insert_mode();
+                return;
+            }
+            default;
+                move_to_line_boundary(true, false, false);
+        }
     }
     start_insert_mode(true, 1);
 }

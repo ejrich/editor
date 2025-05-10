@@ -488,7 +488,7 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     return start_cursor, end_cursor;
 }
 
-move_to_visual_mode_boundary() {
+move_to_visual_mode_boundary(bool end) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -498,7 +498,20 @@ move_to_visual_mode_boundary() {
     switch edit_mode {
         case EditMode.Visual; {
             if buffer_window.line == visual_mode_data.line {
-                if visual_mode_data.cursor < buffer_window.cursor {
+                if end {
+                    if buffer_window.cursor < visual_mode_data.cursor {
+                        buffer_window.cursor = visual_mode_data.cursor;
+                    }
+                }
+                else {
+                    if visual_mode_data.cursor < buffer_window.cursor {
+                        buffer_window.cursor = visual_mode_data.cursor;
+                    }
+                }
+            }
+            else if end {
+                if buffer_window.line < visual_mode_data.line {
+                    buffer_window.line = visual_mode_data.line;
                     buffer_window.cursor = visual_mode_data.cursor;
                 }
             }
@@ -508,12 +521,27 @@ move_to_visual_mode_boundary() {
             }
         }
         case EditMode.VisualLine; {
-            buffer_window.line, _ = get_visual_start_and_end_lines(buffer_window);
-            buffer_window.cursor = 0;
+            if end {
+                _, buffer_window.line = get_visual_start_and_end_lines(buffer_window);
+                line := get_buffer_line(buffer, buffer_window.line);
+                buffer_window.cursor = line.length;
+            }
+            else {
+                buffer_window.line, _ = get_visual_start_and_end_lines(buffer_window);
+                buffer_window.cursor = 0;
+            }
         }
         case EditMode.VisualBlock; {
-            buffer_window.line, _ = get_visual_start_and_end_lines(buffer_window);
-            buffer_window.cursor, _ = get_visual_start_and_end_cursors(buffer_window);
+            start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
+            if end {
+                buffer_window.line = end_line;
+                buffer_window.cursor = end_cursor + 1;
+            }
+            else {
+                buffer_window.line = start_line;
+                buffer_window.cursor = start_cursor;
+            }
         }
     }
 
