@@ -1,6 +1,7 @@
 enum EditMode {
     Normal;
     Insert;
+    BlockInsert;
     Visual;
     VisualLine;
     VisualBlock;
@@ -248,7 +249,19 @@ visual_mode(ModCode mod) {
 [keybind, no_repeat]
 insert(ModCode mod) {
     if mod & ModCode.Shift {
-        move_to_line_boundary(false, true, false);
+        switch edit_mode {
+            case EditMode.Visual;
+            case EditMode.VisualLine;
+                move_to_visual_mode_boundary();
+            case EditMode.VisualBlock; {
+                init_block_insert_mode();
+                move_to_visual_mode_boundary();
+                start_block_insert_mode();
+                return;
+            }
+            default;
+                move_to_line_boundary(false, true, false);
+        }
     }
     start_insert_mode(false);
 }

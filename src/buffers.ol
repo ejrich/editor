@@ -102,12 +102,25 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
             line_string: string = { length = line.length; data = line.data.data; }
             cursor, visual_start, visual_end := -1;
 
-            if line_number == cursor_line {
+            if line_number == cursor_line ||
+                (edit_mode == EditMode.BlockInsert &&
+                line_number >= (block_insert_data.start_line + 1) &&
+                line_number <= (block_insert_data.end_line + 1)) {
                 cursor = window.cursor;
-                if line.length == 0
-                    cursor = 0;
+
+                if line.length == 0 {
+                    if edit_mode == EditMode.BlockInsert && cursor > 0 {
+                        cursor = -1;
+                    }
+                    else {
+                        cursor = 0;
+                    }
+                }
                 else if cursor >= line.length {
-                    if edit_mode != EditMode.Normal {
+                    if edit_mode == EditMode.BlockInsert {
+                        cursor = -1;
+                    }
+                    else if edit_mode != EditMode.Normal {
                         cursor = line.length;
                     }
                     else {
@@ -181,7 +194,8 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
                 highlight_color = appearance.normal_mode_color;
                 mode_string = " NORMAL ";
             }
-            case EditMode.Insert; {
+            case EditMode.Insert;
+            case EditMode.BlockInsert; {
                 highlight_color = appearance.insert_mode_color;
                 mode_string = " INSERT ";
             }
@@ -472,6 +486,38 @@ u32, u32 get_visual_start_and_end_cursors(BufferWindow* buffer_window) {
     }
 
     return start_cursor, end_cursor;
+}
+
+move_to_visual_mode_boundary() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    _: u32;
+    switch edit_mode {
+        case EditMode.Visual; {
+            if buffer_window.line == visual_mode_data.line {
+                if visual_mode_data.cursor < buffer_window.cursor {
+                    buffer_window.cursor = visual_mode_data.cursor;
+                }
+            }
+            else if visual_mode_data.line < buffer_window.line {
+                buffer_window.line = visual_mode_data.line;
+                buffer_window.cursor = visual_mode_data.cursor;
+            }
+        }
+        case EditMode.VisualLine; {
+            buffer_window.line, _ = get_visual_start_and_end_lines(buffer_window);
+            buffer_window.cursor = 0;
+        }
+        case EditMode.VisualBlock; {
+            buffer_window.line, _ = get_visual_start_and_end_lines(buffer_window);
+            buffer_window.cursor, _ = get_visual_start_and_end_cursors(buffer_window);
+        }
+    }
+
+    adjust_start_line(buffer_window);
 }
 
 string get_selected_text() {
@@ -831,7 +877,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                     if !before start_cursor++;
                 }
 
-                buffer_window.cursor = add_text_to_line(line, clipboard_line, start_cursor) - 1;
+                buffer_window.cursor = add_text_to_line(line, clipboard_line, start_cursor);
             }
             else {
                 if line.length {
@@ -850,7 +896,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                         }
                     }
 
-                    buffer_window.cursor = add_text_to_line(end_line, clipboard_lines[clipboard_lines.length - 1]) - 1;
+                    buffer_window.cursor = add_text_to_line(end_line, clipboard_lines[clipboard_lines.length - 1]);
                 }
                 else {
                     paste_lines(buffer_window, buffer, line, clipboard_lines);
@@ -965,6 +1011,99 @@ u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = 
     return new_cursor;
 }
 
+// Block insert mode
+struct BlockInsertData {
+    start_line: u32;
+    end_line: u32;
+}
+
+block_insert_data: BlockInsertData;
+
+init_block_insert_mode() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    block_insert_data.start_line, block_insert_data.end_line = get_visual_start_and_end_lines(buffer_window);
+}
+
+start_block_insert_mode() {
+    reset_key_command();
+    reset_post_movement_command();
+    edit_mode = EditMode.BlockInsert;
+}
+
+add_text_to_block(string text) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line_number := block_insert_data.start_line;
+    line := get_buffer_line(buffer, line_number);
+
+    new_cursor := buffer_window.cursor;
+    while line != null && line_number <= block_insert_data.end_line {
+        if buffer_window.cursor <= line.length {
+            new_cursor = add_text_to_line(line, text, buffer_window.cursor);
+        }
+
+        line = line.next;
+        line_number++;
+    }
+
+    buffer_window.cursor = new_cursor;
+}
+
+delete_from_cursor_block(bool back) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line_number := block_insert_data.start_line;
+    line := get_buffer_line(buffer, line_number);
+
+    new_cursor := buffer_window.cursor;
+    while line != null && line_number <= block_insert_data.end_line {
+        if back {
+            if buffer_window.cursor == 0 {
+                edit_mode = EditMode.Insert;
+
+                if line.previous {
+                    buffer_window.cursor = line.previous.length;
+                    merge_lines(buffer, line.previous, line, line.previous.length, 0, false);
+                    buffer_window.line--;
+                }
+                break;
+            }
+            else if buffer_window.cursor <= line.length {
+                new_cursor = delete_from_line(line, buffer_window.cursor - 1, buffer_window.cursor, false);
+            }
+        }
+        else {
+            if buffer_window.cursor== line.length {
+                edit_mode = EditMode.Insert;
+
+                if line.next {
+                    merge_lines(buffer, line, line.next, line.length, 0, false);
+                }
+                break;
+            }
+            else if buffer_window.cursor <= line.length {
+                delete_from_line(line, buffer_window.cursor, buffer_window.cursor + 1, false);
+            }
+        }
+
+        line = line.next;
+        line_number++;
+    }
+
+    buffer_window.cursor = new_cursor;
+}
+
+// Deletions
 delete_lines(bool delete_all) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -1287,6 +1426,10 @@ join_lines(u32 lines) {
 }
 
 add_new_line(bool above, bool split = false) {
+    if edit_mode == EditMode.BlockInsert {
+        edit_mode = EditMode.Insert;
+    }
+
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;

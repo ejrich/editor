@@ -72,15 +72,17 @@ set_clipboard(string value, ClipboardMode mode = ClipboardMode.Normal) {
         success := OpenClipboard(window.handle);
         if success {
             clipboard_handle := GetClipboardData(ClipboardFormat.CF_TEXT);
+            if clipboard_handle {
+                clipboard_pointer := GlobalLock(clipboard_handle);
+                clipboard_string = convert_c_string(clipboard_pointer);
 
-            clipboard_pointer := GlobalLock(clipboard_handle);
-            clipboard_string = convert_c_string(clipboard_pointer);
+                GlobalUnlock(clipboard_handle);
 
-            GlobalUnlock(clipboard_handle);
+                allocate_strings(&clipboard_string);
+                set_clipboard(clipboard_string);
+            }
+
             CloseClipboard();
         }
-
-        allocate_strings(&clipboard_string);
-        set_clipboard(clipboard_string);
     }
 }

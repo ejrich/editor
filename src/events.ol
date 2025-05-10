@@ -11,10 +11,13 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     // log("Key % is % with mod %!\n", code, state, mod);
 
     if state & PressState.Down {
-        if edit_mode == EditMode.Insert {
+        if edit_mode == EditMode.Insert || edit_mode == EditMode.BlockInsert {
             switch code {
                 case KeyCode.Backspace; {
-                    delete_from_cursor(true);
+                    if edit_mode == EditMode.BlockInsert
+                        delete_from_cursor_block(true);
+                    else
+                        delete_from_cursor(true);
                     return;
                 }
                 case KeyCode.Tab; {
@@ -23,7 +26,11 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                         space = ' ';
                     }
                     tab_string: string = { length = tab_array.length; data = tab_array.data; }
-                    add_text_to_line(tab_string);
+
+                    if edit_mode == EditMode.BlockInsert
+                        add_text_to_block(tab_string);
+                    else
+                        add_text_to_line(tab_string);
                     return;
                 }
                 case KeyCode.Enter; {
@@ -31,13 +38,19 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
                 case KeyCode.Delete; {
-                    delete_from_cursor(false);
+                    if edit_mode == EditMode.BlockInsert
+                        delete_from_cursor_block(false);
+                    else
+                        delete_from_cursor(false);
                     return;
                 }
             }
 
             if cast(u32, code) >= ' ' && char.length > 0 {
-                add_text_to_line(char);
+                if edit_mode == EditMode.BlockInsert
+                    add_text_to_block(char);
+                else
+                    add_text_to_line(char);
                 return;
             }
         }
