@@ -210,6 +210,16 @@ reset_post_movement_command() {
 
 // Editing keybinds
 [keybind, no_repeat]
+command(ModCode mod) {
+    start_command_mode();
+}
+
+[keybind, no_repeat]
+search(ModCode mod) {
+    start_search_mode();
+}
+
+[keybind, no_repeat]
 normal_mode(ModCode mod) {
     edit_mode = EditMode.Normal;
 }

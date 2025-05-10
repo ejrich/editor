@@ -89,22 +89,12 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
             }
-            case KeyCode.ForwardSlash; {
-                if (state & PressState.Held) != PressState.Held {
-                    start_search_mode();
-                    return;
-                }
-            }
-            case KeyCode.Colon; {
-                if (state & PressState.Held) != PressState.Held {
-                    start_command_mode();
-                    return;
-                }
-            }
             case KeyCode.F12; {
-                if (state & PressState.Held) != PressState.Held {
-                    toggle_performance_stats(mod == ModCode.Control);
-                    return;
+                #if DEVELOPER {
+                    if (state & PressState.Held) != PressState.Held {
+                        toggle_performance_stats(mod == ModCode.Control);
+                        return;
+                    }
                 }
             }
             case KeyCode.Up; {

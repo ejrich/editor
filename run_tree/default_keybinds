@@ -1,3 +1,5 @@
+command=Colon
+search=ForwardSlash
 normal_mode=Escape
 visual_mode=V
 insert=I
