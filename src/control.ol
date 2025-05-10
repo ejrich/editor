@@ -291,6 +291,12 @@ substitute(ModCode mod) {
     if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
         delete_lines(false);
     }
+    else if edit_mode == EditMode.VisualBlock {
+        init_block_insert_mode();
+        delete_selected();
+        start_block_insert_mode();
+        return;
+    }
     else {
         delete_selected();
     }
@@ -318,6 +324,12 @@ change(ModCode mod) {
     else {
         if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
             delete_lines(false);
+        }
+        else if edit_mode == EditMode.VisualBlock {
+            init_block_insert_mode();
+            delete_selected();
+            start_block_insert_mode();
+            return;
         }
         else {
             delete_selected();

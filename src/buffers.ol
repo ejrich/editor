@@ -1057,9 +1057,16 @@ init_block_insert_mode() {
 }
 
 start_block_insert_mode() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
     reset_key_command();
     reset_post_movement_command();
     edit_mode = EditMode.BlockInsert;
+
+    buffer_window.line = block_insert_data.start_line;
 }
 
 add_text_to_block(string text) {
