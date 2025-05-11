@@ -1,5 +1,49 @@
-record_jump(BufferWindow* buffer_window, u32 line, u32 cursor) {
-    // TODO Implement
+// TODO When to record jumps
+// - Opening new buffer, record current jump to line 0, cursor 0
+// - Swapping to buffer, record current position
+// - Jump to top/bottom of buffer
+// - Next/previous search result
+// - Next/previous paragraph/sentence
+// - Next/previous syntactical char (Need to implement this)
+
+
+record_jump(BufferWindow* buffer_window) {
+    current_jump_pointer: Jump**;
+    switch current_window {
+        case SelectedWindow.Left;
+            current_jump_pointer = &current_left_jump;
+        case SelectedWindow.Right;
+            current_jump_pointer = &current_right_jump;
+    }
+
+    current_jump := *current_jump_pointer;
+    if current_jump &&
+        current_jump.buffer_index == buffer_window.buffer_index &&
+        current_jump.line == buffer_window.line &&
+        current_jump.cursor == buffer_window.cursor {
+        return;
+    }
+
+    new_jump := new<Jump>();
+    new_jump.buffer_index = buffer_window.buffer_index;
+    new_jump.line = buffer_window.line;
+    new_jump.cursor = buffer_window.cursor;
+
+    if current_jump {
+        if current_jump.next {
+            next_jump := current_jump.next;
+            while next_jump {
+                next := next_jump.next;
+                free_allocation(next_jump);
+                next_jump = next;
+            }
+        }
+
+        current_jump.next = new_jump;
+        new_jump.previous = current_jump;
+    }
+
+    *current_jump_pointer = new_jump;
 }
 
 go_to_jump(bool forward, u32 jumps) {
