@@ -361,6 +361,21 @@ swap_top_buffer() {
     }
 }
 
+set_current_location(s32 buffer_index, u32 line, u32 cursor) {
+    switch current_window {
+        case SelectedWindow.Left; {
+            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
+            left_window.buffer_window.line = line;
+            left_window.buffer_window.cursor = cursor;
+        }
+        case SelectedWindow.Right; {
+            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
+            right_window.buffer_window.line = line;
+            right_window.buffer_window.cursor = cursor;
+        }
+    }
+}
+
 close_window(bool save) {
     editor_window, other_window: EditorWindow*;
     switch current_window {
@@ -375,6 +390,8 @@ close_window(bool save) {
             current_window = SelectedWindow.Left;
         }
     }
+
+    clear_jumps();
 
     buffer_window := editor_window.buffer_window;
     while buffer_window {

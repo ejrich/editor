@@ -5,6 +5,7 @@
 #import "commands.ol"
 #import "events.ol"
 #import "graphics.ol"
+#import "jumps.ol"
 #import "keybinds.ol"
 #import "memory.ol"
 #import "settings.ol"
