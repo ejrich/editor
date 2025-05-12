@@ -1,4 +1,4 @@
-// TODO When to record jumps
+// When jumps are recorded:
 // - Opening new buffer, record current jump to line 0, cursor 0
 // - Swapping to buffer, record current position
 // - Jump to top/bottom of buffer
@@ -6,21 +6,11 @@
 // - Next/previous paragraph/sentence
 // - Next/previous syntactical char (Need to implement this)
 
-
 record_jump(BufferWindow* buffer_window) {
-    current_jump_pointer: Jump**;
-    switch current_window {
-        case SelectedWindow.Left;
-            current_jump_pointer = &current_left_jump;
-        case SelectedWindow.Right;
-            current_jump_pointer = &current_right_jump;
-    }
+    current_jump_pointer := get_jump_pointer();
 
     current_jump := *current_jump_pointer;
-    if current_jump &&
-        current_jump.buffer_index == buffer_window.buffer_index &&
-        current_jump.line == buffer_window.line &&
-        current_jump.cursor == buffer_window.cursor {
+    if jump_is_current_location(current_jump, buffer_window) {
         return;
     }
 
@@ -31,12 +21,7 @@ record_jump(BufferWindow* buffer_window) {
 
     if current_jump {
         if current_jump.next {
-            next_jump := current_jump.next;
-            while next_jump {
-                next := next_jump.next;
-                free_allocation(next_jump);
-                next_jump = next;
-            }
+            clear_jumps_after(current_jump);
         }
 
         current_jump.next = new_jump;
@@ -47,18 +32,24 @@ record_jump(BufferWindow* buffer_window) {
 }
 
 go_to_jump(bool forward, u32 jumps) {
-    current_jump_pointer: Jump**;
-    switch current_window {
-        case SelectedWindow.Left;
-            current_jump_pointer = &current_left_jump;
-        case SelectedWindow.Right;
-            current_jump_pointer = &current_right_jump;
-    }
+    current_jump_pointer := get_jump_pointer();
+    buffer_window := get_current_window();
 
     current_jump := *current_jump_pointer;
+    if jump_is_current_location(current_jump, buffer_window) {
+        if forward {
+            if current_jump.next {
+                current_jump = current_jump.next;
+            }
+        }
+        else if current_jump.previous {
+            current_jump = current_jump.previous;
+        }
+    }
+
     if current_jump == null return;
 
-    each i in jumps {
+    each i in jumps - 1 {
         if forward {
             if current_jump.next {
                 current_jump = current_jump.next;
@@ -77,29 +68,16 @@ go_to_jump(bool forward, u32 jumps) {
         }
     }
 
-    if current_jump != *current_jump_pointer {
-        set_current_location(current_jump.buffer_index, current_jump.line, current_jump.cursor);
-        *current_jump_pointer = current_jump;
-    }
+    set_current_location(current_jump.buffer_index, current_jump.line, current_jump.cursor);
+    *current_jump_pointer = current_jump;
 }
 
 clear_jumps() {
-    window_jump_pointer: Jump**;
-    switch current_window {
-        case SelectedWindow.Left;
-            window_jump_pointer = &current_left_jump;
-        case SelectedWindow.Right;
-            window_jump_pointer = &current_right_jump;
-    }
+    window_jump_pointer := get_jump_pointer();
 
     current_jump := *window_jump_pointer;
     if current_jump {
-        next_jump := current_jump.next;
-        while next_jump {
-            next := next_jump.next;
-            free_allocation(next_jump);
-            next_jump = next;
-        }
+        clear_jumps_after(current_jump);
 
         previous_jump := current_jump.previous;
         while previous_jump {
@@ -120,6 +98,35 @@ struct Jump {
     cursor: u32;
     next: Jump*;
     previous: Jump*;
+}
+
+Jump** get_jump_pointer() {
+    current_jump_pointer: Jump**;
+    switch current_window {
+        case SelectedWindow.Left;
+            current_jump_pointer = &current_left_jump;
+        case SelectedWindow.Right;
+            current_jump_pointer = &current_right_jump;
+    }
+
+    return current_jump_pointer;
+}
+
+clear_jumps_after(Jump* jump) {
+    next_jump := jump.next;
+    while next_jump {
+        next := next_jump.next;
+        free_allocation(next_jump);
+        next_jump = next;
+    }
+}
+
+bool jump_is_current_location(Jump* jump, BufferWindow* buffer_window) {
+    if jump != null && jump.buffer_index == buffer_window.buffer_index &&
+        jump.line == buffer_window.line && jump.cursor == buffer_window.cursor
+        return true;
+
+    return false;
 }
 
 current_left_jump: Jump*;

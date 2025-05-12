@@ -282,10 +282,14 @@ open_file_buffer(string path) {
     }
 
     switch current_window {
-        case SelectedWindow.Left;
+        case SelectedWindow.Left; {
             left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
-        case SelectedWindow.Right;
+            record_jump(left_window.buffer_window);
+        }
+        case SelectedWindow.Right; {
             right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
+            record_jump(right_window.buffer_window);
+        }
     }
 }
 
@@ -362,18 +366,21 @@ swap_top_buffer() {
 }
 
 set_current_location(s32 buffer_index, u32 line, u32 cursor) {
+    buffer_window: BufferWindow*;
     switch current_window {
         case SelectedWindow.Left; {
             left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
-            left_window.buffer_window.line = line;
-            left_window.buffer_window.cursor = cursor;
+            buffer_window = left_window.buffer_window;
         }
         case SelectedWindow.Right; {
             right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
-            right_window.buffer_window.line = line;
-            right_window.buffer_window.cursor = cursor;
+            buffer_window = right_window.buffer_window;
         }
     }
+
+    buffer_window.line = line;
+    buffer_window.cursor = cursor;
+    adjust_start_line(buffer_window);
 }
 
 close_window(bool save) {
@@ -1762,12 +1769,16 @@ go_to_line(s32 line) {
         return;
     }
 
+    record_jump(buffer_window);
+
     if line < 0 {
         buffer_window.line = clamp(buffer.line_count + line, 0, buffer.line_count - 1);
     }
     else {
         buffer_window.line = clamp(line - 1, 0, buffer.line_count - 1);
     }
+
+    record_jump(buffer_window);
     adjust_start_line(buffer_window);
 }
 
