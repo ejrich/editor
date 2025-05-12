@@ -283,12 +283,12 @@ open_file_buffer(string path) {
 
     switch current_window {
         case SelectedWindow.Left; {
-            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
             record_jump(left_window.buffer_window);
+            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
         }
         case SelectedWindow.Right; {
-            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
             record_jump(right_window.buffer_window);
+            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
         }
     }
 }
@@ -347,6 +347,8 @@ swap_top_buffer() {
         case SelectedWindow.Right;
             editor_window = &right_window;
     }
+
+    record_jump(editor_window.buffer_window);
 
     if editor_window.buffer_window != null && editor_window.buffer_window.next != null {
         swap_from := editor_window.buffer_window;
@@ -1778,7 +1780,6 @@ go_to_line(s32 line) {
         buffer_window.line = clamp(line - 1, 0, buffer.line_count - 1);
     }
 
-    record_jump(buffer_window);
     adjust_start_line(buffer_window);
 }
 
@@ -2170,6 +2171,8 @@ move_block(bool forward, bool paragraph) {
         return;
     }
 
+    record_jump(buffer_window);
+
     if paragraph {
         if line.length == 0 {
             if forward {
@@ -2418,6 +2421,7 @@ find_value_in_buffer(string value, bool next) {
     }
 
     if found {
+        record_jump(buffer_window);
         buffer_window.line = line_number;
         buffer_window.cursor = cursor;
         adjust_start_line(buffer_window);

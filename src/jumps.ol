@@ -7,6 +7,8 @@
 // - Next/previous syntactical char (Need to implement this)
 
 record_jump(BufferWindow* buffer_window) {
+    if buffer_window == null return;
+
     current_jump_pointer := get_jump_pointer();
 
     current_jump := *current_jump_pointer;
