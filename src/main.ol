@@ -1,5 +1,6 @@
 #import atomic
 #import "buffers.ol"
+#import "changes.ol"
 #import "clipboard.ol"
 #import "control.ol"
 #import "commands.ol"

@@ -42,3 +42,5 @@ find=N
 swap_buffer=Control+Six
 jump_back=Control+O
 jump_forward=Control+I
+undo=U
+redo=Control+R

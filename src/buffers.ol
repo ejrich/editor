@@ -2980,6 +2980,7 @@ struct FileBuffer {
     line_count: u32;
     line_count_digits: u32;
     lines: BufferLine*;
+    change: Change*;
 }
 
 line_buffer_length := 500; #const
@@ -3031,6 +3032,16 @@ BufferWindow* get_current_window() {
 
     return editor_window.buffer_window;
 }
+
+BufferWindow*, FileBuffer* get_current_window_and_buffer() {
+    buffer_window := get_current_window();
+    if buffer_window == null || buffer_window.buffer_index < 0 {
+        return null, null;
+    }
+
+    return buffer_window, &buffers[buffer_window.buffer_index];
+}
+
 
 u32, u32 get_current_position() {
     buffer_window, buffer := get_current_window_and_buffer();
@@ -3182,15 +3193,6 @@ BufferWindow* copy_buffer_window_stack(BufferWindow* source) {
     }
 
     return stack_top;
-}
-
-BufferWindow*, FileBuffer* get_current_window_and_buffer() {
-    buffer_window := get_current_window();
-    if buffer_window == null || buffer_window.buffer_index < 0 {
-        return null, null;
-    }
-
-    return buffer_window, &buffers[buffer_window.buffer_index];
 }
 
 BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {

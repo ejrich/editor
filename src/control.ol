@@ -665,3 +665,15 @@ jump_forward(ModCode mod) {
     jumps := get_repeats();
     go_to_jump(true, jumps);
 }
+
+[keybind, no_repeat]
+undo(ModCode mod) {
+    changes := get_repeats();
+    apply_changes(false, changes);
+}
+
+[keybind, no_repeat]
+redo(ModCode mod) {
+    changes := get_repeats();
+    apply_changes(true, changes);
+}
