@@ -32,6 +32,7 @@ begin_sentence=OpenParen
 end_sentence=CloseParen
 begin_paragraph=OpenBrace
 end_paragraph=CloseBrace
+syntax_match=Percent
 screen_half_up=Control+U
 screen_half_down=Control+D
 go_to=G

@@ -2247,6 +2247,156 @@ move_block(bool forward, bool paragraph) {
     adjust_start_line(buffer_window);
 }
 
+move_to_syntax_match() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line_number := clamp(buffer_window.line, 0, buffer.line_count - 1);
+    line := get_buffer_line(buffer, line_number);
+
+    if line.length == 0 return;
+
+    cursor := clamp(buffer_window.cursor, 0, line.length - 1);
+
+    match_char, complement_char: u8;
+    forward: bool;
+    while cursor < line.length {
+        complement_char = line.data[cursor];
+        switch complement_char {
+            case '('; {
+                match_char = ')';
+                forward = true;
+                break;
+            }
+            case ')'; {
+                match_char = '(';
+                forward = false;
+                break;
+            }
+            case '['; {
+                match_char = ']';
+                forward = true;
+                break;
+            }
+            case ']'; {
+                match_char = '[';
+                forward = false;
+                break;
+            }
+            case '{'; {
+                match_char = '}';
+                forward = true;
+                break;
+            }
+            case '}'; {
+                match_char = '{';
+                forward = false;
+                break;
+            }
+        }
+
+        cursor++;
+    }
+
+    if match_char == 0 return;
+
+    found := false;
+    nestings := 0;
+    is_string := false;
+    if forward {
+        cursor++;
+        while line {
+            if line.length {
+                each i in cursor..line.length - 1 {
+                    char := line.data[i];
+                    if char == '"' {
+                        if i == 0 || line.data[i - 1] != '\\' {
+                            is_string = !is_string;
+                        }
+                    }
+                    else if !is_string {
+                        if char == complement_char {
+                            nestings++;
+                        }
+                        else if char == match_char {
+                            if nestings > 0 {
+                                nestings--;
+                            }
+                            else {
+                                cursor = i;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if found break;
+
+            line = line.next;
+            line_number++;
+            cursor = 0;
+        }
+    }
+    else {
+        if cursor == 0 {
+            line = line.previous;
+            line_number--;
+
+            if line {
+                cursor = line.length;
+            }
+        }
+
+        while line {
+            if line.length {
+                each i in cursor {
+                    char := line.data[cursor - i - 1];
+                    if char == '"' {
+                        if i == cursor - 1 || line.data[cursor - i - 2] != '\\' {
+                            is_string = !is_string;
+                        }
+                    }
+                    else if !is_string {
+                        if char == complement_char {
+                            nestings++;
+                        }
+                        else if char == match_char {
+                            if nestings > 0 {
+                                nestings--;
+                            }
+                            else {
+                                cursor -= i + 1;
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if found break;
+
+            line = line.previous;
+            line_number--;
+
+            if line {
+                cursor = line.length;
+            }
+        }
+    }
+
+    if found {
+        record_jump(buffer_window);
+        buffer_window.line = line_number;
+        buffer_window.cursor = cursor;
+        adjust_start_line(buffer_window);
+    }
+}
+
 find_character_in_line(bool forward, bool before, string char) {
     if char.length != 1 return;
 

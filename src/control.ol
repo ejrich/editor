@@ -589,6 +589,11 @@ end_paragraph(ModCode mod) {
 }
 
 [keybind, no_repeat]
+syntax_match(ModCode mod) {
+    move_to_syntax_match();
+}
+
+[keybind, no_repeat]
 screen_half_up(ModCode mod) {
     half_screen := global_font_config.max_lines / 2;
     move_line(true, true, half_screen);
