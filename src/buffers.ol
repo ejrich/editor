@@ -2881,7 +2881,7 @@ change_selected_line_commenting() {
     }
 
     starting_line := get_buffer_line(buffer, start_line);
-    comment_string := "//";
+    comment_string := get_comment_string(buffer.relative_path);
 
     // Determine whether to comment or uncomment the lines
     all_lines_commented := true;
@@ -2942,10 +2942,10 @@ change_selected_line_commenting() {
     else {
         line := starting_line;
         line_number := start_line;
-        comment_string_to_add := "// ";
         while line != null && line_number <= end_line {
             if comment_cursor < line.length {
-                add_text_to_line(line, comment_string_to_add, comment_cursor);
+                add_text_to_line(line, comment_string, comment_cursor);
+                add_text_to_line(line, " ", comment_cursor + comment_string.length);
             }
 
             line = line.next;
@@ -2955,6 +2955,24 @@ change_selected_line_commenting() {
 
     edit_mode = EditMode.Normal;
 }
+
+string get_comment_string(string path) {
+    extension: string;
+    each i in path.length {
+         if path[i] == '.' {
+             extension = {
+                 length = path.length - i - 1;
+                 data = path.data + i + 1;
+             }
+         }
+         else if path[i] == '/' {
+             extension.length = 0;
+         }
+    }
+
+    return "//";
+}
+
 
 // Data structures
 struct FileBuffer {
