@@ -84,6 +84,14 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
             find_character_in_line(!key_command.shifted, true, char);
             result = true;
         }
+        case KeyCommand.GoTo; {
+            switch code {
+                case KeyCode.C; {
+                    change_selected_line_commenting();
+                    result = true;
+                }
+            }
+        }
         case KeyCommand.Replace; {
             replace_characters(char[0]);
             edit_mode = EditMode.Normal;

@@ -2860,6 +2860,101 @@ replace_value_in_buffer() {
     }
 }
 
+// Code specific functions
+change_selected_line_commenting() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    start_line, end_line: u32;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+            end_line = buffer_window.line;
+        }
+        case EditMode.Visual;
+        case EditMode.VisualLine;
+        case EditMode.VisualBlock; {
+            start_line, end_line = get_visual_start_and_end_lines(buffer_window);
+        }
+    }
+
+    starting_line := get_buffer_line(buffer, start_line);
+    comment_string := "//";
+
+    // Determine whether to comment or uncomment the lines
+    all_lines_commented := true;
+    comment_cursor: u32 = 0xFFFFFFF;
+    {
+        line := starting_line;
+        line_number := start_line;
+        while line != null && line_number <= end_line {
+            each i in line.length {
+                if line.data[i] != ' ' {
+                    has_comment := true;
+                    if comment_string.length <= line.length - i {
+                        each j in comment_string.length {
+                            if line.data[i + j] != comment_string[j] {
+                                has_comment = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if i < comment_cursor {
+                        comment_cursor = i;
+                    }
+
+                    if !has_comment {
+                        all_lines_commented = false;
+                    }
+
+                    break;
+                }
+            }
+
+            line = line.next;
+            line_number++;
+        }
+    }
+
+    if all_lines_commented {
+        line := starting_line;
+        line_number := start_line;
+        while line != null && line_number <= end_line {
+            each i in line.length {
+                if line.data[i] != ' ' {
+                    delete_length := comment_string.length;
+                    if i + delete_length < line.length && line.data[i + delete_length] == ' ' {
+                        delete_length++;
+                    }
+
+                    delete_from_line(line, i, i + delete_length, false);
+                    break;
+                }
+            }
+
+            line = line.next;
+            line_number++;
+        }
+    }
+    else {
+        line := starting_line;
+        line_number := start_line;
+        comment_string_to_add := "// ";
+        while line != null && line_number <= end_line {
+            if comment_cursor < line.length {
+                add_text_to_line(line, comment_string_to_add, comment_cursor);
+            }
+
+            line = line.next;
+            line_number++;
+        }
+    }
+
+    edit_mode = EditMode.Normal;
+}
 
 // Data structures
 struct FileBuffer {
