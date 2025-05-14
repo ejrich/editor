@@ -229,6 +229,7 @@ search(ModCode mod) {
 
 [keybind, no_repeat]
 normal_mode(ModCode mod) {
+    record_change(pending_changes);
     edit_mode = EditMode.Normal;
 }
 

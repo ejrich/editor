@@ -1023,6 +1023,8 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
     else {
         buffer_window.cursor = clamp(cast(s32, buffer_window.cursor) + change, 0, line.length - 1);
     }
+
+    pending_changes = create_change(line, buffer_window.line, buffer_window.cursor);
 }
 
 add_text_to_line(string text) {
