@@ -53,20 +53,16 @@ go_to_jump(bool forward, u32 jumps) {
 
     each i in jumps - 1 {
         if forward {
-            if current_jump.next {
-                current_jump = current_jump.next;
-            }
-            else {
+            if current_jump.next == null
                 break;
-            }
+
+            current_jump = current_jump.next;
         }
         else {
-            if current_jump.previous {
-                current_jump = current_jump.previous;
-            }
-            else {
+            if current_jump.previous == null
                 break;
-            }
+
+            current_jump = current_jump.previous;
         }
     }
 

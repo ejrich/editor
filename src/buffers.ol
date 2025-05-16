@@ -277,6 +277,8 @@ open_file_buffer(string path) {
             calculate_line_digits(&buffer);
         }
 
+        buffer.current_change = &test_change;
+
         array_insert(&buffers, buffer, allocate, reallocate);
         buffer_index = buffers.length - 1;
     }
@@ -2666,40 +2668,14 @@ bool begin_replace_value_in_buffer(string value, string new_value) {
 }
 
 bool find_next_value_in_buffer(bool move_cursor = true) {
-    lines := 1;
-    each i in find_and_replace_data.value.length {
-        if find_and_replace_data.value[i] == '\n' {
-            lines++;
-        }
-    }
+    value_lines := split_string(find_and_replace_data.value);
 
-    if lines > 1 && find_and_replace_data.block return false;
-
-    value_lines: Array<string>[lines];
-    if lines == 1 {
-        value_lines[0] = find_and_replace_data.value;
-    }
-    else {
-        index := 0;
-        str: string = { data = find_and_replace_data.value.data; }
-        each i in find_and_replace_data.value.length {
-            if find_and_replace_data.value[i] == '\n' {
-                value_lines[index++] = str;
-                str = { length = 0; data = find_and_replace_data.value.data + i + 1; }
-            }
-            else {
-                str.length++;
-            }
-        }
-        value_lines[index++] = str;
-    }
-
-    while find_and_replace_data.line != null && find_and_replace_data.line_number + lines - 1 <= find_and_replace_data.end_line {
+    while find_and_replace_data.line != null && find_and_replace_data.line_number + value_lines.length - 1 <= find_and_replace_data.end_line {
         // Only check if there are enough characters in the line to match the string
         while find_and_replace_data.index + value_lines[0].length <= find_and_replace_data.end_index {
             if find_and_replace_data.line.data.data[find_and_replace_data.cursor] == find_and_replace_data.value[0] {
                 matched := true;
-                if lines == 1 {
+                if value_lines.length == 1 {
                     each i in 1..find_and_replace_data.value.length - 1 {
                         if find_and_replace_data.line.data.data[find_and_replace_data.cursor + i] != find_and_replace_data.value[i] {
                             matched = false;
@@ -2711,7 +2687,7 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
                     current_line := find_and_replace_data.line;
                     cursor := find_and_replace_data.cursor;
                     each line, i in value_lines {
-                        if i < lines - 1 {
+                        if i < value_lines.length - 1 {
                             if current_line.length - cursor == line.length {
                                 each j in line.length {
                                     if current_line.data.data[cursor + j] != line[j] {
@@ -2982,7 +2958,8 @@ struct FileBuffer {
     line_count: u32;
     line_count_digits: u32;
     lines: BufferLine*;
-    change: Change*;
+    current_change: Change*;
+    change_list: Change*;
 }
 
 line_buffer_length := 500; #const
@@ -3044,6 +3021,22 @@ BufferWindow*, FileBuffer* get_current_window_and_buffer() {
     return buffer_window, &buffers[buffer_window.buffer_index];
 }
 
+BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {
+    line_number: u32;
+    target_line = clamp(target_line, 0, buffer.line_count - 1);
+    line := buffer.lines;
+
+    while line != null {
+        if line_number == target_line {
+            break;
+        }
+
+        line_number++;
+        line = line.next;
+    }
+
+    return line;
+}
 
 u32, u32 get_current_position() {
     buffer_window, buffer := get_current_window_and_buffer();
@@ -3195,23 +3188,6 @@ BufferWindow* copy_buffer_window_stack(BufferWindow* source) {
     }
 
     return stack_top;
-}
-
-BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {
-    line_number: u32;
-    target_line = clamp(target_line, 0, buffer.line_count - 1);
-    line := buffer.lines;
-
-    while line != null {
-        if line_number == target_line {
-            break;
-        }
-
-        line_number++;
-        line = line.next;
-    }
-
-    return line;
 }
 
 BufferLine* move_to_next_non_whitespace(BufferWindow* window, BufferLine* line, u32 cursor) {

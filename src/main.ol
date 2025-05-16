@@ -191,6 +191,36 @@ string get_program_directory() {
     return program_directory;
 }
 
+Array<string> split_string(string value) #inline {
+    lines := 1;
+    each i in value.length {
+        if value[i] == '\n' {
+            lines++;
+        }
+    }
+
+    value_lines: Array<string>[lines];
+    if lines == 1 {
+        value_lines[0] = value;
+    }
+    else {
+        index := 0;
+        str: string = { data = value.data; }
+        each i in value.length {
+            if value[i] == '\n' {
+                value_lines[index++] = str;
+                str = { length = 0; data = value.data + i + 1; }
+            }
+            else {
+                str.length++;
+            }
+        }
+        value_lines[index++] = str;
+    }
+
+    return value_lines;
+}
+
 #private
 
 running := true;

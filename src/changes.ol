@@ -28,24 +28,62 @@ apply_changes(bool forward, u32 changes) {
         return;
     }
 
-    // TODO Implement
-    if buffer.change == null return;
+    // TODO Determine which current change to use
+    if buffer.change_list == null return;
 
+    line, cursor: u32;
     if forward {
         each i in changes {
-            if buffer.change.next == null
+            if buffer.current_change.next == null
                 break;
-            buffer.change = buffer.change.next;
+            buffer.current_change = buffer.current_change.next;
 
+            apply_change(buffer, buffer.current_change.old, buffer.current_change.new);
+            line = buffer.current_change.new.cursor_line;
+            cursor = buffer.current_change.new.cursor;
         }
     }
     else {
         each i in changes {
-            buffer.change = buffer.change.next;
+            apply_change(buffer, buffer.current_change.new, buffer.current_change.old);
+            line = buffer.current_change.old.cursor_line;
+            cursor = buffer.current_change.old.cursor;
 
-            if buffer.change.previous == null
+            if buffer.current_change.previous == null
                 break;
-            buffer.change = buffer.change.previous;
+            buffer.current_change = buffer.current_change.previous;
+        }
+    }
+
+    set_current_location(buffer_window.buffer_index, line, cursor);
+}
+
+apply_change(FileBuffer* buffer, ChangeValue change_from, ChangeValue change_to) {
+    value_lines := split_string(change_to.value);
+
+    if change_from.start_line < 0 {
+        // TODO Implement
+    }
+    else if change_to.start_line < 0 {
+        // TODO Implement
+    }
+    else {
+        if change_from.start_line == change_to.start_line {
+            if change_from.end_line == change_to.end_line {
+                line := get_buffer_line(buffer, change_to.start_line);
+                each i in change_to.end_line - change_to.end_line + 1 {
+                    value_line := value_lines[i];
+                    line.length = value_line.length;
+                    if value_line.length {
+                        memory_copy(line.data.data, value_line.data, value_line.length);
+                    }
+
+                    line = line.next;
+                }
+            }
+            else {
+                // TODO Implement
+            }
         }
     }
 }
@@ -59,14 +97,31 @@ struct Change {
 }
 
 struct ChangeValue {
-    start_line: u32;
-    end_line: u32;
+    start_line: s32;
+    end_line: s32;
     cursor: u32;
     cursor_line: u32;
     value: string;
 }
 
 pending_changes: Change*;
+
+test_change: Change = {
+    old = {
+        start_line = 0;
+        end_line = 0;
+        cursor = 3;
+        cursor_line = 0;
+        value = "Hello world";
+    }
+    new = {
+        start_line = 0;
+        end_line = 0;
+        cursor = 6;
+        cursor_line = 0;
+        value = "Hello world 123456789";
+    }
+}
 
 /*
 hello world => '' - 'hello world'
