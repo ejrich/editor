@@ -44,3 +44,5 @@ jump_back=Control+O
 jump_forward=Control+I
 undo=U
 redo=Control+R
+uppercase=Shift+U
+lowercase=Shift+L

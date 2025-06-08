@@ -2838,7 +2838,7 @@ replace_value_in_buffer() {
     }
 }
 
-// Code specific functions
+// Formatting specific functions
 change_selected_line_commenting() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
@@ -2949,6 +2949,86 @@ string get_comment_string(string path) {
     }
 
     return "//";
+}
+
+toggle_casing(bool upper) {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    start_line, end_line, start_cursor, end_cursor: u32;
+    block := false;
+    switch edit_mode {
+        case EditMode.Normal; {
+            start_line = buffer_window.line;
+            end_line = buffer_window.line;
+            start_cursor = buffer_window.cursor;
+            end_cursor = buffer_window.cursor;
+        }
+        case EditMode.Visual; {
+            if buffer_window.line == visual_mode_data.line {
+                start_line = buffer_window.line;
+                end_line = buffer_window.line;
+                if buffer_window.cursor > visual_mode_data.cursor {
+                    start_cursor = visual_mode_data.cursor;
+                    end_cursor = buffer_window.cursor;
+                }
+                else {
+                    start_cursor = buffer_window.cursor;
+                    end_cursor = visual_mode_data.cursor;
+                }
+            }
+            else if buffer_window.line > visual_mode_data.line {
+                start_line = visual_mode_data.line;
+                end_line = buffer_window.line;
+                start_cursor = visual_mode_data.cursor;
+                end_cursor = buffer_window.cursor;
+            }
+            else {
+                start_line = buffer_window.line;
+                end_line = visual_mode_data.line;
+                start_cursor = buffer_window.cursor;
+                end_cursor = visual_mode_data.cursor;
+            }
+        }
+        case EditMode.VisualLine; {
+            start_line, end_line = get_visual_start_and_end_lines(buffer_window);
+            start_cursor = 0;
+            end_cursor = 0xFFFFFFF;
+        }
+        case EditMode.VisualBlock; {
+            start_line, end_line = get_visual_start_and_end_lines(buffer_window);
+            start_cursor, end_cursor = get_visual_start_and_end_cursors(buffer_window);
+            block = true;
+        }
+    }
+
+    line_number := start_line;
+    cursor := start_cursor;
+    line := get_buffer_line(buffer, line_number);
+    while line != null && line_number <= end_line {
+        while cursor < line.length && ((!block && line_number != end_line) || cursor <= end_cursor) {
+            char := line.data[cursor];
+            if upper {
+                if char >= 'a' && char <= 'z' {
+                    line.data[cursor] = char - 0x20;
+                }
+            }
+            else if char >= 'A' && char <= 'Z' {
+                line.data[cursor] = char + 0x20;
+            }
+
+            cursor++;
+        }
+
+        line = line.next;
+        line_number++;
+        cursor = 0;
+        if block {
+            cursor = start_cursor;
+        }
+    }
 }
 
 

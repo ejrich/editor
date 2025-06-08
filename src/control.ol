@@ -678,3 +678,13 @@ redo(ModCode mod) {
     changes := get_repeats();
     apply_changes(true, changes);
 }
+
+[keybind, no_repeat]
+uppercase(ModCode mod) {
+    toggle_casing(true);
+}
+
+[keybind, no_repeat]
+lowercase(ModCode mod) {
+    toggle_casing(false);
+}
