@@ -28,30 +28,35 @@ apply_changes(bool forward, u32 changes) {
         return;
     }
 
-    // TODO Determine which current change to use
-    if buffer.change_list == null return;
-
     line, cursor: u32;
     if forward {
-        each i in changes {
-            if buffer.current_change.next == null
-                break;
-            buffer.current_change = buffer.current_change.next;
+        if buffer.next_change == null return;
 
-            apply_change(buffer, buffer.current_change.old, buffer.current_change.new);
-            line = buffer.current_change.new.cursor_line;
-            cursor = buffer.current_change.new.cursor;
+        each i in changes {
+            if buffer.next_change == null
+                break;
+
+            apply_change(buffer, buffer.next_change.old, buffer.next_change.new);
+            line = buffer.next_change.new.cursor_line;
+            cursor = buffer.next_change.new.cursor;
+
+            buffer.last_change = buffer.next_change;
+            buffer.next_change = buffer.next_change.next;
         }
     }
     else {
-        each i in changes {
-            apply_change(buffer, buffer.current_change.new, buffer.current_change.old);
-            line = buffer.current_change.old.cursor_line;
-            cursor = buffer.current_change.old.cursor;
+        if buffer.last_change == null return;
 
-            if buffer.current_change.previous == null
+        each i in changes {
+            if buffer.last_change == null
                 break;
-            buffer.current_change = buffer.current_change.previous;
+
+            apply_change(buffer, buffer.last_change.new, buffer.last_change.old);
+            line = buffer.last_change.old.cursor_line;
+            cursor = buffer.last_change.old.cursor;
+
+            buffer.next_change = buffer.last_change;
+            buffer.last_change = buffer.last_change.previous;
         }
     }
 
@@ -124,6 +129,21 @@ test_change: Change = {
 }
 
 /*
+- Change list
+When opening the buffers, there are initially no changes.
+When trying to undo/redo in this state, nothing happens.
+
+The changes are a linked list, and branches can be trimmed when the tree diverts.
+
+After a change has been made, the last change is recorded to the buffer.
+If this change is undone, the changes are applied to the file, and the last change is cleared, the next change is then set to the last change.
+
+When redoing, the next change is applied and this is set to the last change.
+
+Undoing is disabled when the last change is null, and redoing is disabled when the next change is null
+
+
+- Example
 hello world => '' - 'hello world'
 {
     insert_new_lines: false;

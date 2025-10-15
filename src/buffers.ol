@@ -277,7 +277,8 @@ open_file_buffer(string path) {
             calculate_line_digits(&buffer);
         }
 
-        buffer.current_change = &test_change;
+        // TODO Remove this when changes are implemented
+        buffer.last_change = &test_change;
 
         array_insert(&buffers, buffer, allocate, reallocate);
         buffer_index = buffers.length - 1;
@@ -3038,8 +3039,8 @@ struct FileBuffer {
     line_count: u32;
     line_count_digits: u32;
     lines: BufferLine*;
-    current_change: Change*;
-    change_list: Change*;
+    last_change: Change*;
+    next_change: Change*;
 }
 
 line_buffer_length := 500; #const
