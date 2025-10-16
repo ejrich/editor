@@ -3203,6 +3203,15 @@ adjust_start_line(BufferWindow* window) {
     }
 }
 
+calculate_line_digits(FileBuffer* buffer) {
+    digit_count: u32 = 1;
+    value := 10;
+    while value < buffer.line_count {
+        value *= 10;
+        digit_count++;
+    }
+    buffer.line_count_digits = digit_count;
+}
 
 #private
 
@@ -3344,16 +3353,6 @@ BufferLine* get_next_line_with_text(BufferLine* line) {
     }
 
     return line;
-}
-
-calculate_line_digits(FileBuffer* buffer) {
-    digit_count: u32 = 1;
-    value := 10;
-    while value < buffer.line_count {
-        value *= 10;
-        digit_count++;
-    }
-    buffer.line_count_digits = digit_count;
 }
 
 // Functions for merging/deleting lines

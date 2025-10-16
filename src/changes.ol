@@ -36,7 +36,7 @@ apply_changes(bool forward, u32 changes) {
             if buffer.next_change == null
                 break;
 
-            apply_change(buffer, buffer.next_change.old, buffer.next_change.new);
+            apply_change(buffer_window, buffer, buffer.next_change.old, buffer.next_change.new);
             line = buffer.next_change.new.cursor_line;
             cursor = buffer.next_change.new.cursor;
 
@@ -51,7 +51,7 @@ apply_changes(bool forward, u32 changes) {
             if buffer.last_change == null
                 break;
 
-            apply_change(buffer, buffer.last_change.new, buffer.last_change.old);
+            apply_change(buffer_window, buffer, buffer.last_change.new, buffer.last_change.old);
             line = buffer.last_change.old.cursor_line;
             cursor = buffer.last_change.old.cursor;
 
@@ -63,20 +63,50 @@ apply_changes(bool forward, u32 changes) {
     set_current_location(buffer_window.buffer_index, line, cursor);
 }
 
-apply_change(FileBuffer* buffer, ChangeValue change_from, ChangeValue change_to) {
+apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change_from, ChangeValue change_to) {
     value_lines := split_string(change_to.value);
 
     if change_from.start_line < 0 {
-        // TODO Implement
+        // TODO Implement case when there were no lines before change
     }
     else if change_to.start_line < 0 {
-        // TODO Implement
+        // TODO Implement case when there are no lines after change
     }
     else {
         if change_from.start_line == change_to.start_line {
-            if change_from.end_line == change_to.end_line {
-                line := get_buffer_line(buffer, change_to.start_line);
-                each i in change_to.end_line - change_to.end_line + 1 {
+            line := get_buffer_line(buffer, change_to.start_line);
+
+            if change_from.end_line <= change_to.end_line {
+                // Modify existing lines
+                line_index := 0;
+                each i in change_from.end_line - change_from.start_line + 1 {
+                    value_line := value_lines[line_index++];
+                    line.length = value_line.length;
+                    if value_line.length {
+                        memory_copy(line.data.data, value_line.data, value_line.length);
+                    }
+
+                    line = line.next;
+                }
+
+                // Insert additional lines if necessary
+                if change_from.end_line < change_to.end_line {
+                    line = line.previous;
+                    each i in change_to.end_line - change_from.end_line {
+                        line = add_new_line(buffer_window, buffer, line, false, false);
+                        value_line := value_lines[line_index++];
+                        line.length = value_line.length;
+                        if value_line.length {
+                            memory_copy(line.data.data, value_line.data, value_line.length);
+                        }
+                    }
+
+                    calculate_line_digits(buffer);
+                    adjust_start_line(buffer_window);
+                }
+            }
+            else {
+                each i in change_to.end_line - change_to.start_line + 1 {
                     value_line := value_lines[i];
                     line.length = value_line.length;
                     if value_line.length {
@@ -85,9 +115,24 @@ apply_change(FileBuffer* buffer, ChangeValue change_from, ChangeValue change_to)
 
                     line = line.next;
                 }
-            }
-            else {
-                // TODO Implement
+
+                line = line.previous;
+                last_line := line;
+                new_next := line.next;
+                each i in change_from.end_line - change_to.end_line {
+                    next := new_next.next;
+                    free_line(new_next);
+                    new_next = next;
+                    buffer.line_count--;
+                }
+
+                last_line.next = new_next;
+                if new_next {
+                    new_next.previous = last_line;
+                }
+
+                calculate_line_digits(buffer);
+                adjust_start_line(buffer_window);
             }
         }
     }
@@ -121,10 +166,10 @@ test_change: Change = {
     }
     new = {
         start_line = 0;
-        end_line = 0;
+        end_line = 2;
         cursor = 6;
         cursor_line = 0;
-        value = "Hello world 123456789";
+        value = "Hello world 123456789\nThis is a test\nTest";
     }
 }
 
