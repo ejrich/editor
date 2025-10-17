@@ -1249,7 +1249,6 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
     }
 }
 
-
 delete_selected(bool copy = true) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {

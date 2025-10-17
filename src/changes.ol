@@ -67,10 +67,14 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
     value_lines := split_string(change_to.value);
 
     if change_from.start_line < 0 {
-        // TODO Implement case when there were no lines before change
+        line := get_buffer_line(buffer, change_to.start_line);
+        line = add_new_line(buffer_window, buffer, line, true, false);
+
+        paste_lines(buffer_window, buffer, line, value_lines);
     }
     else if change_to.start_line < 0 {
-        // TODO Implement case when there are no lines after change
+        line := get_buffer_line(buffer, change_from.start_line);
+        delete_lines_in_range(buffer, line, change_from.end_line - change_from.start_line, true);
     }
     else {
         if change_from.start_line == change_to.start_line {
@@ -79,40 +83,43 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
             if change_from.end_line <= change_to.end_line {
                 // Modify existing lines
                 line_index := 0;
-                each i in change_from.end_line - change_from.start_line + 1 {
-                    value_line := value_lines[line_index++];
-                    add_text_to_line(line, value_line, clear = true);
-
-                    line = line.next;
-                }
+                overwrite_count := change_from.end_line - change_from.start_line + 1;
+                line = overwrite_lines(line, overwrite_count, value_lines);
 
                 // Insert additional lines if necessary
                 if change_from.end_line < change_to.end_line {
                     line = line.previous;
                     each i in change_to.end_line - change_from.end_line {
                         line = add_new_line(buffer_window, buffer, line, false, false);
-                        value_line := value_lines[line_index++];
+                        value_line := value_lines[i + overwrite_count];
                         add_text_to_line(line, value_line);
                     }
-
                 }
             }
             else {
-                each i in change_to.end_line - change_to.start_line + 1 {
-                    value_line := value_lines[i];
-                    add_text_to_line(line, value_line, clear = true);
-
-                    line = line.next;
-                }
+                line = overwrite_lines(line, change_to.end_line - change_to.start_line + 1, value_lines);
 
                 line = line.previous;
                 delete_lines_in_range(buffer, line, change_from.end_line - change_to.end_line);
            }
         }
+
+        // TODO What other cases need to be handled here?
     }
 
     calculate_line_digits(buffer);
     adjust_start_line(buffer_window);
+}
+
+BufferLine* overwrite_lines(BufferLine* line, u32 count, Array<string> value_lines) {
+    each i in count {
+        value_line := value_lines[i];
+        add_text_to_line(line, value_line, clear = true);
+
+        line = line.next;
+    }
+
+    return line;
 }
 
 struct Change {
@@ -184,4 +191,14 @@ undo:
 undo:
     - insert_new_lines == false, so change line 100 only
     - Set the line to 'hello world'
+
+
+- Tracking line deletions
+When deleting the line, first store the lines that were deleted and the start/end line
+
+Set the new change start line to -1 to show that there should be no changes
+
+When applying the changes:
+- If the change from is -1, then just insert the new lines in the change to
+- If the change to is -1, then just delete the lines that in the change from
 */
