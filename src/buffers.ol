@@ -1040,7 +1040,11 @@ add_text_to_line(string text) {
     buffer_window.cursor = add_text_to_line(line, text, buffer_window.cursor);
 }
 
-u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = false) {
+u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = false, bool clear = false) {
+    if clear {
+        line.length = 0;
+    }
+
     if fill && cursor > line.length {
         each i in cursor - line.length {
             line.data[line.length++] = ' ';
@@ -1212,6 +1216,39 @@ delete_lines(u32 line_1, u32 line_2, bool delete_all) {
 
     delete_lines(buffer_window, buffer, start_line, end_line, delete_all);
 }
+
+delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool delete_all = false) {
+    start := line;
+    new_next := line.next;
+
+    each i in count {
+        next := new_next.next;
+        free_line(new_next);
+        new_next = next;
+        buffer.line_count--;
+    }
+
+    if delete_all {
+        if start.previous == null {
+            buffer.lines = new_next;
+            new_next.previous = null;
+        }
+        else {
+            start.previous.next = new_next;
+            new_next.previous = start.previous;
+        }
+
+        free_line(start);
+        buffer.line_count--;
+    }
+    else {
+        start.next = new_next;
+        if new_next {
+            new_next.previous = start;
+        }
+    }
+}
+
 
 delete_selected(bool copy = true) {
     buffer_window, buffer := get_current_window_and_buffer();
@@ -3451,37 +3488,7 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
             buffer_window.cursor = 0;
         }
 
-        start := line;
-        new_next := line.next;
-        start_line++;
-
-        while start_line <= end_line {
-            next := new_next.next;
-            free_line(new_next);
-            new_next = next;
-            start_line++;
-            buffer.line_count--;
-        }
-
-        if delete_all {
-            if start.previous == null {
-                buffer.lines = new_next;
-                new_next.previous = null;
-            }
-            else {
-                start.previous.next = new_next;
-                new_next.previous = start.previous;
-            }
-
-            free_line(start);
-            buffer.line_count--;
-        }
-        else {
-            start.next = new_next;
-            if new_next {
-                new_next.previous = start;
-            }
-        }
+        delete_lines_in_range(buffer, line, end_line - start_line, delete_all);
 
         calculate_line_digits(buffer);
         adjust_start_line(buffer_window);

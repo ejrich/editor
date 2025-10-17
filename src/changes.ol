@@ -81,10 +81,7 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
                 line_index := 0;
                 each i in change_from.end_line - change_from.start_line + 1 {
                     value_line := value_lines[line_index++];
-                    line.length = value_line.length;
-                    if value_line.length {
-                        memory_copy(line.data.data, value_line.data, value_line.length);
-                    }
+                    add_text_to_line(line, value_line, clear = true);
 
                     line = line.next;
                 }
@@ -95,47 +92,27 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
                     each i in change_to.end_line - change_from.end_line {
                         line = add_new_line(buffer_window, buffer, line, false, false);
                         value_line := value_lines[line_index++];
-                        line.length = value_line.length;
-                        if value_line.length {
-                            memory_copy(line.data.data, value_line.data, value_line.length);
-                        }
+                        add_text_to_line(line, value_line);
                     }
 
-                    calculate_line_digits(buffer);
-                    adjust_start_line(buffer_window);
                 }
             }
             else {
                 each i in change_to.end_line - change_to.start_line + 1 {
                     value_line := value_lines[i];
-                    line.length = value_line.length;
-                    if value_line.length {
-                        memory_copy(line.data.data, value_line.data, value_line.length);
-                    }
+                    add_text_to_line(line, value_line, clear = true);
 
                     line = line.next;
                 }
 
                 line = line.previous;
-                last_line := line;
-                new_next := line.next;
-                each i in change_from.end_line - change_to.end_line {
-                    next := new_next.next;
-                    free_line(new_next);
-                    new_next = next;
-                    buffer.line_count--;
-                }
-
-                last_line.next = new_next;
-                if new_next {
-                    new_next.previous = last_line;
-                }
-
-                calculate_line_digits(buffer);
-                adjust_start_line(buffer_window);
-            }
+                delete_lines_in_range(buffer, line, change_from.end_line - change_to.end_line);
+           }
         }
     }
+
+    calculate_line_digits(buffer);
+    adjust_start_line(buffer_window);
 }
 
 struct Change {
