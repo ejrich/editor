@@ -934,7 +934,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                     if !before start_cursor++;
                 }
 
-                buffer_window.cursor = add_text_to_line(line, clipboard_line, start_cursor);
+                buffer_window.cursor = add_text_to_line(line, clipboard_line, start_cursor) - 1;
             }
             else {
                 if line.length {
@@ -953,10 +953,18 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                         }
                     }
 
-                    buffer_window.cursor = add_text_to_line(end_line, clipboard_lines[clipboard_lines.length - 1]);
+                    end_line_value := clipboard_lines[clipboard_lines.length - 1];
+                    if end_line_value.length
+                        buffer_window.cursor = add_text_to_line(end_line, end_line_value) - 1;
+                    else
+                        buffer_window.cursor = 0;
                 }
                 else {
-                    paste_lines(buffer_window, buffer, line, clipboard_lines);
+                    last_line := paste_lines(buffer_window, buffer, line, clipboard_lines);
+                    if last_line.length
+                        buffer_window.cursor = last_line.length - 1;
+                    else
+                        buffer_window.cursor = 0;
                 }
 
                 adjust_start_line(buffer_window);
@@ -993,7 +1001,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
     adjust_start_line(buffer_window);
 }
 
-paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines) {
+BufferLine* paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines) {
     each clipboard_line, i in clipboard_lines {
         add_text_to_line(line, clipboard_line);
 
@@ -1001,6 +1009,8 @@ paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, A
             line = add_new_line(buffer_window, buffer, line, false, false);
         }
     }
+
+    return line;
 }
 
 // Insert mode functions

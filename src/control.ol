@@ -459,6 +459,7 @@ paste(ModCode mod) {
     reset_key_command();
     reset_post_movement_command();
 
+    // TODO Handle repeats
     if edit_mode == EditMode.Normal {
         paste_by_cursor((mod & ModCode.Shift) == ModCode.Shift);
     }
