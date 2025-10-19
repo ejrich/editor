@@ -845,17 +845,17 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
     save_string_to_clipboard(copy_string, ClipboardMode.Normal);
 }
 
-paste_by_cursor(bool before) {
+paste_by_cursor(bool before, u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
-    paste_clipboard(buffer_window, buffer, before, false);
+    paste_clipboard(buffer_window, buffer, before, false, paste_count);
 }
 
-paste_over_selected() {
+paste_over_selected(u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -865,7 +865,7 @@ paste_over_selected() {
         case EditMode.VisualLine; {
             start_line, end_line := get_visual_start_and_end_lines(buffer_window);
             delete_lines(buffer_window, buffer, start_line, end_line, false, false, false);
-            paste_clipboard(buffer_window, buffer, true, true);
+            paste_clipboard(buffer_window, buffer, true, true, paste_count);
         }
         case EditMode.Visual; {
             delete_selected(false);
@@ -874,7 +874,7 @@ paste_over_selected() {
                 add_new_line(buffer_window, buffer, line, false, true);
                 buffer_window.line--;
             }
-            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false);
+            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count);
         }
         case EditMode.VisualBlock; {
             if clipboard.mode == ClipboardMode.Normal && clipboard.value_lines == 1 {
@@ -885,7 +885,10 @@ paste_over_selected() {
                 while start_line <= end_line {
                     if start_cursor < line.length {
                         delete_from_line(line, start_cursor, end_cursor);
-                        add_text_to_line(line, clipboard.value, start_cursor);
+                        cursor := start_cursor;
+                        each i in paste_count {
+                            cursor = add_text_to_line(line, clipboard.value, cursor);
+                        }
                     }
                     line = line.next;
                     start_line++;
@@ -896,13 +899,13 @@ paste_over_selected() {
                 start_line, end_line := get_visual_start_and_end_lines(buffer_window);
                 buffer_window.line = start_line;
 
-                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false);
+                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count);
             }
         }
     }
 }
 
-paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines) {
+paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count) {
     line := get_buffer_line(buffer, buffer_window.line);
 
     clipboard_lines: Array<string>[clipboard.value_lines];
@@ -934,7 +937,10 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                     if !before start_cursor++;
                 }
 
-                buffer_window.cursor = add_text_to_line(line, clipboard_line, start_cursor) - 1;
+                each i in paste_count {
+                    start_cursor = add_text_to_line(line, clipboard_line, start_cursor);
+                }
+                buffer_window.cursor = start_cursor - 1;
             }
             else {
                 if line.length {
@@ -944,23 +950,18 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
 
                     end_line := add_new_line(buffer_window, buffer, line, false, true);
 
-                    each i in clipboard_lines.length - 1 {
-                        add_text_to_line(line, clipboard_lines[i], start_cursor);
-                        start_cursor = 0;
+                    last_line := paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count, start_cursor, true);
 
-                        if i < clipboard_lines.length - 2 {
-                            line = add_new_line(buffer_window, buffer, line, false, false);
-                        }
-                    }
-
-                    end_line_value := clipboard_lines[clipboard_lines.length - 1];
-                    if end_line_value.length
-                        buffer_window.cursor = add_text_to_line(end_line, end_line_value) - 1;
+                    if last_line.length
+                        buffer_window.cursor = last_line.length - 1;
                     else
                         buffer_window.cursor = 0;
+
+                    merge_lines(buffer, last_line, end_line, last_line.length, 0, false);
+                    buffer_window.line--;
                 }
                 else {
-                    last_line := paste_lines(buffer_window, buffer, line, clipboard_lines);
+                    last_line := paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count, wrap = true);
                     if last_line.length
                         buffer_window.cursor = last_line.length - 1;
                     else
@@ -974,17 +975,20 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
             if !over_lines {
                 line = add_new_line(buffer_window, buffer, line, before, false);
             }
-            paste_lines(buffer_window, buffer, line, clipboard_lines);
+            paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
         }
         case ClipboardMode.Block; {
             if over_lines {
-                paste_lines(buffer_window, buffer, line, clipboard_lines);
+                paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
             }
             else {
                 if !before buffer_window.cursor++;
 
                 each clipboard_line, i in clipboard_lines {
-                    add_text_to_line(line, clipboard_line, buffer_window.cursor, true);
+                    cursor := buffer_window.cursor;
+                    each paste in paste_count {
+                        cursor = add_text_to_line(line, clipboard_line, cursor, true);
+                    }
 
                     if line.next {
                         line = line.next;
@@ -1001,12 +1005,24 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
     adjust_start_line(buffer_window);
 }
 
-BufferLine* paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines) {
-    each clipboard_line, i in clipboard_lines {
-        add_text_to_line(line, clipboard_line);
+BufferLine* paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines, u32 paste_count, u32 cursor = 0, bool wrap = false) {
+    each paste in paste_count {
+        each clipboard_line, i in clipboard_lines {
+            add_text_to_line(line, clipboard_line, cursor);
+            cursor = 0;
 
-        if i < clipboard_lines.length - 1 {
-            line = add_new_line(buffer_window, buffer, line, false, false);
+            if i < clipboard_lines.length - 1 {
+                line = add_new_line(buffer_window, buffer, line, false, false);
+            }
+        }
+
+        if paste < paste_count - 1 {
+            if wrap {
+                cursor = line.length;
+            }
+            else {
+                line = add_new_line(buffer_window, buffer, line, false, false);
+            }
         }
     }
 

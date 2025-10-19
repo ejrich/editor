@@ -70,7 +70,7 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
         line := get_buffer_line(buffer, change_to.start_line);
         line = add_new_line(buffer_window, buffer, line, true, false);
 
-        paste_lines(buffer_window, buffer, line, value_lines);
+        paste_lines(buffer_window, buffer, line, value_lines, 1);
     }
     else if change_to.start_line < 0 {
         line := get_buffer_line(buffer, change_from.start_line);
