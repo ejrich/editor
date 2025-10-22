@@ -906,6 +906,7 @@ paste_over_selected(u32 paste_count) {
 }
 
 paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count) {
+    recording_start_line, recording_end_line := buffer_window.line;
     line := get_buffer_line(buffer, buffer_window.line);
 
     clipboard_lines: Array<string>[clipboard.value_lines];
@@ -1000,6 +1001,9 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
             }
         }
     }
+
+    // TODO Save this
+    record_change(buffer, recording_start_line, recording_end_line, buffer_window.cursor, buffer_window.line);
 
     calculate_line_digits(buffer);
     adjust_start_line(buffer_window);

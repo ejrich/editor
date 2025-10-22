@@ -18,6 +18,43 @@ Change* create_change(BufferLine* line, u32 line_number, u32 cursor) {
     return change;
 }
 
+ChangeValue record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+    start := get_buffer_line(buffer, start_line);
+
+    line := start;
+    length := 0;
+    each i in start_line..end_line {
+        length += line.length;
+        if i < end_line
+            length++;
+
+        line = line.next;
+        assert(line != null);
+    }
+
+    recorded_lines: string = { length = length; data = allocate(length); }
+    line = start;
+    length = 0;
+    each i in start_line..end_line {
+        memory_copy(recorded_lines.data + length, line.data.data, line.length);
+        length += line.length;
+        if i < end_line
+            recorded_lines[length++] = '\n';
+
+        line = line.next;
+        assert(line != null);
+    }
+
+    value: ChangeValue = {
+        start_line = end_line;
+        end_line = end_line;
+        cursor = cursor;
+        cursor_line = cursor_line;
+        value = recorded_lines;
+    }
+    return value;
+}
+
 record_change(Change* change) {
     // TODO Implement
 }
