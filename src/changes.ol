@@ -1,24 +1,54 @@
-Change* create_change(BufferLine* line, u32 line_number, u32 cursor) {
-    change := new<Change>();
-    change.old = {
-        start_line = line_number;
-        end_line = line_number;
+begin_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+    value: ChangeValue = {
+        start_line = start_line;
+        end_line = end_line;
         cursor = cursor;
-        cursor_line = line_number;
+        cursor_line = cursor_line;
     }
 
-    if line.length {
-        change.old.value = {
-            length = line.length;
-            data = line.data.data;
-        }
-        allocate_strings(&change.old.value);
+    if start_line >= 0 {
+        value.value = record_change_lines(buffer, start_line, end_line);
     }
 
-    return change;
+    pending_changes = new<Change>();
+    pending_changes.old = value;
 }
 
-ChangeValue record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+    assert(pending_changes != null);
+
+    value: ChangeValue = {
+        start_line = start_line;
+        end_line = end_line;
+        cursor = cursor;
+        cursor_line = cursor_line;
+        value = record_change_lines(buffer, start_line, end_line);
+    }
+
+    pending_changes.new = value;
+    pending_changes.previous = buffer.last_change;
+
+    buffer.last_change.next = pending_changes;
+    buffer.last_change = pending_changes;
+
+    // Free the next changes in the tree, as they have been overwritten by the new change
+    next := buffer.next_change;
+    while next {
+        if next.old.value.length
+            free_allocation(next.old.value.data);
+        if next.new.value.length
+            free_allocation(next.new.value.data);
+
+        new_next := next.next;
+        free_allocation(next);
+        next = new_next;
+    }
+
+    buffer.next_change = null;
+    pending_changes = null;
+}
+
+string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
     start := get_buffer_line(buffer, start_line);
 
     line := start;
@@ -45,14 +75,7 @@ ChangeValue record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 
         assert(line != null);
     }
 
-    value: ChangeValue = {
-        start_line = end_line;
-        end_line = end_line;
-        cursor = cursor;
-        cursor_line = cursor_line;
-        value = recorded_lines;
-    }
-    return value;
+    return recorded_lines;
 }
 
 record_change(Change* change) {
@@ -160,7 +183,6 @@ BufferLine* overwrite_lines(BufferLine* line, u32 count, Array<string> value_lin
 }
 
 struct Change {
-    insert_new_lines: bool;
     old: ChangeValue;
     new: ChangeValue;
     next: Change*;

@@ -969,6 +969,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                         buffer_window.cursor = 0;
                 }
 
+                recording_end_line = buffer_window.line;
                 adjust_start_line(buffer_window);
             }
         }
@@ -977,6 +978,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                 line = add_new_line(buffer_window, buffer, line, before, false);
             }
             paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
+            recording_end_line = buffer_window.line;
         }
         case ClipboardMode.Block; {
             if over_lines {
@@ -1002,7 +1004,6 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
         }
     }
 
-    // TODO Save this
     record_change(buffer, recording_start_line, recording_end_line, buffer_window.cursor, buffer_window.line);
 
     calculate_line_digits(buffer);
@@ -1057,7 +1058,8 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
         buffer_window.cursor = clamp(cast(s32, buffer_window.cursor) + change, 0, line.length - 1);
     }
 
-    pending_changes = create_change(line, buffer_window.line, buffer_window.cursor);
+    // TODO Update this
+    // pending_changes = create_change(line, buffer_window.line, buffer_window.cursor);
 }
 
 add_text_to_line(string text) {
