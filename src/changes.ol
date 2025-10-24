@@ -28,7 +28,8 @@ record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 
     pending_changes.new = value;
     pending_changes.previous = buffer.last_change;
 
-    buffer.last_change.next = pending_changes;
+    if buffer.last_change
+        buffer.last_change.next = pending_changes;
     buffer.last_change = pending_changes;
 
     // Free the next changes in the tree, as they have been overwritten by the new change

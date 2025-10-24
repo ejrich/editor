@@ -277,9 +277,6 @@ open_file_buffer(string path) {
             calculate_line_digits(&buffer);
         }
 
-        // TODO Remove this when changes are implemented
-        buffer.last_change = &test_change;
-
         array_insert(&buffers, buffer, allocate, reallocate);
         buffer_index = buffers.length - 1;
     }
@@ -852,7 +849,7 @@ paste_by_cursor(bool before, u32 paste_count) {
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
-    paste_clipboard(buffer_window, buffer, before, false, paste_count);
+    paste_clipboard(buffer_window, buffer, before, false, paste_count, false);
 }
 
 paste_over_selected(u32 paste_count) {
@@ -864,8 +861,9 @@ paste_over_selected(u32 paste_count) {
     switch edit_mode {
         case EditMode.VisualLine; {
             start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
             delete_lines(buffer_window, buffer, start_line, end_line, false, false, false);
-            paste_clipboard(buffer_window, buffer, true, true, paste_count);
+            paste_clipboard(buffer_window, buffer, true, true, paste_count, true);
         }
         case EditMode.Visual; {
             delete_selected(false);
@@ -874,15 +872,17 @@ paste_over_selected(u32 paste_count) {
                 add_new_line(buffer_window, buffer, line, false, true);
                 buffer_window.line--;
             }
-            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count);
+            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true);
         }
         case EditMode.VisualBlock; {
             if clipboard.mode == ClipboardMode.Normal && clipboard.value_lines == 1 {
                 start_line, end_line := get_visual_start_and_end_lines(buffer_window);
                 start_cursor, end_cursor := get_visual_start_and_end_cursors(buffer_window);
 
+                begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+
                 line := get_buffer_line(buffer, start_line);
-                while start_line <= end_line {
+                each _ in start_line..end_line {
                     if start_cursor < line.length {
                         delete_from_line(line, start_cursor, end_cursor);
                         cursor := start_cursor;
@@ -891,21 +891,22 @@ paste_over_selected(u32 paste_count) {
                         }
                     }
                     line = line.next;
-                    start_line++;
                 }
+
+                record_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
             }
             else {
                 delete_selected(false);
                 start_line, end_line := get_visual_start_and_end_lines(buffer_window);
                 buffer_window.line = start_line;
 
-                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count);
+                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true);
             }
         }
     }
 }
 
-paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count) {
+paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count, bool change_recorded) {
     recording_start_line, recording_end_line := buffer_window.line;
     line := get_buffer_line(buffer, buffer_window.line);
 
@@ -929,6 +930,10 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
 
     switch clipboard.mode {
         case ClipboardMode.Normal; {
+            if !change_recorded {
+                begin_change(buffer, buffer_window.line, buffer_window.line, buffer_window.cursor, buffer_window.line);
+            }
+
             if clipboard_lines.length == 1 {
                 clipboard_line := clipboard_lines[0];
                 start_cursor: u32;
