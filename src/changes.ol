@@ -55,25 +55,25 @@ string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
     line := start;
     length := 0;
     each i in start_line..end_line {
+        assert(line != null);
         length += line.length;
         if i < end_line
             length++;
 
         line = line.next;
-        assert(line != null);
     }
 
     recorded_lines: string = { length = length; data = allocate(length); }
     line = start;
     length = 0;
     each i in start_line..end_line {
+        assert(line != null);
         memory_copy(recorded_lines.data + length, line.data.data, line.length);
         length += line.length;
         if i < end_line
             recorded_lines[length++] = '\n';
 
         line = line.next;
-        assert(line != null);
     }
 
     return recorded_lines;

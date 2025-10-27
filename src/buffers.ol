@@ -866,6 +866,7 @@ paste_over_selected(u32 paste_count) {
             paste_clipboard(buffer_window, buffer, true, true, paste_count, true);
         }
         case EditMode.Visual; {
+            // TODO Begin change
             delete_selected(false);
             if clipboard.mode == ClipboardMode.Lines {
                 line := get_buffer_line(buffer, buffer_window.line);
@@ -896,6 +897,7 @@ paste_over_selected(u32 paste_count) {
                 record_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
             }
             else {
+                // TODO Begin change
                 delete_selected(false);
                 start_line, end_line := get_visual_start_and_end_lines(buffer_window);
                 buffer_window.line = start_line;
@@ -979,7 +981,13 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
             }
         }
         case ClipboardMode.Lines; {
+            if !change_recorded {
+                begin_change(buffer, -1, 0, buffer_window.cursor, buffer_window.line);
+            }
             if !over_lines {
+                if !before {
+                    recording_start_line++;
+                }
                 line = add_new_line(buffer_window, buffer, line, before, false);
             }
             paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
@@ -988,9 +996,17 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
         case ClipboardMode.Block; {
             if over_lines {
                 paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
+                recording_end_line = buffer_window.line;
             }
             else {
                 if !before buffer_window.cursor++;
+
+                recording_end_line += clipboard_lines.length - 1;
+
+                if !change_recorded {
+                    end_line := clamp(recording_end_line, 0, buffer.line_count - 1);
+                    begin_change(buffer, recording_start_line, end_line, buffer_window.cursor, buffer_window.line);
+                }
 
                 each clipboard_line, i in clipboard_lines {
                     cursor := buffer_window.cursor;
@@ -1267,12 +1283,20 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
 
     if delete_all {
         if start.previous == null {
-            buffer.lines = new_next;
-            new_next.previous = null;
+            if new_next {
+                buffer.lines = new_next;
+                new_next.previous = null;
+            }
+            else {
+                start.length = 0;
+                buffer.line_count = 1;
+            }
         }
         else {
             start.previous.next = new_next;
-            new_next.previous = start.previous;
+            if new_next {
+                new_next.previous = start.previous;
+            }
         }
 
         free_line(start);
@@ -3239,8 +3263,10 @@ adjust_start_line(BufferWindow* window) {
     rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
     while current_line != null && line_number != window.line {
         current_line = current_line.next;
-        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
-        line_number++;
+        if current_line {
+            rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+            line_number++;
+        }
     }
 
     if rendered_lines <= settings.scroll_offset {
@@ -3503,7 +3529,9 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
             }
             else {
                 line.previous.next = line.next;
-                line.next.previous = line.previous;
+                if line.next {
+                    line.next.previous = line.previous;
+                }
             }
 
             free_line(line);
