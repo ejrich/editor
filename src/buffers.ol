@@ -1706,9 +1706,14 @@ change_indentation(bool indent, u32 indentations) {
         }
     }
 
+    begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+
     line := get_buffer_line(buffer, start_line);
     indent_size := settings.tab_size * indentations;
-    while line != null && start_line <= end_line {
+    each _ in start_line..end_line {
+        if line == null
+            break;
+
         if indent {
             indent_line(line, indent_size);
         }
@@ -1731,8 +1736,9 @@ change_indentation(bool indent, u32 indentations) {
         }
 
         line = line.next;
-        start_line++;
     }
+
+    record_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
 }
 
 replace_characters(u8 char) {
