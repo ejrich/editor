@@ -79,10 +79,6 @@ string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
     return recorded_lines;
 }
 
-record_change(Change* change) {
-    // TODO Implement
-}
-
 apply_changes(bool forward, u32 changes) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {

@@ -867,14 +867,18 @@ paste_over_selected(u32 paste_count) {
         }
         case EditMode.Visual; {
             start_line, end_line := get_visual_start_and_end_lines(buffer_window);
+            if clipboard.mode == ClipboardMode.Block {
+                end_line += clipboard.value_lines - 1;
+            }
             begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+
             delete_selected(false);
             if clipboard.mode == ClipboardMode.Lines {
                 line := get_buffer_line(buffer, buffer_window.line);
                 add_new_line(buffer_window, buffer, line, false, true);
                 buffer_window.line--;
             }
-            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true);
+            paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true, 1);
         }
         case EditMode.VisualBlock; {
             if clipboard.mode == ClipboardMode.Normal && clipboard.value_lines == 1 {
@@ -898,19 +902,18 @@ paste_over_selected(u32 paste_count) {
                 record_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
             }
             else {
-                // TODO Begin change
                 start_line, end_line := get_visual_start_and_end_lines(buffer_window);
                 begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
                 delete_selected(false);
                 buffer_window.line = start_line;
 
-                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true);
+                paste_clipboard(buffer_window, buffer, clipboard.mode != ClipboardMode.Lines, false, paste_count, true, end_line - start_line);
             }
         }
     }
 }
 
-paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count, bool change_recorded) {
+paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count, bool change_recorded, u32 additional_lines_to_record = 0) {
     recording_start_line, recording_end_line := buffer_window.line;
     line := get_buffer_line(buffer, buffer_window.line);
 
@@ -979,6 +982,9 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                 }
 
                 recording_end_line = buffer_window.line;
+                if edit_mode == EditMode.VisualBlock {
+                    recording_end_line += additional_lines_to_record;
+                }
                 adjust_start_line(buffer_window);
             }
         }
@@ -993,11 +999,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
                 line = add_new_line(buffer_window, buffer, line, before, false);
             }
             paste_lines(buffer_window, buffer, line, clipboard_lines, paste_count);
-            recording_end_line = buffer_window.line;
-            if edit_mode == EditMode.Visual {
-                recording_end_line++;
-            }
-            // TODO Set the correct end line for visual block
+            recording_end_line = buffer_window.line + additional_lines_to_record;
         }
         case ClipboardMode.Block; {
             if over_lines {
