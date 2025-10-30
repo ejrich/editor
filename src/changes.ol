@@ -14,7 +14,24 @@ begin_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 c
     pending_changes.old = value;
 }
 
-record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+begin_line_change(BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line = -1) {
+    value: ChangeValue = {
+        start_line = line_number;
+        end_line = line_number;
+        cursor = cursor;
+        cursor_line = line_number;
+        value = record_change_line(line);
+    }
+
+    if cursor_line >= 0 {
+        value.cursor_line = cursor_line;
+    }
+
+    pending_changes = new<Change>();
+    pending_changes.old = value;
+}
+
+record_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     assert(pending_changes != null);
 
     value: ChangeValue = {
@@ -22,12 +39,40 @@ record_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 
         end_line = end_line;
         cursor = cursor;
         cursor_line = cursor_line;
-        value = record_change_lines(buffer, start_line, end_line);
+    }
+
+    if start_line >= 0 {
+        value.value = record_change_lines(buffer, start_line, end_line);
     }
 
     pending_changes.new = value;
     pending_changes.previous = buffer.last_change;
 
+    add_changes_to_buffer(buffer);
+}
+
+record_line_change(FileBuffer* buffer, BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line = -1) {
+    assert(pending_changes != null);
+
+    value: ChangeValue = {
+        start_line = line_number;
+        end_line = line_number;
+        cursor = cursor;
+        cursor_line = line_number;
+        value = record_change_line(line);
+    }
+
+    if cursor_line >= 0 {
+        value.cursor_line = cursor_line;
+    }
+
+    pending_changes.new = value;
+    pending_changes.previous = buffer.last_change;
+
+    add_changes_to_buffer(buffer);
+}
+
+add_changes_to_buffer(FileBuffer* buffer) {
     if buffer.last_change
         buffer.last_change.next = pending_changes;
     buffer.last_change = pending_changes;
@@ -77,6 +122,13 @@ string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
     }
 
     return recorded_lines;
+}
+
+string record_change_line(BufferLine* line) {
+    recorded_line: string = { length = line.length; data = line.data.data; }
+    allocate_strings(&recorded_line);
+
+    return recorded_line;
 }
 
 apply_changes(bool forward, u32 changes) {

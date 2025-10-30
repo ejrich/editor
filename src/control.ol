@@ -182,10 +182,10 @@ handle_post_movement_command() {
         }
         case PostMovementCommand.Delete; {
             if post_movement_command.changed_by_line {
-                delete_lines(post_movement_command.start_line, line, true);
+                delete_lines(post_movement_command.start_line, line, true, true);
             }
             else {
-                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
+                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor, true);
             }
         }
         case PostMovementCommand.Copy; {
@@ -365,10 +365,10 @@ delete_char(ModCode mod) {
     }
     else {
         if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-            delete_lines(true);
+            delete_lines(true, true);
         }
         else {
-            delete_selected();
+            delete_selected(record = true);
         }
 
         edit_mode = EditMode.Normal;
@@ -391,12 +391,12 @@ unindent(ModCode mod) {
 delete(ModCode mod) {
     if edit_mode == EditMode.Normal {
         if mod & ModCode.Shift {
-            clear_remaining_line();
+            clear_remaining_line(true);
             reset_post_movement_command();
         }
         else if post_movement_command.command == PostMovementCommand.Delete {
             line_changes := get_repeats();
-            delete_lines(post_movement_command.start_line, post_movement_command.start_line + line_changes - 1, true);
+            delete_lines(post_movement_command.start_line, post_movement_command.start_line + line_changes - 1, true, true);
             reset_post_movement_command();
         }
         else {
@@ -405,10 +405,10 @@ delete(ModCode mod) {
     }
     else {
         if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-            delete_lines(true);
+            delete_lines(true, true);
         }
         else {
-            delete_selected();
+            delete_selected(record = true);
         }
 
         edit_mode = EditMode.Normal;
