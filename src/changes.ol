@@ -31,6 +31,24 @@ begin_line_change(BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line
     pending_changes.old = value;
 }
 
+begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
+    value: ChangeValue = {
+        start_line = line_number;
+        end_line = line_number;
+        cursor = cursor;
+        cursor_line = line_number;
+        value = record_change_line(line);
+    }
+
+    pending_changes = new<Change>();
+    pending_changes.old = value;
+
+    insert_mode_changes = {
+        start_line = line_number;
+        end_line = line_number;
+    }
+}
+
 record_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     assert(pending_changes != null);
 
@@ -45,10 +63,7 @@ record_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 
         value.value = record_change_lines(buffer, start_line, end_line);
     }
 
-    pending_changes.new = value;
-    pending_changes.previous = buffer.last_change;
-
-    add_changes_to_buffer(buffer);
+    add_changes_to_buffer(buffer, value);
 }
 
 record_line_change(FileBuffer* buffer, BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line = -1) {
@@ -66,13 +81,39 @@ record_line_change(FileBuffer* buffer, BufferLine* line, u32 line_number, u32 cu
         value.cursor_line = cursor_line;
     }
 
+    add_changes_to_buffer(buffer, value);
+}
+
+record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
+    assert(pending_changes != null);
+
+    // Check if there were no changes made
+    if insert_mode_changes.start_line == insert_mode_changes.end_line {
+        line := get_buffer_line(buffer, insert_mode_changes.start_line);
+        line_string: string = { length = line.length; data = line.data.data; }
+
+        if line_string == pending_changes.old.value {
+            free_change(pending_changes);
+            pending_changes = null;
+            return;
+        }
+    }
+
+    value: ChangeValue = {
+        start_line = insert_mode_changes.start_line;
+        end_line = insert_mode_changes.end_line;
+        cursor = cursor;
+        cursor_line = line_number;
+        value = record_change_lines(buffer, insert_mode_changes.start_line, insert_mode_changes.end_line);
+    }
+
+    add_changes_to_buffer(buffer, value);
+}
+
+add_changes_to_buffer(FileBuffer* buffer, ChangeValue value) {
     pending_changes.new = value;
     pending_changes.previous = buffer.last_change;
 
-    add_changes_to_buffer(buffer);
-}
-
-add_changes_to_buffer(FileBuffer* buffer) {
     if buffer.last_change
         buffer.last_change.next = pending_changes;
     buffer.last_change = pending_changes;
@@ -80,13 +121,8 @@ add_changes_to_buffer(FileBuffer* buffer) {
     // Free the next changes in the tree, as they have been overwritten by the new change
     next := buffer.next_change;
     while next {
-        if next.old.value.length
-            free_allocation(next.old.value.data);
-        if next.new.value.length
-            free_allocation(next.new.value.data);
-
         new_next := next.next;
-        free_allocation(next);
+        free_change(next);
         next = new_next;
     }
 
@@ -231,6 +267,15 @@ BufferLine* overwrite_lines(BufferLine* line, u32 count, Array<string> value_lin
     return line;
 }
 
+free_change(Change* change) {
+    if change.old.value.length
+        free_allocation(change.old.value.data);
+    if change.new.value.length
+        free_allocation(change.new.value.data);
+
+    free_allocation(change);
+}
+
 struct Change {
     old: ChangeValue;
     new: ChangeValue;
@@ -248,22 +293,12 @@ struct ChangeValue {
 
 pending_changes: Change*;
 
-test_change: Change = {
-    old = {
-        start_line = 0;
-        end_line = 0;
-        cursor = 3;
-        cursor_line = 0;
-        value = "Hello world";
-    }
-    new = {
-        start_line = 0;
-        end_line = 2;
-        cursor = 6;
-        cursor_line = 0;
-        value = "Hello world 123456789\nThis is a test\nTest";
-    }
+struct InsertModeChanges {
+    start_line: u32;
+    end_line: u32;
 }
+
+insert_mode_changes: InsertModeChanges;
 
 /*
 - Change list
@@ -280,33 +315,18 @@ When redoing, the next change is applied and this is set to the last change.
 Undoing is disabled when the last change is null, and redoing is disabled when the next change is null
 
 
-- Example
-hello world => '' - 'hello world'
-{
-    insert_new_lines: false;
-    previous_start_line: 100;
-    previous_end_line: 100;
-    previous_value: '';
-    new_start_line: 100;
-    new_end_line: 100;
-    new_value: 'hello world';
-}
-
-undo:
-    - insert_new_lines == false, so change line 100 only
-    - Set the line to ''
-
-undo:
-    - insert_new_lines == false, so change line 100 only
-    - Set the line to 'hello world'
-
-
 - Tracking line deletions
 When deleting the line, first store the lines that were deleted and the start/end line
 
 Set the new change start line to -1 to show that there should be no changes
 
 When applying the changes:
-- If the change from is -1, then just insert the new lines in the change to
-- If the change to is -1, then just delete the lines that in the change from
+* If the change from is -1, then just insert the new lines in the change to
+* If the change to is -1, then just delete the lines that in the change from
+
+
+- Insert mode change tracking
+When insert mode is activated, record the initial state of the line
+If enter/backspace reaches a new line, append that line to the pending changes and change the start/end line
+When going back into normal mode, record the lines that have been modified
 */

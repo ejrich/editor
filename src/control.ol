@@ -229,6 +229,9 @@ search(ModCode mod) {
 
 [keybind, no_repeat]
 normal_mode(ModCode mod) {
+    if edit_mode == EditMode.Insert {
+        end_insert_mode();
+    }
     edit_mode = EditMode.Normal;
 }
 

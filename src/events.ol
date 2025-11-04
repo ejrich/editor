@@ -17,6 +17,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     if edit_mode == EditMode.BlockInsert
                         delete_from_cursor_block(true);
                     else
+                        // TODO Update end line of insert_mode_changes
                         delete_from_cursor(true);
                     return;
                 }
@@ -34,6 +35,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
                 case KeyCode.Enter; {
+                    // TODO Update end line of insert_mode_changes
                     add_new_line(false, true);
                     return;
                 }
@@ -41,6 +43,7 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     if edit_mode == EditMode.BlockInsert
                         delete_from_cursor_block(false);
                     else
+                        // TODO Update end line of insert_mode_changes
                         delete_from_cursor(false);
                     return;
                 }

@@ -1087,8 +1087,16 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
         buffer_window.cursor = clamp(cast(s32, buffer_window.cursor) + change, 0, line.length - 1);
     }
 
-    // TODO Update this
-    // pending_changes = create_change(line, buffer_window.line, buffer_window.cursor);
+    begin_insert_mode_change(line, buffer_window.line, buffer_window.cursor);
+}
+
+end_insert_mode() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
 add_text_to_line(string text) {
