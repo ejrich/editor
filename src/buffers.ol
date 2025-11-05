@@ -1527,6 +1527,7 @@ delete_from_cursor(bool back) {
         cursor := clamp(buffer_window.cursor, 0, line.length);
         if cursor == 0 {
             if line.previous {
+                update_insert_mode_change(buffer, buffer_window.line - 1);
                 buffer_window.cursor = line.previous.length;
                 merge_lines(buffer, line.previous, line, line.previous.length, 0, false);
                 buffer_window.line--;
