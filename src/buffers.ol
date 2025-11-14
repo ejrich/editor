@@ -1670,13 +1670,18 @@ join_lines(u32 lines) {
 }
 
 add_new_line(bool above, bool split = false) {
-    if edit_mode == EditMode.BlockInsert {
-        edit_mode = EditMode.Insert;
-    }
-
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
+    }
+
+    if edit_mode == EditMode.Insert {
+        if !above
+            update_insert_mode_change(buffer, buffer_window.line + 1);
+    }
+
+    if edit_mode == EditMode.BlockInsert {
+        edit_mode = EditMode.Insert;
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
