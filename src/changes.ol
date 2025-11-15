@@ -70,8 +70,7 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number) {
         }
         insert_mode_changes.start_line = line_number;
     }
-
-    if line_number > insert_mode_changes.end_line {
+    else {
         // Change the end line to the line_number
         insert_mode_changes.end_line = line_number;
     }
@@ -359,4 +358,19 @@ When applying the changes:
 When insert mode is activated, record the initial state of the line
 If enter/backspace reaches a new line, append that line to the pending changes and change the start/end line
 When going back into normal mode, record the lines that have been modified
+
+Example - starting at line 2
+Key presses:
+< < < < < < (back over line) a b c d Enter Enter Enter Enter a b c d < < < < < (back over line)
+Current Line:
+2 2 2 2 2 1                  1 1 1 1 2     3     4     5     5 5 5 5 5 5 5 5 4
+Before start:
+2 2 2 2 2 1                  1 1 1 1 1     1     1     1     1 1 1 1 1 1 1 1 1
+Before end:
+2 2 2 2 2 2                  2 2 2 2 2     2     2     2     2 2 2 2 2 2 2 2 2
+New start:
+2 2 2 2 2 1                  1 1 1 1 1     1     1     1     1 1 1 1 1 1 1 1 1
+New end:
+2 2 2 2 2 2                  2 2 2 2 2     3     4     5     5 5 5 5 5 5 5 5 5
+
 */

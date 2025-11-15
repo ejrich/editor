@@ -35,7 +35,6 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     return;
                 }
                 case KeyCode.Enter; {
-                    // TODO Update end line of insert_mode_changes
                     add_new_line(false, true);
                     return;
                 }
