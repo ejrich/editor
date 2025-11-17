@@ -1549,6 +1549,7 @@ delete_from_cursor(bool back) {
         cursor := clamp(buffer_window.cursor, 0, line.length);
         if cursor == line.length {
             if line.next {
+                update_insert_mode_change(buffer, buffer_window.line, true);
                 buffer_window.cursor = cursor;
                 merge_lines(buffer, line, line.next, line.length, 0, false);
             }
@@ -1650,6 +1651,9 @@ join_lines(u32 lines) {
     switch edit_mode {
         case EditMode.Normal; {
             start_line = buffer_window.line;
+            if lines + start_line > buffer.line_count {
+                lines = buffer.line_count - start_line;
+            }
         }
         case EditMode.Visual;
         case EditMode.VisualLine;
@@ -1662,11 +1666,15 @@ join_lines(u32 lines) {
         }
     }
 
+    begin_change(buffer, start_line, start_line + lines, buffer_window.cursor, buffer_window.line);
+
     line := get_buffer_line(buffer, start_line);
     while line.next != null && lines > 0 {
         merge_lines(buffer, line, line.next, line.length, 0, false, true);
         lines--;
     }
+
+    record_line_change(buffer, line, start_line, buffer_window.cursor);
 }
 
 add_new_line(bool above, bool split = false) {

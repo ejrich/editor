@@ -15,9 +15,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             switch code {
                 case KeyCode.Backspace; {
                     if edit_mode == EditMode.BlockInsert
+                        // TODO Track these changes
                         delete_from_cursor_block(true);
                     else
-                        // TODO Update end line of insert_mode_changes
                         delete_from_cursor(true);
                     return;
                 }
@@ -40,9 +40,9 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                 }
                 case KeyCode.Delete; {
                     if edit_mode == EditMode.BlockInsert
+                        // TODO Track these changes
                         delete_from_cursor_block(false);
                     else
-                        // TODO Update end line of insert_mode_changes
                         delete_from_cursor(false);
                     return;
                 }
