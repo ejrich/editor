@@ -1677,7 +1677,7 @@ join_lines(u32 lines) {
     record_line_change(buffer, line, start_line, buffer_window.cursor);
 }
 
-add_new_line(bool above, bool split = false) {
+add_new_line(bool above, bool split = false, bool opening = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -1694,6 +1694,10 @@ add_new_line(bool above, bool split = false) {
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
+
+    if opening {
+        begin_open_line_change(line, buffer_window.line, buffer_window.cursor);
+    }
 
     new_line := add_new_line(buffer_window, buffer, line, above, split);
     indent_line(buffer_window, new_line);

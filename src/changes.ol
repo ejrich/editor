@@ -33,6 +33,8 @@ begin_line_change(BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line
 }
 
 begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
+    if pending_changes return;
+
     value: ChangeValue = {
         start_line = line_number;
         end_line = line_number;
@@ -47,6 +49,24 @@ begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
     insert_mode_changes = {
         start_line = line_number;
         end_line = line_number;
+    }
+}
+
+begin_open_line_change(BufferLine* line, u32 line_number, u32 cursor) {
+    value: ChangeValue = {
+        start_line = line_number;
+        end_line = line_number;
+        cursor = cursor;
+        cursor_line = line_number;
+        value = record_change_line(line);
+    }
+
+    pending_changes = new<Change>();
+    pending_changes.old = value;
+
+    insert_mode_changes = {
+        start_line = line_number;
+        end_line = line_number + 1;
     }
 }
 
@@ -132,6 +152,7 @@ record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
     assert(pending_changes != null);
 
     // Check if there were no changes made
+    // TODO Check multiple lines
     if insert_mode_changes.start_line == insert_mode_changes.end_line {
         line := get_buffer_line(buffer, insert_mode_changes.start_line);
         line_string: string = { length = line.length; data = line.data.data; }
@@ -387,5 +408,17 @@ New start:
 2 2 2 2 2 1                  1 1 1 1 1     1     1     1     1 1 1 1 1 1 1 1 1
 New end:
 2 2 2 2 2 2                  2 2 2 2 2     3     4     5     5 5 5 5 5 5 5 5 5
+
+
+- Opening new lines
+When opening below the current line:
+* Begin the recording with the start_line/end_line of the previous change to be the line that was opened from
+* Set the start_line of the insert mode changes to be the line that was opened from
+* Set the end_line of the insert mode changes to line opened to
+
+When opening above the current line:
+* Begin the recording with the start_line/end_line of the previous change to be the line that was opened from
+* Set the start_line of the insert mode changes to be the line that was opened from
+* Set the end_line of the insert mode changes to line opened to +1 (this will be the where the existing line is)
 
 */
