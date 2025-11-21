@@ -32,6 +32,26 @@ begin_line_change(BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line
     pending_changes.old = value;
 }
 
+begin_insert_mode_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+    if pending_changes return;
+
+    value: ChangeValue = {
+        start_line = start_line;
+        end_line = end_line;
+        cursor = cursor;
+        cursor_line = cursor_line;
+        value = record_change_lines(buffer, start_line, end_line);
+    }
+
+    pending_changes = new<Change>();
+    pending_changes.old = value;
+
+    insert_mode_changes = {
+        start_line = start_line;
+        end_line = start_line;
+    }
+}
+
 begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
     if pending_changes return;
 

@@ -1243,7 +1243,7 @@ delete_from_cursor_block(bool back) {
 }
 
 // Deletions
-delete_lines(bool delete_all, bool record = false) {
+delete_lines(bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -1264,6 +1264,10 @@ delete_lines(bool delete_all, bool record = false) {
         }
     }
 
+    if inserting {
+        begin_insert_mode_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+    }
+
     if record {
         begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
     }
@@ -1275,7 +1279,7 @@ delete_lines(bool delete_all, bool record = false) {
     }
 }
 
-delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false) {
+delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -1289,6 +1293,10 @@ delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false) {
     else {
         start_line = line_1;
         end_line = line_2;
+    }
+
+    if inserting {
+        begin_insert_mode_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
     }
 
     if record {
@@ -1344,7 +1352,7 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
     }
 }
 
-delete_selected(bool copy = true, bool record = false) {
+delete_selected(bool copy = true, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -1356,6 +1364,11 @@ delete_selected(bool copy = true, bool record = false) {
         case EditMode.Normal; {
             copy_string: string;
             line := get_buffer_line(buffer, buffer_window.line);
+
+            if inserting {
+                begin_insert_mode_change(line, buffer_window.line, buffer_window.cursor);
+            }
+
             if record {
                 begin_line_change(line, buffer_window.line, buffer_window.cursor);
             }
@@ -1382,7 +1395,7 @@ delete_selected(bool copy = true, bool record = false) {
             }
         }
         case EditMode.Visual; {
-            delete_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, visual_mode_data.line, visual_mode_data.cursor, true, copy, record);
+            delete_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, visual_mode_data.line, visual_mode_data.cursor, true, copy, record, inserting);
         }
         case EditMode.VisualBlock; {
             start_line, end_line := get_visual_start_and_end_lines(buffer_window);
@@ -1411,22 +1424,27 @@ delete_selected(bool copy = true, bool record = false) {
     }
 }
 
-delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool record = false) {
+delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
-    delete_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor, true, record);
+    delete_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor, true, record, inserting);
 }
 
-delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool copy, bool record) {
+delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool copy, bool record, bool inserting) {
     if copy {
         copy_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor);
     }
 
     if line_1 == line_2 {
         line := get_buffer_line(buffer, line_1);
+
+        if inserting {
+            begin_insert_mode_change(line, buffer_window.line, buffer_window.cursor);
+        }
+
         if record {
             begin_line_change(line, line_1, buffer_window.cursor, buffer_window.line);
         }
@@ -1455,6 +1473,10 @@ delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32
         else {
             start_line_number = line_2;
             end_line_number = line_1;
+        }
+
+        if inserting {
+            begin_insert_mode_change(buffer, start_line_number, end_line_number, buffer_window.cursor, buffer_window.line);
         }
 
         if record {
@@ -1489,7 +1511,7 @@ delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32
     }
 }
 
-clear_remaining_line(bool record = false) {
+clear_remaining_line(bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
@@ -1497,6 +1519,11 @@ clear_remaining_line(bool record = false) {
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
+
+    if inserting {
+        begin_insert_mode_change(line, buffer_window.line, buffer_window.cursor);
+    }
+
     if record {
         begin_line_change(line, buffer_window.line, buffer_window.cursor);
     }

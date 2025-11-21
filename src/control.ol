@@ -173,10 +173,10 @@ handle_post_movement_command() {
     switch post_movement_command.command {
         case PostMovementCommand.Change; {
             if post_movement_command.changed_by_line {
-                delete_lines(post_movement_command.start_line, line, false);
+                delete_lines(post_movement_command.start_line, line, false, inserting = true);
             }
             else {
-                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor);
+                delete_selected(post_movement_command.start_line, post_movement_command.start_cursor, line, cursor, post_movement_command.include_end_cursor, inserting = true);
             }
             start_insert_mode(true);
         }
@@ -310,7 +310,7 @@ append(ModCode mod) {
 [keybind, no_repeat]
 substitute(ModCode mod) {
     if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-        delete_lines(false);
+        delete_lines(false, inserting = true);
     }
     else if edit_mode == EditMode.VisualBlock {
         init_block_insert_mode();
@@ -319,7 +319,7 @@ substitute(ModCode mod) {
         return;
     }
     else {
-        delete_selected();
+        delete_selected(inserting = true);
     }
 
     start_insert_mode(true);
@@ -335,7 +335,7 @@ open_line(ModCode mod) {
 change(ModCode mod) {
     if edit_mode == EditMode.Normal {
         if mod & ModCode.Shift {
-            clear_remaining_line();
+            clear_remaining_line(inserting = true);
         }
         else {
             set_post_movement_command(PostMovementCommand.Change);
@@ -344,7 +344,7 @@ change(ModCode mod) {
     }
     else {
         if (mod & ModCode.Shift) == ModCode.Shift || edit_mode == EditMode.VisualLine {
-            delete_lines(false);
+            delete_lines(false, inserting = true);
         }
         else if edit_mode == EditMode.VisualBlock {
             init_block_insert_mode();
@@ -353,7 +353,7 @@ change(ModCode mod) {
             return;
         }
         else {
-            delete_selected();
+            delete_selected(inserting = true);
         }
     }
 
