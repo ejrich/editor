@@ -1158,6 +1158,8 @@ init_block_insert_mode() {
     }
 
     block_insert_data.start_line, block_insert_data.end_line = get_visual_start_and_end_lines(buffer_window);
+
+    begin_block_insert_mode_change(buffer, block_insert_data.start_line, block_insert_data.end_line, buffer_window.cursor, buffer_window.line);
 }
 
 start_block_insert_mode() {
@@ -1171,6 +1173,10 @@ start_block_insert_mode() {
     edit_mode = EditMode.BlockInsert;
 
     buffer_window.line = block_insert_data.start_line;
+
+    if block_insert_data.start_line == block_insert_data.end_line {
+        edit_mode = EditMode.Insert;
+    }
 }
 
 add_text_to_block(string text) {
@@ -1211,6 +1217,7 @@ delete_from_cursor_block(bool back) {
                 edit_mode = EditMode.Insert;
 
                 if line.previous {
+                    update_insert_mode_change(buffer, buffer_window.line - 1);
                     buffer_window.cursor = line.previous.length;
                     merge_lines(buffer, line.previous, line, line.previous.length, 0, false);
                     buffer_window.line--;
@@ -1222,10 +1229,11 @@ delete_from_cursor_block(bool back) {
             }
         }
         else {
-            if buffer_window.cursor== line.length {
+            if buffer_window.cursor == line.length {
                 edit_mode = EditMode.Insert;
 
                 if line.next {
+                    update_insert_mode_change(buffer, buffer_window.line, true);
                     merge_lines(buffer, line, line.next, line.length, 0, false);
                 }
                 break;

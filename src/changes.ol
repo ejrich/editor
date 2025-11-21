@@ -72,6 +72,26 @@ begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
     }
 }
 
+begin_block_insert_mode_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+    if pending_changes return;
+
+    value: ChangeValue = {
+        start_line = start_line;
+        end_line = end_line;
+        cursor = cursor;
+        cursor_line = cursor_line;
+        value = record_change_lines(buffer, start_line, end_line);
+    }
+
+    pending_changes = new<Change>();
+    pending_changes.old = value;
+
+    insert_mode_changes = {
+        start_line = start_line;
+        end_line = end_line;
+    }
+}
+
 begin_open_line_change(BufferLine* line, u32 line_number, u32 cursor, bool above) {
     value: ChangeValue = {
         start_line = -1;
@@ -119,9 +139,12 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = fa
         if insert_mode_changes.start_line == insert_mode_changes.end_line {
             insert_mode_changes.end_line = line_number;
         }
+        else {
+            insert_mode_changes.end_line--;
+        }
         insert_mode_changes.start_line = line_number;
     }
-    else {
+    else if insert_mode_changes.end_line <= line_number {
         if merging && insert_mode_changes.end_line == line_number {
             // Append the next line to the end of the pending changes
             line := get_buffer_line(buffer, line_number + 1);
@@ -149,6 +172,9 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = fa
 
         // Change the end line to the line_number
         insert_mode_changes.end_line = line_number;
+    }
+    else if merging {
+        insert_mode_changes.end_line--;
     }
 }
 
