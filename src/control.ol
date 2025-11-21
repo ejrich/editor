@@ -488,15 +488,27 @@ move_up(ModCode mod) {
         edit_mode = EditMode.Insert;
     }
 
+    if edit_mode == EditMode.Insert {
+        end_insert_mode();
+    }
+
     post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
     move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
+
+    if edit_mode == EditMode.Insert {
+        start_insert_mode(true);
+    }
 }
 
 [keybind, no_repeat]
 move_down(ModCode mod) {
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
+    }
+
+    if edit_mode == EditMode.Insert {
+        end_insert_mode();
     }
 
     line_changes := get_repeats();
@@ -506,6 +518,10 @@ move_down(ModCode mod) {
     else {
         post_movement_command.changed_by_line = true;
         move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
+    }
+
+    if edit_mode == EditMode.Insert {
+        start_insert_mode(true);
     }
 }
 
