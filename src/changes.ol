@@ -219,15 +219,22 @@ record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
     assert(pending_changes != null);
 
     // Check if there were no changes made
-    // TODO Check multiple lines
-    if insert_mode_changes.start_line == insert_mode_changes.end_line {
+    if pending_changes.old.start_line == insert_mode_changes.start_line &&
+        pending_changes.old.end_line == insert_mode_changes.end_line {
         line := get_buffer_line(buffer, insert_mode_changes.start_line);
-        line_string: string = { length = line.length; data = line.data.data; }
+        old_lines := split_string(pending_changes.old.value);
 
-        if line_string == pending_changes.old.value {
-            free_change(pending_changes);
-            pending_changes = null;
-            return;
+        each i in insert_mode_changes.end_line - insert_mode_changes.start_line + 1 {
+            line_string: string = { length = line.length; data = line.data.data; }
+            old_line := old_lines[i];
+
+            if line_string == old_line {
+                free_change(pending_changes);
+                pending_changes = null;
+                return;
+            }
+
+            line = line.next;
         }
     }
 
