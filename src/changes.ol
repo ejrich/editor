@@ -52,21 +52,23 @@ begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
     }
 }
 
-begin_open_line_change(BufferLine* line, u32 line_number, u32 cursor) {
+begin_open_line_change(BufferLine* line, u32 line_number, u32 cursor, bool above) {
     value: ChangeValue = {
-        start_line = line_number;
-        end_line = line_number;
+        start_line = -1;
         cursor = cursor;
         cursor_line = line_number;
-        value = record_change_line(line);
     }
 
     pending_changes = new<Change>();
     pending_changes.old = value;
 
+    if !above {
+        line_number++;
+    }
+
     insert_mode_changes = {
         start_line = line_number;
-        end_line = line_number + 1;
+        end_line = line_number;
     }
 }
 
@@ -74,14 +76,23 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = fa
     if line_number < insert_mode_changes.start_line {
         // Change the start line to the line_number and record what was on the line before
         line := get_buffer_line(buffer, line_number);
-        new_length := line.length + 1 + pending_changes.old.value.length;
-        new_value: string = { length = new_length; data = allocate(new_length); }
+        new_value: string;
 
-        memory_copy(new_value.data, line.data.data, line.length);
-        new_value[line.length] = '\n';
-        memory_copy(new_value.data + line.length + 1, pending_changes.old.value.data, pending_changes.old.value.length);
+        if pending_changes.old.start_line == -1 {
+            new_value = record_change_line(line);
+            pending_changes.old.end_line = line_number;
+        }
+        else {
+            new_length := line.length + 1 + pending_changes.old.value.length;
+            new_value = { length = new_length; data = allocate(new_length); }
 
-        free_allocation(pending_changes.old.value.data);
+            memory_copy(new_value.data, line.data.data, line.length);
+            new_value[line.length] = '\n';
+            memory_copy(new_value.data + line.length + 1, pending_changes.old.value.data, pending_changes.old.value.length);
+
+            free_allocation(pending_changes.old.value.data);
+        }
+
         pending_changes.old.value = new_value;
         pending_changes.old.start_line = line_number;
 
@@ -94,16 +105,26 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = fa
         if merging && insert_mode_changes.end_line == line_number {
             // Append the next line to the end of the pending changes
             line := get_buffer_line(buffer, line_number + 1);
-            new_length := line.length + 1 + pending_changes.old.value.length;
-            new_value: string = { length = new_length; data = allocate(new_length); }
+            new_value: string;
 
-            memory_copy(new_value.data, pending_changes.old.value.data, pending_changes.old.value.length);
-            new_value[pending_changes.old.value.length] = '\n';
-            memory_copy(new_value.data + pending_changes.old.value.length + 1, line.data.data, line.length);
+            if pending_changes.old.start_line == -1 {
+                new_value = record_change_line(line);
+                pending_changes.old.start_line = insert_mode_changes.start_line;
+                pending_changes.old.end_line = insert_mode_changes.start_line;
+            }
+            else {
+                new_length := line.length + 1 + pending_changes.old.value.length;
+                new_value = { length = new_length; data = allocate(new_length); }
 
-            free_allocation(pending_changes.old.value.data);
+                memory_copy(new_value.data, pending_changes.old.value.data, pending_changes.old.value.length);
+                new_value[pending_changes.old.value.length] = '\n';
+                memory_copy(new_value.data + pending_changes.old.value.length + 1, line.data.data, line.length);
+
+                free_allocation(pending_changes.old.value.data);
+                pending_changes.old.end_line++;
+            }
+
             pending_changes.old.value = new_value;
-            pending_changes.old.end_line++;
         }
 
         // Change the end line to the line_number
