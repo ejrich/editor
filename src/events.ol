@@ -97,7 +97,6 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     }
                 }
             }
-            // TODO If in insert mode, end the change tracking if the following keys are pressed
             case KeyCode.Up; {
                 move_up(mod);
                 return;

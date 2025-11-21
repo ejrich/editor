@@ -109,6 +109,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
             case KeyCode.A; {
                 replace_value_in_buffer();
                 while find_next_value_in_buffer() {
+                    // TODO Track this change
                     replace_value_in_buffer();
                 }
                 end_replace();
@@ -120,6 +121,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 }
             }
             case KeyCode.Y; {
+                // TODO Track this change
                 replace_value_in_buffer();
                 if !find_next_value_in_buffer() {
                     end_replace();
@@ -420,6 +422,7 @@ find_and_replace(string value, bool allocated) {
         }
         else {
             while find_next_value_in_buffer(false) {
+                // TODO Track this change
                 replace_value_in_buffer();
             }
             end_replace(false);

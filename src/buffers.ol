@@ -2986,9 +2986,11 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
 }
 
 set_end_index() {
-    find_and_replace_data.end_index = find_and_replace_data.line.length;
-    if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
-        find_and_replace_data.end_index = find_and_replace_data.end_cursor + 1;
+    if find_and_replace_data.line {
+        find_and_replace_data.end_index = find_and_replace_data.line.length;
+        if (find_and_replace_data.block || find_and_replace_data.line_number == find_and_replace_data.end_line) && find_and_replace_data.end_cursor < find_and_replace_data.line.length {
+            find_and_replace_data.end_index = find_and_replace_data.end_cursor + 1;
+        }
     }
 }
 
