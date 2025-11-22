@@ -3003,6 +3003,10 @@ replace_value_in_buffer() {
         }
     }
 
+    line_number := find_and_replace_data.line_number;
+
+    begin_change(find_and_replace_data.buffer, line_number, line_number + lines - 1, find_and_replace_data.cursor, line_number);
+
     if lines == 1 {
         delete_from_line(find_and_replace_data.line, find_and_replace_data.cursor, find_and_replace_data.cursor + find_and_replace_data.value.length, false);
         find_and_replace_data.index += find_and_replace_data.value.length;
@@ -3075,6 +3079,8 @@ replace_value_in_buffer() {
         find_and_replace_data.end_line += new_lines - 1;
         find_and_replace_data.line_number += new_lines - 1;
     }
+
+    record_change(find_and_replace_data.buffer, line_number, line_number + new_lines - 1, find_and_replace_data.cursor, find_and_replace_data.line_number);
 }
 
 // Formatting specific functions
