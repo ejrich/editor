@@ -223,18 +223,24 @@ record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
         pending_changes.old.end_line == insert_mode_changes.end_line {
         line := get_buffer_line(buffer, insert_mode_changes.start_line);
         old_lines := split_string(pending_changes.old.value);
+        has_no_changes := true;
 
         each i in insert_mode_changes.end_line - insert_mode_changes.start_line + 1 {
             line_string: string = { length = line.length; data = line.data.data; }
             old_line := old_lines[i];
 
-            if line_string == old_line {
-                free_change(pending_changes);
-                pending_changes = null;
-                return;
+            if line_string != old_line {
+                has_no_changes = false;
+                break;
             }
 
             line = line.next;
+        }
+
+        if has_no_changes {
+            free_change(pending_changes);
+            pending_changes = null;
+            return;
         }
     }
 
@@ -385,10 +391,11 @@ apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change
 
                 line = line.previous;
                 delete_lines_in_range(buffer, line, change_from.end_line - change_to.end_line);
-           }
+            }
         }
-
-        // TODO What other cases need to be handled here?
+        else {
+            assert(false, "Changes not correctly set up");
+        }
     }
 
     calculate_line_digits(buffer);
