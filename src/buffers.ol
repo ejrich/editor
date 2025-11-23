@@ -642,9 +642,7 @@ copy_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 
     line_number = start_line;
     i := 0;
     while line_number <= end_line {
-        // TODO Handle long lines
-        memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
-        i += current_line.length;
+        i = copy_line_into_buffer(copy_string.data, current_line, i);
 
         if line_number != end_line {
             copy_string[i] = '\n';
@@ -759,15 +757,11 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
                 end_cursor = clamp(cursor_1, 0, line.length - 1);
             }
 
-            // TODO Handle long lines
-            copy_string = {
-                length = end_cursor - start_cursor;
-                data = line.data.data + start_cursor;
-            }
+            if include_end end_cursor++;
 
-            if include_end copy_string.length++;
-
-            allocate_strings(&copy_string);
+            copy_length := end_cursor - start_cursor;
+            copy_string = { length = copy_length; data = allocate(copy_length); }
+            copy_line_into_buffer(copy_string.data, line, 0, start_cursor, end_cursor - 1);
         }
     }
     else {
@@ -820,6 +814,7 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
         line_number = start_line_number;
         i: u32;
         while line_number++ <= end_line_number {
+            // TODO Handle long lines
             if current_line == start_line {
                 length := current_line.length - start_cursor;
                 memory_copy(copy_string.data + i, current_line.data.data + start_cursor, length);
@@ -843,6 +838,63 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
     }
 
     save_string_to_clipboard(copy_string, ClipboardMode.Normal);
+}
+
+u32 copy_line_into_buffer(u8* buffer, BufferLine* line, u32 index, u32 start = 0, s32 end = -1) {
+    if end == -1 {
+        end = line.length - 1;
+    }
+
+    if end < line_buffer_length {
+        copy_length := end - start + 1;
+        memory_copy(buffer + index, line.data.data + start, copy_length);
+        index += copy_length;
+    }
+    else {
+        assert(line.child != null);
+
+        start_line := start / line_buffer_length;
+
+        // Copy from the parent line if specified
+        if start_line == 0 {
+            copy_length := line_buffer_length - start;
+            memory_copy(buffer + index, line.data.data + start, copy_length);
+            index += copy_length;
+        }
+
+        // Get the starting child line
+        child := line.child;
+        current_child := 1;
+        while current_child < start_line {
+            child = child.next;
+            current_child++;
+        }
+
+        end_line := end / line_buffer_length;
+        while current_child <= end_line {
+            line_start_index := current_child * line_buffer_length;
+            copy_start: u32 = 0;
+            if start > line_start_index {
+                copy_start = line_buffer_length - (start - line_start_index);
+            }
+
+            line_end_index := (current_child + 1) * line_buffer_length - 1;
+            copy_end: u32 = line_buffer_length - 1;
+            if end < line_end_index {
+                copy_end = end;
+            }
+
+            copy_length := copy_end - copy_start + 1;
+            memory_copy(buffer + index, child.data.data + start, copy_length);
+
+            index += copy_length;
+
+            child = child.next;
+            current_child++;
+        }
+    }
+
+    return index;
 }
 
 paste_by_cursor(bool before, u32 paste_count) {
@@ -1441,8 +1493,9 @@ delete_selected(bool copy = true, bool record = false, bool inserting = false) {
             if line.length {
                 cursor := clamp(buffer_window.cursor, 0, line.length - 1);
                 if copy {
-                    // TODO Handle long lines
-                    copy_string = { length = 1; data = line.data.data + cursor; }
+                    copy_char: u8;
+                    copy_line_into_buffer(&copy_char, line, 0, cursor, cursor);
+                    copy_string = { length = 1; data = &copy_char; }
                     allocate_strings(&copy_string);
                 }
 
