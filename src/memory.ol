@@ -136,7 +136,7 @@ print_arenas() {
 }
 
 // Line allocation
-BufferLine* allocate_line() {
+BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null) {
     line_memory_size := size_of(BufferLine) + line_buffer_length; #const
     lines_to_allocate := 0x10000; #const
 
@@ -175,6 +175,9 @@ BufferLine* allocate_line() {
                 line_arena.first_available = lines_to_allocate;
             }
 
+            line.parent = parent;
+            line.previous = previous;
+
             return line;
         }
     }
@@ -184,10 +187,19 @@ BufferLine* allocate_line() {
 }
 
 free_line(BufferLine* line) {
+    // TODO Deallocate child lines
     line_arena := &line_arenas[line.arena_index];
     line.allocated = false;
     if line.index < line_arena.first_available {
         line_arena.first_available = line.index;
+    }
+}
+
+free_child_lines(BufferLine* line) {
+    while line {
+        next := line.next;
+        free_line(line);
+        line = next;
     }
 }
 

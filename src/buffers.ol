@@ -99,6 +99,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
+            // TODO Handle long lines
             line_string: string = { length = line.length; data = line.data.data; }
             cursor, visual_start, visual_end := -1;
 
@@ -247,6 +248,8 @@ open_file_buffer(string path) {
             line := allocate_line();
             buffer = { line_count = 1; lines = line; }
 
+            tab := create_empty_string(settings.tab_size);
+
             add_new_line := false;
             each i in file.length {
                 char := file[i];
@@ -263,14 +266,11 @@ open_file_buffer(string path) {
                     add_new_line = true;
                 }
                 else if char == '\t' {
-                    assert(line.length + settings.tab_size < line_buffer_length);
-                    each j in settings.tab_size {
-                        line.data[line.length++] = ' ';
-                    }
+                    add_text_to_line(line, tab, line.length);
                 }
                 else {
-                    assert(line.length < line_buffer_length);
-                    line.data[line.length++] = char;
+                    char_string: string = { length = 1; data = &char; }
+                    add_text_to_line(line, char_string, line.length);
                 }
             }
 
@@ -642,6 +642,7 @@ copy_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 
     line_number = start_line;
     i := 0;
     while line_number <= end_line {
+        // TODO Handle long lines
         memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
         i += current_line.length;
 
@@ -699,6 +700,7 @@ copy_block(FileBuffer* buffer, u32 start_line, u32 start_cursor, u32 end_line, u
     line_number = start_line;
     i: u32;
     while line_number <= end_line {
+        // TODO Handle long lines
         each j in start_cursor..end_cursor {
             if j >= current_line.length {
                 copy_string[i] = ' ';
@@ -757,6 +759,7 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
                 end_cursor = clamp(cursor_1, 0, line.length - 1);
             }
 
+            // TODO Handle long lines
             copy_string = {
                 length = end_cursor - start_cursor;
                 data = line.data.data + start_cursor;
@@ -1111,26 +1114,29 @@ add_text_to_line(string text) {
 
 u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = false, bool clear = false) {
     if clear {
+        // Free any child lines that extend past the new text length
+        if text.length <= line_buffer_length {
+            if line.child {
+                free_child_lines(line.child);
+                line.child = null;
+            }
+        }
+
         line.length = 0;
+        return add_text_to_end_of_line(line, text);
     }
 
     if fill && cursor > line.length {
-        each i in cursor - line.length {
-            line.data[line.length++] = ' ';
-        }
+        fill_string := create_empty_string(cursor - line.length);
+        add_text_to_end_of_line(line, fill_string);
     }
 
     new_cursor: u32;
-    if line.length + text.length > line_buffer_length {
-        // TODO Allocate additional lines
-        new_cursor = line.length;
-    }
-    else if line.length <= cursor {
-        memory_copy(line.data.data + line.length, text.data, text.length);
-        line.length += text.length;
-        new_cursor = line.length;
+    if line.length <= cursor {
+        new_cursor = add_text_to_end_of_line(line, text);
     }
     else {
+        // TODO Handle long lines
         each i in line.length - cursor {
             line.data[line.length + text.length - 1 - i] = line.data[line.length - 1 - i];
         }
@@ -1141,6 +1147,57 @@ u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = 
     }
 
     return new_cursor;
+}
+
+u32 add_text_to_end_of_line(BufferLine* line, string text) {
+    new_length := line.length + text.length;
+    if new_length <= line_buffer_length {
+        memory_copy(line.data.data + line.length, text.data, text.length);
+    }
+    else {
+        current_child := line.length / line_buffer_length;
+        child_lines := (line.length + text.length) / line_buffer_length;
+
+        text_start_index := 0;
+        remaining := text.length;
+
+        if line.length < line_buffer_length {
+            copy_length := line_buffer_length - line.length;
+            memory_copy(line.data.data + line.length, text.data, copy_length);
+            text_start_index += copy_length;
+            remaining -= copy_length;
+        }
+
+        if line.child == null {
+            line.child = allocate_line(line);
+        }
+
+        child := line.child;
+        while true {
+            if child.length + remaining <= line_buffer_length {
+                memory_copy(child.data.data + child.length, text.data + text_start_index, remaining);
+                child.length += remaining;
+                free_child_lines(child.next);
+                child.next = null;
+                break;
+            }
+
+            copy_length := line_buffer_length - child.length;
+            memory_copy(child.data.data + child.length, text.data + text_start_index, copy_length);
+            child.length = line_buffer_length;
+            text_start_index += copy_length;
+            remaining -= copy_length;
+
+            if child.next == null {
+                child.next = allocate_line(line, child);
+            }
+
+            child = child.next;
+        }
+    }
+
+    line.length = new_length;
+    return new_length;
 }
 
 // Block insert mode
@@ -1384,6 +1441,7 @@ delete_selected(bool copy = true, bool record = false, bool inserting = false) {
             if line.length {
                 cursor := clamp(buffer_window.cursor, 0, line.length - 1);
                 if copy {
+                    // TODO Handle long lines
                     copy_string = { length = 1; data = line.data.data + cursor; }
                     allocate_strings(&copy_string);
                 }
@@ -1540,6 +1598,7 @@ clear_remaining_line(bool record = false, bool inserting = false) {
         buffer_window.cursor = 0;
     }
     else {
+        // TODO Handle long lines
         buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
         copy_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, buffer_window.line, line.length - 1);
         line.length = buffer_window.cursor;
@@ -1654,10 +1713,12 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
     }
 
     if start >= line.length {
+        // TODO Handle long lines
         return line.length;
     }
 
     if end >= line.length {
+        // TODO Handle long lines
         line.length = start;
     }
     else {
@@ -1667,6 +1728,7 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
             delete_length++;
         }
 
+        // TODO Handle long lines
         memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
         line.length -= delete_length;
     }
@@ -3297,6 +3359,8 @@ struct BufferLine {
     data: string;
     previous: BufferLine*;
     next: BufferLine*;
+    parent: BufferLine*;
+    child: BufferLine*;
 }
 
 buffers: Array<FileBuffer>;
@@ -3631,6 +3695,7 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
         }
 
         if copy_length {
+            // TODO Handle long lines
             memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line, copy_length);
             start_line.length += copy_length;
         }
@@ -3766,12 +3831,7 @@ indent_line(BufferWindow* buffer_window, BufferLine* line) {
 }
 
 indent_line(BufferLine* line, u32 indent_length) {
-    indent_array: Array<u8>[indent_length];
-    each char in indent_array {
-        char = ' ';
-    }
-    indent_string: string = { length = indent_length; data = indent_array.data; }
-
+    indent_string := create_empty_string(indent_length);
     add_text_to_line(line, indent_string);
 }
 

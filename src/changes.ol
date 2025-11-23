@@ -294,6 +294,7 @@ string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
     length = 0;
     each i in start_line..end_line {
         assert(line != null);
+        // TODO Handle long lines
         memory_copy(recorded_lines.data + length, line.data.data, line.length);
         length += line.length;
         if i < end_line
@@ -306,6 +307,7 @@ string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
 }
 
 string record_change_line(BufferLine* line) {
+    // TODO Handle long lines
     recorded_line: string = { length = line.length; data = line.data.data; }
     allocate_strings(&recorded_line);
 

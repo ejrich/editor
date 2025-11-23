@@ -221,6 +221,16 @@ Array<string> split_string(string value) #inline {
     return value_lines;
 }
 
+string create_empty_string(u32 length) #inline {
+    string_data: Array<u8>[length];
+    str: string = { length = length; data = string_data.data; }
+    each i in length {
+        str[i] = ' ';
+    }
+
+    return str;
+}
+
 #private
 
 running := true;
