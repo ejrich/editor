@@ -1184,17 +1184,28 @@ u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = 
         new_cursor = add_text_to_end_of_line(line, text);
     }
     else {
-        // TODO Handle long lines
-        each i in line.length - cursor {
-            line.data[line.length + text.length - 1 - i] = line.data[line.length - 1 - i];
+        new_length := line.length + text.length;
+        if new_length <= line_buffer_length {
+            each i in line.length - cursor {
+                line.data[line.length + text.length - 1 - i] = line.data[line.length - 1 - i];
+            }
+
+            memory_copy(line.data.data + cursor, text.data, text.length);
+        }
+        else {
+            // TODO Handle long lines
         }
 
-        memory_copy(line.data.data + cursor, text.data, text.length);
-        line.length += text.length;
+        line.length = new_length;
         new_cursor = cursor + text.length;
     }
 
     return new_cursor;
+}
+
+u32 add_text_to_end_of_line(BufferLine* line, u8* data, u32 length) {
+    line_string: string = { length = length; data = data; }
+    return add_text_to_end_of_line(line, line_string);
 }
 
 u32 add_text_to_end_of_line(BufferLine* line, string text) {
@@ -1428,7 +1439,7 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
 
     each i in count {
         next := new_next.next;
-        free_line(new_next);
+        free_line_and_children(new_next);
         new_next = next;
         buffer.line_count--;
     }
@@ -1453,7 +1464,7 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
             }
         }
 
-        free_line(start);
+        free_line_and_children(start);
         buffer.line_count--;
     }
     else {
@@ -1746,7 +1757,8 @@ delete_cursor(bool back, u32 cursor_changes) {
 
 bool is_whitespace_before_cursor(BufferLine* line, u32 cursor) {
     each i in cursor {
-        if line.data[i] != ' ' {
+        char := get_char(line, i);
+        if char != ' ' {
             return false;
         }
     }
@@ -1968,7 +1980,8 @@ change_indentation(bool indent, u32 indentations) {
         else {
             available_whitespace: u32;
             while available_whitespace < line.length {
-                if line.data[available_whitespace] != ' '
+                char := get_char(line, available_whitespace);
+                if char != ' '
                     break;
 
                 available_whitespace++;
@@ -2073,7 +2086,7 @@ replace_characters(u8 char) {
 replace_characters_in_line(BufferLine* line, u8 char, u32 start, u32 end) {
     i := start;
     while i < line.length && i <= end {
-        line.data[i++] = char;
+        set_char(line, i++, char);
     }
 }
 
@@ -2226,7 +2239,7 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
         if line != null {
             cursor := 0;
             while cursor < line.length {
-                char := line.data[cursor];
+                char := get_char(line, cursor);
                 if !is_whitespace(char) {
                     break;
                 }
@@ -2300,7 +2313,7 @@ move_to_start_of_word(bool forward, bool full_word) {
     }
     else {
         cursor = clamp(buffer_window.cursor, 0, line.length - 1);
-        char = line.data[cursor];
+        char = get_char(line, cursor);
         is_whitespace = is_whitespace(char);
     }
 
@@ -2312,7 +2325,7 @@ move_to_start_of_word(bool forward, bool full_word) {
             is_text := is_text_character(char);
             next_word_found, whitespace_found := false;
             while ++cursor < line.length {
-                char = line.data[cursor];
+                char = get_char(line, cursor);
                 if is_whitespace(char) {
                     whitespace_found = true;
                 }
@@ -2340,7 +2353,7 @@ move_to_start_of_word(bool forward, bool full_word) {
         is_first := false;
         if !is_whitespace && cursor > 0 {
             is_text := is_text_character(char);
-            previous_char := line.data[cursor - 1];
+            previous_char := get_char(line, cursor - 1);
             if is_whitespace(previous_char) {
                 is_first = true;
             }
@@ -2367,7 +2380,7 @@ move_to_start_of_word(bool forward, bool full_word) {
                 char_found := false;
                 if line.length > 0 {
                     while true {
-                        char = line.data[cursor];
+                        char = get_char(line, cursor);
                         if !is_whitespace(char) {
                             char_found = true;
                             break;
@@ -2399,7 +2412,7 @@ move_to_start_of_word(bool forward, bool full_word) {
                 break;
             }
 
-            previous_char := line.data[cursor - 1];
+            previous_char := get_char(line, cursor - 1);
             if is_whitespace(previous_char) || !full_word && (is_text != is_text_character(previous_char)) {
                 break;
             }
@@ -2432,13 +2445,13 @@ move_to_end_of_word(bool full_word) {
     }
     else {
         cursor = clamp(buffer_window.cursor, 0, line.length - 1);
-        char = line.data[cursor];
+        char = get_char(line, cursor);
         is_whitespace = is_whitespace(char);
     }
 
     if !is_whitespace && cursor < line.length - 1 {
         is_text := is_text_character(char);
-        next_char := line.data[cursor + 1];
+        next_char := get_char(line, cursor + 1);
         if is_whitespace(next_char) {
             is_last = true;
         }
@@ -2454,14 +2467,14 @@ move_to_end_of_word(bool full_word) {
 
     // Move to the end of the word
     cursor = buffer_window.cursor;
-    char = line.data[cursor];
+    char = get_char(line, cursor);
     is_text := is_text_character(char);
     while cursor < line.length {
         if cursor + 1 == line.length {
             break;
         }
 
-        next_char := line.data[cursor + 1];
+        next_char := get_char(line, cursor + 1);
         if is_whitespace(next_char) || !full_word && (is_text != is_text_character(next_char)) {
             break;
         }
@@ -2520,7 +2533,7 @@ move_to_line_boundary(bool end, bool soft_boundary, bool with_wrap) {
         cursor := 0;
         if soft_boundary {
             while cursor < line.length {
-                char := line.data[cursor];
+                char := get_char(line, cursor);
                 if !is_whitespace(char) {
                     break;
                 }
@@ -2635,7 +2648,7 @@ move_to_syntax_match() {
     match_char, complement_char: u8;
     forward: bool;
     while cursor < line.length {
-        complement_char = line.data[cursor];
+        complement_char = get_char(line, cursor);
         switch complement_char {
             case '('; {
                 match_char = ')';
@@ -2682,9 +2695,9 @@ move_to_syntax_match() {
         while line {
             if line.length {
                 each i in cursor..line.length - 1 {
-                    char := line.data[i];
+                    char := get_char(line, i);
                     if char == '"' {
-                        if i == 0 || line.data[i - 1] != '\\' {
+                        if i == 0 || get_char(line, i - 1) != '\\' {
                             is_string = !is_string;
                         }
                     }
@@ -2726,9 +2739,9 @@ move_to_syntax_match() {
         while line {
             if line.length {
                 each i in cursor {
-                    char := line.data[cursor - i - 1];
+                    char := get_char(line, cursor - i - 1);
                     if char == '"' {
-                        if i == cursor - 1 || line.data[cursor - i - 2] != '\\' {
+                        if i == cursor - 1 || get_char(line, cursor - i - 2) != '\\' {
                             is_string = !is_string;
                         }
                     }
@@ -2787,7 +2800,7 @@ find_character_in_line(bool forward, bool before, string char) {
     if forward {
         cursor++;
         while cursor < line.length {
-            if line.data[cursor] == char[0] {
+            if get_char(line, cursor) == char[0] {
                 char_found = true;
                 break;
             }
@@ -2802,7 +2815,7 @@ find_character_in_line(bool forward, bool before, string char) {
     else if cursor > 0 {
         cursor--;
         while true {
-            if line.data[cursor] == char[0] {
+            if get_char(line, cursor) == char[0] {
                 char_found = true;
                 break;
             }
@@ -2847,10 +2860,10 @@ find_value_in_buffer(string value, bool next) {
         while true {
             // Only check if there are enough characters in the line to match the string
             while cursor + value.length <= line.length {
-                if line.data.data[cursor] == value[0] {
+                if get_char(line, cursor) == value[0] {
                     matched := true;
                     each i in 1..value.length - 1 {
-                        if line.data.data[cursor + i] != value[i] {
+                        if get_char(line, cursor + i) != value[i] {
                             matched = false;
                             break;
                         }
@@ -2891,10 +2904,10 @@ find_value_in_buffer(string value, bool next) {
         while true {
             // Only check if there are enough characters in the line to match the string
             while line.length >= value.length && cursor >= value.length - 1 {
-                if line.data.data[cursor] == value[value.length - 1] {
+                if get_char(line, cursor) == value[value.length - 1] {
                     matched := true;
                     each i in 1..value.length - 1 {
-                        if line.data.data[cursor - i] != value[value.length - 1 - i] {
+                        if get_char(line, cursor - i) != value[value.length - 1 - i] {
                             matched = false;
                             break;
                         }
@@ -3041,11 +3054,11 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
     while find_and_replace_data.line != null && find_and_replace_data.line_number + value_lines.length - 1 <= find_and_replace_data.end_line {
         // Only check if there are enough characters in the line to match the string
         while find_and_replace_data.index + value_lines[0].length <= find_and_replace_data.end_index {
-            if find_and_replace_data.line.data.data[find_and_replace_data.cursor] == find_and_replace_data.value[0] {
+            if get_char(find_and_replace_data.line, find_and_replace_data.cursor) == find_and_replace_data.value[0] {
                 matched := true;
                 if value_lines.length == 1 {
                     each i in 1..find_and_replace_data.value.length - 1 {
-                        if find_and_replace_data.line.data.data[find_and_replace_data.cursor + i] != find_and_replace_data.value[i] {
+                        if get_char(find_and_replace_data.line, find_and_replace_data.cursor + i) != find_and_replace_data.value[i] {
                             matched = false;
                             break;
                         }
@@ -3058,7 +3071,7 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
                         if i < value_lines.length - 1 {
                             if current_line.length - cursor == line.length {
                                 each j in line.length {
-                                    if current_line.data.data[cursor + j] != line[j] {
+                                    if get_char(current_line, cursor + j) != line[j] {
                                         matched = false;
                                         break;
                                     }
@@ -3078,7 +3091,7 @@ bool find_next_value_in_buffer(bool move_cursor = true) {
                         }
                         else {
                             each j in line.length {
-                                if current_line.data.data[cursor + j] != line[j] {
+                                if get_char(current_line, cursor + j) != line[j] {
                                     matched = false;
                                     break;
                                 }
@@ -3245,11 +3258,11 @@ change_selected_line_commenting() {
         line_number := start_line;
         while line != null && line_number <= end_line {
             each i in line.length {
-                if line.data[i] != ' ' {
+                if get_char(line, i) != ' ' {
                     has_comment := true;
                     if comment_string.length <= line.length - i {
                         each j in comment_string.length {
-                            if line.data[i + j] != comment_string[j] {
+                            if get_char(line, i + j) != comment_string[j] {
                                 has_comment = false;
                                 break;
                             }
@@ -3278,9 +3291,9 @@ change_selected_line_commenting() {
         line_number := start_line;
         while line != null && line_number <= end_line {
             each i in line.length {
-                if line.data[i] != ' ' {
+                if get_char(line, i) != ' ' {
                     delete_length := comment_string.length;
-                    if i + delete_length < line.length && line.data[i + delete_length] == ' ' {
+                    if i + delete_length < line.length && get_char(line, i + delete_length) == ' ' {
                         delete_length++;
                     }
 
@@ -3385,14 +3398,14 @@ toggle_casing(bool upper) {
     line := get_buffer_line(buffer, line_number);
     while line != null && line_number <= end_line {
         while cursor < line.length && ((!block && line_number != end_line) || cursor <= end_cursor) {
-            char := line.data[cursor];
+            char := get_char(line, cursor);
             if upper {
                 if char >= 'a' && char <= 'z' {
-                    line.data[cursor] = char - 0x20;
+                    set_char(line, cursor, char - 0x20);
                 }
             }
             else if char >= 'A' && char <= 'Z' {
-                line.data[cursor] = char + 0x20;
+                set_char(line, cursor, char + 0x20);
             }
 
             cursor++;
@@ -3494,6 +3507,47 @@ BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {
     }
 
     return line;
+}
+
+u8 get_char(BufferLine* line, u32 index) {
+    if index >= line.length return 0;
+
+    if index < line_buffer_length {
+        return line.data[index];
+    }
+
+    assert(line.child != null);
+
+    index -= line_buffer_length;
+    child := line.child;
+    while index >= line_buffer_length {
+        child = child.next;
+        assert(child != null);
+        index -= line_buffer_length;
+    }
+
+    return child.data[index];
+}
+
+set_char(BufferLine* line, u32 index, u8 char) {
+    if index >= line.length return;
+
+    if index < line_buffer_length {
+        line.data[index] = char;
+        return;
+    }
+
+    assert(line.child != null);
+
+    index -= line_buffer_length;
+    child := line.child;
+    while index >= line_buffer_length {
+        child = child.next;
+        assert(child != null);
+        index -= line_buffer_length;
+    }
+
+    child.data[index] = char;
 }
 
 u32, u32 get_current_position() {
@@ -3663,7 +3717,7 @@ BufferLine* move_to_next_non_whitespace(BufferWindow* window, BufferLine* line, 
     while true {
         char_found := false;
         while cursor < line.length {
-            char := line.data[cursor];
+            char := get_char(line, cursor);
             if !is_whitespace(char) {
                 char_found = true;
                 break;
@@ -3687,7 +3741,8 @@ BufferLine* move_to_next_non_whitespace(BufferWindow* window, BufferLine* line, 
 bool trim_line(BufferLine* line) {
     actual_length: u32;
     each i in line.length {
-        if !is_whitespace(line.data[i]) {
+        char := get_char(line, i);
+        if !is_whitespace(char) {
             actual_length = i + 1;
         }
     }
@@ -3738,35 +3793,56 @@ BufferLine* get_next_line_with_text(BufferLine* line) {
 merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true, bool joining = false) {
     start_line.length = end_start_line;
     if beginning_end_line < end_line.length {
-        copy_length: u32;
         if joining {
             beginning_end_line = 0;
             while beginning_end_line < end_line.length {
-                if end_line.data[beginning_end_line] != ' '
+                if get_char(end_line, beginning_end_line) != ' '
                     break;
 
                 beginning_end_line++;
             }
 
-            copy_length = end_line.length - beginning_end_line;
-            if copy_length {
-                start_line.data[start_line.length] = ' ';
-                start_line.length++;
+            if end_line.length - beginning_end_line {
+                add_text_to_end_of_line(start_line, " ");
                 end_start_line++;
             }
         }
         else {
-            copy_length = end_line.length - beginning_end_line;
             if delete_end_cursor {
-                copy_length--;
                 beginning_end_line++;
             }
         }
 
+        if end_start_line < start_line.length {
+            delete_from_line(start_line, end_start_line, start_line.length - 1);
+        }
+
+        copy_length := end_line.length - beginning_end_line;
         if copy_length {
-            // TODO Handle long lines
-            memory_copy(start_line.data.data + end_start_line, end_line.data.data + beginning_end_line, copy_length);
-            start_line.length += copy_length;
+            if end_line.length <= line_buffer_length {
+                add_text_to_end_of_line(start_line, end_line.data.data + beginning_end_line, copy_length);
+            }
+            else {
+                if beginning_end_line < line_buffer_length {
+                    copy_section := line_buffer_length - beginning_end_line;
+                    add_text_to_end_of_line(start_line, end_line.data.data + beginning_end_line, copy_section);
+                }
+
+                child := end_line.child;
+                index := line_buffer_length;
+                while child {
+                    if beginning_end_line <= index {
+                        add_text_to_end_of_line(start_line, child.data.data, child.length);
+                    }
+                    else {
+                        start := beginning_end_line - index;
+                        copy_section := end_line.length - start;
+                        add_text_to_end_of_line(start_line, child.data.data + start, copy_section);
+                    }
+                    child = child.next;
+                    index += line_buffer_length;
+                }
+            }
         }
     }
 
@@ -3774,7 +3850,7 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
         line_to_free := start_line.next;
         while line_to_free != end_line {
             line_to_free = line_to_free.next;
-            free_line(line_to_free.previous);
+            free_line_and_children(line_to_free.previous);
             buffer.line_count--;
         }
     }
@@ -3783,7 +3859,7 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
     if start_line.next
         start_line.next.previous = start_line;
 
-    free_line(end_line);
+    free_line_and_children(end_line);
     buffer.line_count--;
 
     calculate_line_digits(buffer);
@@ -3815,7 +3891,7 @@ delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u3
                 }
             }
 
-            free_line(line);
+            free_line_and_children(line);
             buffer.line_count--;
 
             calculate_line_digits(buffer);
@@ -3870,7 +3946,7 @@ indent_line(BufferWindow* buffer_window, BufferLine* line) {
 
     if line_to_copy_indentation {
         each i in line_to_copy_indentation.length {
-            char := line_to_copy_indentation.data[i];
+            char := get_char(line_to_copy_indentation, i);
             if parsing_indents {
                 if char == ' ' {
                     indent_length++;

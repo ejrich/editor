@@ -202,6 +202,12 @@ free_child_lines(BufferLine* line) {
     }
 }
 
+free_line_and_children(BufferLine* line) {
+    free_child_lines(line.child);
+    free_line(line);
+}
+
+
 // Temporary allocation (resets every frame)
 void* temp_allocate(u64 size) {
     cursor := temporary_buffer_cursor;
