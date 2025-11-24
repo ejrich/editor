@@ -107,7 +107,7 @@ render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 back
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 }
 
-u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end) {
+u32 render_line(BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -120,7 +120,7 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
         line_number_offset := (digits + 1) * font_texture.quad_advance;
         available_line_width := max_x - x - line_number_offset;
 
-        full_line_width := text.length * font_texture.quad_advance;
+        full_line_width := line.length * font_texture.quad_advance;
         rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
 
         current_line_quad: QuadInstanceData = {
@@ -169,7 +169,20 @@ u32 render_line(string text, float x, float y, u32 line_number, u32 digits, int 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line_with_cursor(font_texture, text, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
+    line_count: u32;
+    text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
+
+    line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
+    index: u32 = text.length;
+
+    if line.child {
+        child := line.child;
+        text = { length = child.length; data = child.data.data; }
+        line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
+        index += child.length;
+    }
+
+    return line_count;
 }
 
 render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
@@ -177,7 +190,7 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    render_line_with_cursor(font_texture, text, x, y, cursor, true, max_x, lines_available);
+    render_line_with_cursor(font_texture, text, x, x, y, cursor, true, max_x, lines_available);
 }
 
 
@@ -241,15 +254,13 @@ global_font_config: GlobalFontConfig;
 
 library: FT_Library*;
 
-u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1) {
+u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
-    x_start := x;
-    line_count := 1;
     quad_data: Array<QuadInstanceData>[text.length];
-    i, length := 0;
+    length := 0;
 
-    while i < text.length {
+    each i in text.length {
         if x + font_texture.quad_advance > max_x {
             if line_count >= lines_available
                 break;
@@ -260,11 +271,11 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
         }
 
         font_color := appearance.font_color;
-        if i == cursor && render_cursor {
+        if index == cursor && render_cursor {
             font_color = appearance.cursor_font_color;
             draw_cursor(x, y, appearance.cursor_color);
         }
-        else if i >= visual_start && i <= visual_end {
+        else if index >= visual_start && index <= visual_end {
             font_color = appearance.visual_font_color;
             draw_cursor(x, y, appearance.font_color);
         }
@@ -287,7 +298,7 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
         }
 
         x += font_texture.quad_advance;
-        i++;
+        index++;
     }
 
     if cursor == text.length && render_cursor {
@@ -298,7 +309,7 @@ u32 render_line_with_cursor(FontTexture* font_texture, string text, float x, flo
     if length > 0
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
-    return line_count;
+    return line_count, x, y;
 }
 
 

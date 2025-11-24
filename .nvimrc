@@ -11,5 +11,6 @@ if has('win32')
 else
     map <leader><F8>  :Dispatch ~/lang/ol/bin/Debug/net8.0/ol src/first.ol<CR>
     map <leader>t<F8> :Dispatch ~/lang/ol/bin/Debug/net8.0/ol -R src/first.ol<CR>
-    map <leader><F5>  :Dispatch ./run_tree/editor src/first.ol<CR>
+    " map <leader><F5>  :Dispatch ./run_tree/editor src/first.ol<CR>
+    map <leader><F5>  :Dispatch ./run_tree/editor test/long_lines.txt<CR>
 endif

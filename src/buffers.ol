@@ -99,8 +99,6 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
-            // TODO Handle long lines
-            line_string: string = { length = line.length; data = line.data.data; }
             cursor, visual_start, visual_end := -1;
 
             if line_number == cursor_line ||
@@ -177,7 +175,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
                 }
             }
 
-            lines := render_line(line_string, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
+            lines := render_line(line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }
