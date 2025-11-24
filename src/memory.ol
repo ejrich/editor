@@ -187,7 +187,6 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
 }
 
 free_line(BufferLine* line) {
-    // TODO Deallocate child lines
     line_arena := &line_arenas[line.arena_index];
     line.allocated = false;
     if line.index < line_arena.first_available {

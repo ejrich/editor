@@ -698,20 +698,24 @@ copy_block(FileBuffer* buffer, u32 start_line, u32 start_cursor, u32 end_line, u
     line_number = start_line;
     i: u32;
     while line_number <= end_line {
-        // TODO Handle long lines
-        each j in start_cursor..end_cursor {
-            if j >= current_line.length {
-                copy_string[i] = ' ';
+        if start_cursor >= current_line.length {
+            // Fill with only spaces
+            each j in start_cursor..end_cursor {
+                copy_string[i++] = ' ';
             }
-            else {
-                copy_string[i] = current_line.data[j];
+        }
+        else {
+            line_end := clamp(end_cursor, 0, current_line.length - 1);
+            i = copy_line_into_buffer(copy_string.data, current_line, i, start_cursor, line_end);
+
+            // Fill if necessary
+            each j in end_cursor - line_end {
+                copy_string[i++] = ' ';
             }
-            i++;
         }
 
         if line_number != end_line {
-            copy_string.data[i] = '\n';
-            i++;
+            copy_string.data[i++] = '\n';
         }
 
         current_line = current_line.next;
@@ -814,23 +818,17 @@ copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 c
         line_number = start_line_number;
         i: u32;
         while line_number++ <= end_line_number {
-            // TODO Handle long lines
             if current_line == start_line {
-                length := current_line.length - start_cursor;
-                memory_copy(copy_string.data + i, current_line.data.data + start_cursor, length);
-                copy_string.data[i + length] = '\n';
-                i += length + 1;
+                i = copy_line_into_buffer(copy_string.data, current_line, i, start_cursor);
+                copy_string.data[i++] = '\n';
             }
             else if current_line == end_line {
-                memory_copy(copy_string.data + i, current_line.data.data, end_cursor);
-                if include_end {
-                    copy_string.data[i + end_cursor] = current_line.data[end_cursor];
-                }
+                if !include_end end_cursor--;
+                i = copy_line_into_buffer(copy_string.data, current_line, i, 0, end_cursor);
             }
             else {
-                memory_copy(copy_string.data + i, current_line.data.data, current_line.length);
-                copy_string.data[i + current_line.length] = '\n';
-                i += current_line.length + 1;
+                i = copy_line_into_buffer(copy_string.data, current_line, i);
+                copy_string.data[i++] = '\n';
             }
 
             current_line = current_line.next;
@@ -1208,7 +1206,6 @@ u32 add_text_to_end_of_line(BufferLine* line, string text) {
     }
     else {
         current_child := line.length / line_buffer_length;
-        child_lines := (line.length + text.length) / line_buffer_length;
 
         text_start_index := 0;
         remaining := text.length;
@@ -1651,7 +1648,6 @@ clear_remaining_line(bool record = false, bool inserting = false) {
         buffer_window.cursor = 0;
     }
     else {
-        // TODO Handle long lines
         buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
         copy_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, buffer_window.line, line.length - 1);
         line.length = buffer_window.cursor;
@@ -1766,12 +1762,10 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
     }
 
     if start >= line.length {
-        // TODO Handle long lines
         return line.length;
     }
 
     if end >= line.length {
-        // TODO Handle long lines
         line.length = start;
     }
     else {
@@ -1784,6 +1778,30 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
         // TODO Handle long lines
         memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
         line.length -= delete_length;
+    }
+
+    // Free unused child lines
+    if line.length <= line_buffer_length {
+        if line.child {
+            free_child_lines(line.child);
+            line.child = null;
+        }
+    }
+    else {
+        index := line_buffer_length;
+        child := line.child;
+        while true {
+            if index + line_buffer_length >= line.length {
+                child.length = line.length - index;
+                free_child_lines(child.next);
+                child.next = null;
+                break;
+            }
+
+            child.length = line_buffer_length;
+            index += line_buffer_length;
+            child = child.next;
+        }
     }
 
     return start;
