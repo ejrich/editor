@@ -877,7 +877,7 @@ u32 copy_line_into_buffer(u8* buffer, BufferLine* line, u32 index, u32 start = 0
             line_end_index := (current_child + 1) * line_buffer_length - 1;
             copy_end: u32 = line_buffer_length - 1;
             if end < line_end_index {
-                copy_end = end;
+                copy_end = end - line_start_index;
             }
 
             copy_length := copy_end - copy_start + 1;

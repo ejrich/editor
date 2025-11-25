@@ -254,7 +254,7 @@ arena_head: Arena*;
 void* allocate_arena(u64 initial_block_size, u64 size = default_arena_size) {
     new_arena := create_arena(initial_block_size, size);
 
-    log("Allocating new arena with initial size = %\n", initial_block_size);
+    log("Allocating new arena with initial block = %, total size = %\n", initial_block_size, size);
 
     arena := arena_head;
     while arena {
