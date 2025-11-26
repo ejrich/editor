@@ -1785,8 +1785,13 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
             delete_length++;
         }
 
-        // TODO Handle long lines
-        memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
+        if line.length <= line_buffer_length {
+            memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
+        }
+        else {
+            // TODO Handle long lines
+        }
+
         line.length -= delete_length;
     }
 
