@@ -173,15 +173,17 @@ u32 render_line(BufferLine* line, float x, float y, u32 line_number, u32 digits,
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
     line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
-    index: u32 = text.length;
 
-    child := line.child;
-    while child {
-        text = { length = child.length; data = child.data.data; }
-        // TODO Fix cursor not rendering at EOL
-        line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
-        index += child.length;
-        child = child.next;
+    if line.child {
+        child := line.child;
+        index := text.length;
+        while child {
+            text = { length = child.length; data = child.data.data; }
+            line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
+
+            index += child.length;
+            child = child.next;
+        }
     }
 
     return line_count;
@@ -303,7 +305,7 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
         index++;
     }
 
-    if cursor == text.length && render_cursor {
+    if cursor == index && render_cursor {
         draw_cursor(x, y, appearance.cursor_color);
     }
 
