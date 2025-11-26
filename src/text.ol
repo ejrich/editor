@@ -178,6 +178,7 @@ u32 render_line(BufferLine* line, float x, float y, u32 line_number, u32 digits,
     child := line.child;
     while child {
         text = { length = child.length; data = child.data.data; }
+        // TODO Fix cursor not rendering at EOL
         line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
         index += child.length;
         child = child.next;

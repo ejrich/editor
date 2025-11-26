@@ -1193,7 +1193,40 @@ u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = 
             memory_copy(line.data.data + cursor, text.data, text.length);
         }
         else {
-            // TODO Handle long lines
+            // Allocate the additional blocks needed
+            if line.child == null {
+                line.child = allocate_line(line);
+            }
+
+            child := line.child;
+            start_index := line_buffer_length;
+            while start_index < new_length {
+                remaining_length := new_length - start_index;
+                if remaining_length <= line_buffer_length {
+                    child.length = remaining_length;
+                }
+                else {
+                    child.length = line_buffer_length;
+                    if child.next == null {
+                        child.next = allocate_line(line, child);
+                    }
+                }
+
+                start_index += line_buffer_length;
+                child = child.next;
+            }
+
+            // Move the existing line chars to the new position
+            each i in line.length - cursor {
+                char := get_char(line, line.length - 1 - i);
+                set_char(line, line.length + text.length - 1 - i, char);
+            }
+
+            // Insert the new text
+            each i in text.length {
+                char := text[i];
+                set_char(line, cursor + i, char);
+            }
         }
 
         line.length = new_length;
@@ -1779,20 +1812,16 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
         line.length = start;
     }
     else {
-        delete_length := end - start;
         if delete_end_cursor {
             end++;
-            delete_length++;
         }
 
-        if line.length <= line_buffer_length {
-            memory_copy(line.data.data + start, line.data.data + end, line.length - delete_length);
-        }
-        else {
-            // TODO Handle long lines
+        each i in line.length - end {
+            char := get_char(line, end + i);
+            set_char(line, start + i, char);
         }
 
-        line.length -= delete_length;
+        line.length -= end - start;
     }
 
     // Free unused child lines
@@ -3535,8 +3564,6 @@ u8 get_char(BufferLine* line, u32 index) {
 }
 
 set_char(BufferLine* line, u32 index, u8 char) {
-    if index >= line.length return;
-
     if index < line_buffer_length {
         line.data[index] = char;
         return;
