@@ -1,0 +1,8 @@
+- Settings
+source_control=p4
+perforce_client_suffix=-editor
+
+- Commands
+F8=../lang/ol/bin/Debug/net8.0/ol src/first.ol
+Control+F8=../lang/ol/bin/Debug/net8.0/ol src/first.ol
+F5=./run_tree/editor src/first.ol
