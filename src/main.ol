@@ -8,6 +8,7 @@
 #import "graphics.ol"
 #import "jumps.ol"
 #import "keybinds.ol"
+#import "local_settings.ol"
 #import "memory.ol"
 #import "settings.ol"
 #import "text.ol"
@@ -246,6 +247,7 @@ init_subsystems() {
     init_display();
     load_settings();
     load_keybinds();
+    load_local_settings();
 
     create_window();
     init_thread_pool();
