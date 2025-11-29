@@ -105,41 +105,16 @@ reassign_keybind(KeyCode code, string keybind) {
 #private
 
 parse_keybinds_file(string keybinds_file) {
-    i := 0;
+    i: u32;
     line := 1;
     while i < keybinds_file.length {
-        name: string = { data = keybinds_file.data + i; }
+        success, name, value := parse_settings_line(keybinds_file, &i);
 
-        while i < keybinds_file.length && keybinds_file[i] != '=' && keybinds_file[i] != '\n' {
-            name.length++;
-            i++;
-        }
-
-        if keybinds_file[i] == '\n' || i >= keybinds_file.length {
+        if !success {
             if name.length
                 log("Unable to parse keybind at line %, keybind name = %\n", line, name);
-            line++;
-            i++;
-            continue;
         }
-
-        i++;
-        value: string = { data = keybinds_file.data + i; }
-
-        while i < keybinds_file.length && keybinds_file[i] != '\n' {
-            value.length++;
-            i++;
-        }
-
-        // Trim any trailing whitespace
-        while name[name.length - 1] == ' ' {
-            name.length--;
-        }
-        while value[value.length - 1] == ' ' {
-            value.length--;
-        }
-
-        if name.length > 0 && value.length > 0 {
+        else if name.length > 0 && value.length > 0 {
             handler_index := 0;
             each definition, i in keybind_definitions {
                 if definition.name == name {
