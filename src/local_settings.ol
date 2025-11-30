@@ -115,7 +115,11 @@ load_local_settings() {
             }
             // Parse commands
             else if section == LocalSettingsSection.Commands {
-                // TODO Implement
+                allocate_strings(&value);
+                if !add_command_keybind(name, value) {
+                    log("Invalid key code for command keybind at line %, value is '%'\n", line, name);
+                    free_allocation(value.data);
+                }
             }
 
             line++;

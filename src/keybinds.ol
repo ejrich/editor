@@ -60,22 +60,31 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
     if handler_index == 0 {
         handler_index = keybind_lookup[code_value];
     }
-    if handler_index == 0 return false;
 
-    keybind := keybind_definitions[handler_index - 1];
+    if handler_index > 0 {
+        keybind := keybind_definitions[handler_index - 1];
 
-    result: bool;
-    if keybind.no_repeat || key_command.repeats == 0 {
-        keybind.handler(mod);
-    }
-    else {
-        each i in key_command.repeats {
+        result: bool;
+        if keybind.no_repeat || key_command.repeats == 0 {
             keybind.handler(mod);
         }
+        else {
+            each i in key_command.repeats {
+                keybind.handler(mod);
+            }
+        }
+    }
+    else {
+        command := command_keybinds[mod_value];
+        if string_is_empty(command) {
+            return false;
+        }
+
+        // TODO Execute command
+        log("Executing command: '%'\n", command);
     }
 
     reset_key_command();
-
     handle_post_movement_command();
 
     return true;
@@ -100,6 +109,17 @@ reassign_keybind(KeyCode code, string keybind) {
     }
 
     log("Unable to reassign keybind '%', not found\n", keybind);
+}
+
+bool add_command_keybind(string keybind, string command) {
+    valid, lookup_index := parse_keybind_value(keybind);
+    if !valid {
+        return false;
+    }
+
+    command_keybinds[lookup_index] = command;
+
+    return true;
 }
 
 #private
@@ -133,7 +153,7 @@ parse_keybinds_file(string keybinds_file) {
                 keybind_lookup[lookup_index] = handler_index;
             }
             else {
-                log("Invalid key code for setting % at line %, value is '%'\n", name, line, value);
+                log("Invalid key code for keybind % at line %, value is '%'\n", name, line, value);
             }
         }
 
@@ -180,6 +200,7 @@ struct KeybindDefinition {
 
 keybind_definitions: Array<KeybindDefinition>;
 keybind_lookup: Array<int>[0xF24];
+command_keybinds: Array<string>[0xF24];
 
 keybinds_file_path: string;
 
