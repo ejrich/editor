@@ -80,8 +80,10 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
             return false;
         }
 
-        // TODO Execute command
         log("Executing command: '%'\n", command);
+        data: JobData;
+        data.string = command;
+        queue_work(&low_priority_queue, run_command, data);
     }
 
     reset_key_command();
@@ -213,4 +215,9 @@ assign_keybind(KeyCode code, KeybindHandler handler) {
     }
 
     log("Unable to assign keybind to code '%'\n", code);
+}
+
+run_command(int index, JobData data) {
+    status := execute_command(data.string);
+    log("%\n", status);
 }
