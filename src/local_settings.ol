@@ -115,7 +115,7 @@ load_local_settings() {
             }
             // Parse commands
             else if section == LocalSettingsSection.Commands {
-                allocate_strings(&value);
+                allocate_strings(true, &value);
                 if !add_command_keybind(name, value) {
                     log("Invalid key code for command keybind at line %, value is '%'\n", line, name);
                     free_allocation(value.data);

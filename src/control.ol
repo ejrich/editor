@@ -707,3 +707,9 @@ uppercase(ModCode mod) {
 lowercase(ModCode mod) {
     toggle_casing(false);
 }
+
+// Command keybinds
+[keybind, no_repeat]
+stop_command(ModCode mod) {
+    force_command_to_stop();
+}

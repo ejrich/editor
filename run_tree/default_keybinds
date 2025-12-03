@@ -46,3 +46,4 @@ undo=U
 redo=Control+R
 uppercase=Shift+U
 lowercase=Shift+L
+stop_command=Shift+F5

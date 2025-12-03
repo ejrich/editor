@@ -10,6 +10,7 @@
 #import "keybinds.ol"
 #import "local_settings.ol"
 #import "memory.ol"
+#import "run.ol"
 #import "settings.ol"
 #import "text.ol"
 #import "thread_pool.ol"
@@ -131,10 +132,14 @@ signal_shutdown() {
 }
 
 // Takes in a list of strings and allocates the data in a single block
-allocate_strings(Params<string*> strings) {
+allocate_strings(bool null_terminate = false, Params<string*> strings) {
     length: u64;
     each str in strings {
         length += str.length;
+    }
+
+    if null_terminate {
+        length++;
     }
 
     if length == 0 return;
@@ -254,6 +259,7 @@ init_subsystems() {
     init_clipboard();
     init_graphics();
     init_text();
+    init_run();
 }
 
 deinit_subsystems() {
