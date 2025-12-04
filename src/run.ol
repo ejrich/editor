@@ -94,7 +94,7 @@ run_command(int index, JobData data) {
     }
     else {
         // TODO Implement for linux
-        current_command.exit_code = system(command);
+        current_command.exit_code = system(data.string);
     }
 
     log("Exit code: %\n", current_command.exit_code);
@@ -170,7 +170,7 @@ current_command: CommandRunData;
 }
 else {
     struct RunProcessData {
-        // TODO Implement for linux
+        handle: s64;
     }
 }
 
