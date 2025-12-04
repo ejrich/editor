@@ -1156,6 +1156,10 @@ add_text_to_line(string text) {
         return;
     }
 
+    add_text_to_line(text, buffer_window, buffer);
+}
+
+add_text_to_line(string text, BufferWindow* buffer_window, FileBuffer* buffer) {
     line := get_buffer_line(buffer, buffer_window.line);
     buffer_window.cursor = add_text_to_line(line, text, buffer_window.cursor);
 }
@@ -3457,6 +3461,7 @@ toggle_casing(bool upper) {
 
 // Data structures
 struct FileBuffer {
+    read_only: bool;
     relative_path: string;
     line_count: u32;
     line_count_digits: u32;
@@ -3488,6 +3493,7 @@ struct BufferWindow {
     buffer_index := -1;
     previous: BufferWindow*;
     next: BufferWindow*;
+    static_buffer: FileBuffer*;
 }
 
 struct EditorWindow {
