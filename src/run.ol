@@ -24,13 +24,21 @@ force_command_to_stop() {
     }
 }
 
+BufferWindow* get_run_window() {
+    if current_command.displayed {
+        return &command_buffer_window;
+    }
+
+    return null;
+}
+
 #private
 
 run_command(int index, JobData data) {
     semaphore_wait(&run_mutex);
     defer semaphore_release(&run_mutex);
 
-    clear_command_buffer_window();
+    clear_command_buffer_window(data.string);
 
     log("Executing command: '%'\n", data.string);
 
@@ -40,6 +48,7 @@ run_command(int index, JobData data) {
         exit_code = 0;
         failed = false;
         exited = false;
+        displayed = true;
     }
 
     #if os == OS.Windows {
@@ -100,7 +109,7 @@ run_command(int index, JobData data) {
     log("Exit code: %\n", current_command.exit_code);
 }
 
-clear_command_buffer_window() {
+clear_command_buffer_window(string command) {
     command_buffer_window = {
         cursor = 0;
         line = 0;
@@ -110,6 +119,7 @@ clear_command_buffer_window() {
     line := command_buffer.lines;
 
     command_buffer = {
+        title = command;
         line_count = 1;
         line_count_digits = 1;
         lines = allocate_line();
@@ -158,6 +168,7 @@ struct CommandRunData {
     exit_code: int;
     failed: bool;
     exited: bool;
+    displayed: bool;
 }
 
 current_command: CommandRunData;

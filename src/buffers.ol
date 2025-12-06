@@ -14,11 +14,19 @@ draw_buffers() {
         draw_quad(&divider_quad, 1);
     }
 
+    command_window := get_run_window();
     if left_window.displayed {
-        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed);
+        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed && command_window == null);
     }
 
-    if right_window.displayed {
+    if command_window {
+        x := 0.0;
+        if !left_window.displayed {
+            x = -1.0;
+        }
+        draw_buffer_window(command_window, x, false, !left_window.displayed);
+    }
+    else if right_window.displayed {
         x := 0.0;
         if !left_window.displayed {
             x = -1.0;
@@ -49,9 +57,17 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     draw_quad(&info_quad, 1);
 
-    if window.buffer_index < 0 return;
+    buffer: FileBuffer;
+    if window.buffer_index >= 0 {
+        buffer = buffers[window.buffer_index];
+    }
+    else if window.static_buffer {
+        buffer = *window.static_buffer;
+    }
+    else {
+        return;
+    }
 
-    buffer := buffers[window.buffer_index];
     line_background_quad: QuadInstanceData = {
         color = {
             x = appearance.background_color.x;
@@ -220,7 +236,12 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
         x += mode_string.length * global_font_config.quad_advance;
     }
 
-    render_text(buffer.relative_path, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
+    title := buffer.relative_path;
+    if !string_is_empty(buffer.title) {
+        title = buffer.title;
+    }
+
+    render_text(title, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
 
     render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
 }
@@ -3463,6 +3484,7 @@ toggle_casing(bool upper) {
 struct FileBuffer {
     read_only: bool;
     relative_path: string;
+    title: string;
     line_count: u32;
     line_count_digits: u32;
     lines: BufferLine*;
