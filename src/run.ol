@@ -92,7 +92,7 @@ run_command(int index, JobData data) {
             if !success || read == 0 break;
 
             str: string = { length = read; data = &buf; }
-            add_to_command_buffer(str);
+            add_text_to_end_of_buffer(&command_buffer, str);
         }
 
         GetExitCodeProcess(pi.hProcess, &current_command.exit_code);
@@ -129,32 +129,6 @@ clear_command_buffer_window(string command) {
         next := line.next;
         free_line_and_children(line);
         line = next;
-    }
-}
-
-add_to_command_buffer(string value) {
-    text: string = { data = value.data; }
-    each i in value.length {
-        char := value[i];
-        if char == '\n' {
-            if text.length {
-                add_text_to_line(text, &command_buffer_window, &command_buffer);
-            }
-
-            line := get_buffer_line(&command_buffer, command_buffer_window.line);
-            add_new_line(&command_buffer_window, &command_buffer, line, false, false);
-            calculate_line_digits(&command_buffer);
-            command_buffer_window.cursor = 0;
-
-            text = { length = 0; data = value.data + i + 1; }
-        }
-        else {
-            text.length++;
-        }
-    }
-
-    if text.length {
-        add_text_to_line(text, &command_buffer_window, &command_buffer);
     }
 }
 

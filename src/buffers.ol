@@ -1171,16 +1171,40 @@ end_insert_mode() {
     record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
+add_text_to_end_of_buffer(FileBuffer* buffer, string value) {
+    line := get_buffer_line(buffer, buffer.line_count - 1);
+    text: string = { data = value.data; }
+
+    each i in value.length {
+        char := value[i];
+        if char == '\n' {
+            if text.length {
+                add_text_to_line(line, text, line.length);
+            }
+
+            line = add_new_line(null, buffer, line, false, false);
+            calculate_line_digits(buffer);
+
+            text = { length = 0; data = value.data + i + 1; }
+        }
+        else {
+            text.length++;
+        }
+    }
+
+    if text.length {
+        add_text_to_line(line, text, line.length);
+    }
+
+    calculate_line_digits(buffer);
+}
+
 add_text_to_line(string text) {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null || buffer == null {
         return;
     }
 
-    add_text_to_line(text, buffer_window, buffer);
-}
-
-add_text_to_line(string text, BufferWindow* buffer_window, FileBuffer* buffer) {
     line := get_buffer_line(buffer, buffer_window.line);
     buffer_window.cursor = add_text_to_line(line, text, buffer_window.cursor);
 }
@@ -1961,6 +1985,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, Buffer
     }
     else {
         if split {
+            assert(buffer_window != null);
             if buffer_window.cursor <= line.length {
                 new_line_string: string = { length = line.length - buffer_window.cursor; data = line.data.data + buffer_window.cursor; }
                 line.length = buffer_window.cursor;
@@ -1976,7 +2001,9 @@ BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, Buffer
         new_line.next = line.next;
         line.next = new_line;
 
-        buffer_window.line++;
+        if buffer_window {
+            buffer_window.line++;
+        }
     }
 
     buffer.line_count++;
