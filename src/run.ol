@@ -59,7 +59,7 @@ run_command(int index, JobData data) {
         }
         pi: PROCESS_INFORMATION;
 
-        if !CreateProcessA(null, current_command.command, null, null, true, 0, null, null, &si, &pi) {
+        if !CreateProcessA(null, current_command.command, null, null, true, 0x8, null, null, &si, &pi) {
             CloseHandle(read_handle);
             CloseHandle(write_handle);
             current_command.failed = true;
