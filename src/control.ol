@@ -494,6 +494,7 @@ move_up(ModCode mod) {
 
     post_movement_command.changed_by_line = true;
     line_changes := get_repeats();
+    // TODO Handle control to exit run buffer
     move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
 
     if edit_mode == EditMode.Insert {
@@ -512,6 +513,7 @@ move_down(ModCode mod) {
     }
 
     line_changes := get_repeats();
+    // TODO Handle control to enter run buffer
     if mod & ModCode.Shift {
         join_lines(line_changes);
     }
@@ -623,13 +625,13 @@ syntax_match(ModCode mod) {
 
 [keybind, no_repeat]
 screen_half_up(ModCode mod) {
-    half_screen := global_font_config.max_lines / 2;
+    half_screen := determine_max_lines() / 2;
     move_line(true, true, half_screen);
 }
 
 [keybind, no_repeat]
 screen_half_down(ModCode mod) {
-    half_screen := global_font_config.max_lines / 2;
+    half_screen := determine_max_lines() / 2;
     move_line(false, true, half_screen);
 }
 

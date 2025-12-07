@@ -244,11 +244,16 @@ struct GlobalFontConfig {
     line_height: float;
     first_line_offset: float;
     block_y_offset: float;
-    max_lines: u32;
+    // max_lines: u32;
+    max_lines_without_run_window: u32;
+    max_lines_with_run_window: u32;
+    run_window_max_lines: u32;
     max_chars_per_line: u32;
     max_chars_per_line_full: u32;
     divider_y: float;
     divider_height: float;
+    divider_y_with_run_window: float;
+    divider_height_with_run_window: float;
 }
 
 global_font_config: GlobalFontConfig;
@@ -527,18 +532,26 @@ adjust_texture_to_window(FontTexture* texture) {
     texture.block_y_offset = texture.line_height / 2.0 - texture.max_line_bearing_y / 3.0;
 
     if texture.size == settings.font_size {
-        max_lines := cast(u32, 2.0 / texture.line_height) - 2;
+        total_lines_excluding_command := cast(u32, 2.0 / texture.line_height) - 1;
+        max_lines := total_lines_excluding_command - 1;
+        run_window_lines := (total_lines_excluding_command / 4) - 1;
+        main_window_lines_with_run_window := total_lines_excluding_command - run_window_lines - 2;
 
         global_font_config = {
             quad_advance = texture.quad_advance;
             line_height = texture.line_height;
             first_line_offset = texture.line_height - texture.max_line_bearing_y / 3.0;
             block_y_offset = texture.block_y_offset;
-            max_lines = max_lines;
+            max_lines_without_run_window = max_lines;
+            max_lines_with_run_window = main_window_lines_with_run_window;
+            run_window_max_lines = run_window_lines;
             max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
             max_chars_per_line_full = cast(u32, 2.0 / texture.quad_advance);
             divider_y = texture.line_height + texture.max_line_bearing_y / 4.0;
             divider_height = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
+            // TODO Properly set these values
+            divider_y_with_run_window = texture.line_height + texture.max_line_bearing_y / 4.0;
+            divider_height_with_run_window = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
         }
     }
 }

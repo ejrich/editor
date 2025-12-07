@@ -1,5 +1,5 @@
 init_run() {
-    command_buffer_window.static_buffer = &command_buffer;
+    run_buffer_window.static_buffer = &run_buffer;
 
     create_semaphore(&run_mutex, initial_value = 1);
 }
@@ -26,7 +26,7 @@ force_command_to_stop() {
 
 BufferWindow* get_run_window() {
     if current_command.displayed {
-        return &command_buffer_window;
+        return &run_buffer_window;
     }
 
     return null;
@@ -38,7 +38,7 @@ run_command(int index, JobData data) {
     semaphore_wait(&run_mutex);
     defer semaphore_release(&run_mutex);
 
-    clear_command_buffer_window(data.string);
+    clear_run_buffer_window(data.string);
 
     log("Executing command: '%'\n", data.string);
 
@@ -92,7 +92,7 @@ run_command(int index, JobData data) {
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
-            add_to_command_buffer(text);
+            add_to_run_buffer(text);
         }
 
         GetExitCodeProcess(pi.hProcess, &current_command.exit_code);
@@ -109,16 +109,16 @@ run_command(int index, JobData data) {
     log("Exit code: %\n", current_command.exit_code);
 }
 
-clear_command_buffer_window(string command) {
-    command_buffer_window = {
+clear_run_buffer_window(string command) {
+    run_buffer_window = {
         cursor = 0;
         line = 0;
         start_line = 0;
     }
 
-    line := command_buffer.lines;
+    line := run_buffer.lines;
 
-    command_buffer = {
+    run_buffer = {
         title = command;
         line_count = 1;
         line_count_digits = 1;
@@ -132,14 +132,14 @@ clear_command_buffer_window(string command) {
     }
 }
 
-add_to_command_buffer(string text) {
-    change_line := command_buffer_window.line == command_buffer.line_count - 1;
+add_to_run_buffer(string text) {
+    change_line := run_buffer_window.line == run_buffer.line_count - 1;
 
-    add_text_to_end_of_buffer(&command_buffer, text);
+    add_text_to_end_of_buffer(&run_buffer, text);
 
     if change_line {
-        command_buffer_window.line = command_buffer.line_count - 1;
-        adjust_start_line(&command_buffer_window);
+        run_buffer_window.line = run_buffer.line_count - 1;
+        adjust_start_line(&run_buffer_window);
     }
 }
 
@@ -172,5 +172,5 @@ else {
 
 current_process: RunProcessData;
 
-command_buffer: FileBuffer = { read_only = true; }
-command_buffer_window: BufferWindow;
+run_buffer: FileBuffer = { read_only = true; }
+run_buffer_window: BufferWindow;

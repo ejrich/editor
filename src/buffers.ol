@@ -2,42 +2,51 @@
 draw_buffers() {
     if !is_font_ready(settings.font_size) return;
 
+    run_window := get_run_window();
+
     if left_window.displayed && right_window.displayed {
         divider_quad: QuadInstanceData = {
             color = appearance.font_color;
-            position = { y = global_font_config.divider_y; }
             flags = QuadFlags.Solid;
             width = 1.0 / settings.window_width;
-            height = global_font_config.divider_height;
+        }
+
+        if run_window {
+            divider_quad = {
+                position = { y = global_font_config.divider_y_with_run_window; }
+                height = global_font_config.divider_height_with_run_window;
+            }
+        }
+        else {
+            divider_quad = {
+                position = { y = global_font_config.divider_y; }
+                height = global_font_config.divider_height;
+            }
         }
 
         draw_quad(&divider_quad, 1);
     }
 
-    command_window := get_run_window();
     if left_window.displayed {
-        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed && command_window == null);
+        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed, false, run_window != null);
     }
 
-    if command_window {
+    if right_window.displayed {
         x := 0.0;
         if !left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(command_window, x, false, !left_window.displayed);
+        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed, false, run_window != null);
     }
-    else if right_window.displayed {
-        x := 0.0;
-        if !left_window.displayed {
-            x = -1.0;
-        }
-        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed);
+
+    if run_window {
+        draw_buffer_window(run_window, -1.0, false, true, true, true);
     }
 
     draw_command();
 }
 
-draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width) {
+draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window, bool has_run_window) {
     if window == null {
         window = &scratch_window;
     }
@@ -47,9 +56,24 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     y := 1.0 - global_font_config.first_line_offset;
 
+    max_lines := determine_max_lines(window);
+    if is_run_window {
+        // TODO Adjust y
+        y -= global_font_config.line_height * (global_font_config.max_lines_with_run_window + 1);
+    }
+    else if has_run_window {
+        // TODO Adjust y
+    }
+    else {
+    }
+
     info_quad: QuadInstanceData = {
         color = appearance.current_line_color;
-        position = { x = (x + line_max_x) / 2; y = y - global_font_config.max_lines * global_font_config.line_height + global_font_config.block_y_offset; z = 0.2; }
+        position = {
+            x = (x + line_max_x) / 2;
+            y = y - max_lines * global_font_config.line_height + global_font_config.block_y_offset;
+            z = 0.2;
+        }
         flags = QuadFlags.Solid;
         width = line_max_x - x;
         height = global_font_config.line_height;
@@ -82,7 +106,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
         }
         flags = QuadFlags.Solid;
         width = global_font_config.quad_advance * buffer.line_count_digits;
-        height = global_font_config.line_height * global_font_config.max_lines;
+        height = global_font_config.line_height * max_lines;
     }
 
     draw_quad(&line_background_quad, 1);
@@ -111,7 +135,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     line := buffer.lines;
     line_number: u32 = 1;
     line_cursor: u32;
-    available_lines_to_render := global_font_config.max_lines;
+    available_lines_to_render := max_lines;
 
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
@@ -200,7 +224,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     }
 
     // Render the file information
-    y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * global_font_config.max_lines;
+    y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * max_lines;
     highlight_color: Vector4;
     if selected {
         mode_string := empty_string;
@@ -2207,7 +2231,7 @@ scroll_to_position(ScrollTo scroll_position) {
             buffer_window.start_line = buffer_window.line;
         case ScrollTo.Middle; {
             buffer_window.start_line = buffer_window.line;
-            lines_to_offset := global_font_config.max_lines / 2;
+            lines_to_offset := determine_max_lines(buffer_window) / 2;
             max_chars := calculate_max_chars_per_line(buffer.line_count_digits);
 
             line := get_buffer_line(buffer, buffer_window.line);
@@ -2252,6 +2276,15 @@ go_to_line(s32 line) {
     }
 
     adjust_start_line(buffer_window);
+}
+
+u32 determine_max_lines() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null {
+        return global_font_config.max_lines_without_run_window;
+    }
+
+    return determine_max_lines(buffer_window);
 }
 
 move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false) {
@@ -3662,7 +3695,8 @@ adjust_start_line(BufferWindow* window) {
         return;
     }
 
-    if settings.scroll_offset > global_font_config.max_lines {
+    max_lines := determine_max_lines(window);
+    if settings.scroll_offset > max_lines {
         window.start_line = window.line;
         return;
     }
@@ -3701,7 +3735,7 @@ adjust_start_line(BufferWindow* window) {
             rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
         }
     }
-    else if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
+    else if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
         // Check that there are more lines to scroll to
         end_line := current_line.next;
         rendered_lines_after_current: u32;
@@ -3719,7 +3753,7 @@ adjust_start_line(BufferWindow* window) {
             allowed_scroll_offset = rendered_lines_after_current;
         }
 
-        while starting_line != null && rendered_lines + allowed_scroll_offset > global_font_config.max_lines {
+        while starting_line != null && rendered_lines + allowed_scroll_offset > max_lines {
             window.start_line++;
             rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
             starting_line = starting_line.next;
@@ -4086,7 +4120,8 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
     window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
 
-    if settings.scroll_offset > global_font_config.max_lines {
+    max_lines := determine_max_lines(window);
+    if settings.scroll_offset > max_lines {
         window.line = window.start_line;
         return;
     }
@@ -4118,7 +4153,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
         return;
     }
 
-    if rendered_lines + settings.scroll_offset > global_font_config.max_lines && current_line != null {
+    if rendered_lines + settings.scroll_offset > max_lines && current_line != null {
         // Check that there are more lines to scroll to
         end_line := current_line.next;
         rendered_lines_after_current: u32;
@@ -4126,13 +4161,13 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
             rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
             end_line = end_line.next;
 
-            if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
+            if rendered_lines + rendered_lines_after_current > max_lines {
                 break;
             }
         }
 
-        if rendered_lines + rendered_lines_after_current > global_font_config.max_lines {
-            while current_line != null && rendered_lines + settings.scroll_offset > global_font_config.max_lines {
+        if rendered_lines + rendered_lines_after_current > max_lines {
+            while current_line != null && rendered_lines + settings.scroll_offset > max_lines {
                 window.line--;
                 rendered_lines -= calculate_rendered_lines(max_chars, current_line.length);
                 current_line = current_line.previous;
@@ -4153,16 +4188,6 @@ go_to_buffer_line(BufferWindow* window, u32 line) {
     adjust_start_line(window);
 }
 
-move_buffer_cursor(BufferWindow* window, bool left, u32 cursor_changes = 1) {
-    if window.buffer_index < 0 {
-        window.line = 0;
-        window.start_line = 0;
-        return;
-    }
-
-    buffer := buffers[window.buffer_index];
-}
-
 u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
     lines := line_length / max_chars + 1;
 
@@ -4170,11 +4195,25 @@ u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
 }
 
 u32 calculate_max_chars_per_line(u32 digits) {
-    full_width := left_window.displayed ^ right_window.displayed;
+    run_window_displayed := get_run_window() != null;
+    full_width := left_window.displayed ^ (right_window.displayed || run_window_displayed);
 
     if full_width {
         return global_font_config.max_chars_per_line_full - digits - 1;
     }
 
     return global_font_config.max_chars_per_line - digits - 1;
+}
+
+u32 determine_max_lines(BufferWindow* buffer_window) {
+    run_window := get_run_window();
+    if run_window == null {
+        return global_font_config.max_lines_without_run_window;
+    }
+
+    if run_window == buffer_window {
+        return global_font_config.run_window_max_lines;
+    }
+
+    return global_font_config.max_lines_with_run_window;
 }

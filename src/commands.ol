@@ -54,7 +54,7 @@ show_current_search_result() {
 draw_command() {
     background_color: Vector4;
     x := -1.0;
-    y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines + 1);
+    y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines_without_run_window + 1);
     switch command_prompt_buffer.result {
         case CommandResult.None; {
             start, value: string;
