@@ -3656,7 +3656,7 @@ u32, u32 get_current_position() {
 adjust_start_line(BufferWindow* window) {
     if window == null return;
 
-    if window.buffer_index < 0 {
+    if window.buffer_index < 0 && window.static_buffer == null {
         window.line = 0;
         window.start_line = 0;
         return;
@@ -3669,7 +3669,11 @@ adjust_start_line(BufferWindow* window) {
 
     window.start_line = clamp(window.start_line, 0, window.line);
 
-    buffer := buffers[window.buffer_index];
+    buffer := window.static_buffer;
+    if buffer == null {
+        buffer = &buffers[window.buffer_index];
+    }
+
     starting_line := buffer.lines;
     line_number := 0;
     while starting_line != null && line_number != window.start_line {

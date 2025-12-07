@@ -177,6 +177,8 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
 
             line.parent = parent;
             line.previous = previous;
+            line.next = null;
+            line.child = null;
 
             return line;
         }

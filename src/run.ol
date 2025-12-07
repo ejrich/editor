@@ -91,8 +91,8 @@ run_command(int index, JobData data) {
 
             if !success || read == 0 break;
 
-            str: string = { length = read; data = &buf; }
-            add_text_to_end_of_buffer(&command_buffer, str);
+            text: string = { length = read; data = &buf; }
+            add_to_command_buffer(text);
         }
 
         GetExitCodeProcess(pi.hProcess, &current_command.exit_code);
@@ -129,6 +129,17 @@ clear_command_buffer_window(string command) {
         next := line.next;
         free_line_and_children(line);
         line = next;
+    }
+}
+
+add_to_command_buffer(string text) {
+    change_line := command_buffer_window.line == command_buffer.line_count - 1;
+
+    add_text_to_end_of_buffer(&command_buffer, text);
+
+    if change_line {
+        command_buffer_window.line = command_buffer.line_count - 1;
+        adjust_start_line(&command_buffer_window);
     }
 }
 
