@@ -24,6 +24,11 @@ force_command_to_stop() {
     }
 }
 
+close_run_buffer_and_stop_command() {
+    current_command.displayed = false;
+    force_command_to_stop();
+}
+
 BufferWindow* get_run_window() {
     if current_command.displayed {
         return &run_buffer_window;
@@ -104,7 +109,10 @@ run_command(int index, JobData data) {
     else {
         // TODO Implement for linux
         current_command.exit_code = system(data.string);
+        add_to_run_buffer("snths\nsnthsnth\nthsnthnst\nnthsnthn\nthsnthsn\nnsnthsnth\n\nsnthnsthsnth\nsthnsnthsnths");
     }
+
+    current_command.running = false;
 
     log("Exit code: %\n", current_command.exit_code);
 }

@@ -6,4 +6,3 @@ perforce_client_suffix=-editor
 F8=../lang/ol/bin/Debug/net8.0/ol src/first.ol
 Control+F8=../lang/ol/bin/Debug/net8.0/ol -R src/first.ol
 F5=./run_tree/editor src/first.ol
-F6=../lang/example/bin/Example

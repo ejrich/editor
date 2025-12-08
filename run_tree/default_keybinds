@@ -47,3 +47,4 @@ redo=Control+R
 uppercase=Shift+U
 lowercase=Shift+L
 stop_command=Shift+F5
+close_run_buffer=Control+Escape

@@ -721,3 +721,8 @@ lowercase(ModCode mod) {
 stop_command(ModCode mod) {
     force_command_to_stop();
 }
+
+[keybind, no_repeat]
+close_run_buffer(ModCode mod) {
+    close_run_buffer_and_stop_command();
+}

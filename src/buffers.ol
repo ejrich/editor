@@ -944,7 +944,7 @@ u32 copy_line_into_buffer(u8* buffer, BufferLine* line, u32 index, u32 start = 0
 
 paste_by_cursor(bool before, u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -954,7 +954,7 @@ paste_by_cursor(bool before, u32 paste_count) {
 
 paste_over_selected(u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1166,7 +1166,7 @@ BufferLine* paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferL
 // Insert mode functions
 start_insert_mode(bool allow_eol, s32 change = 0) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1192,7 +1192,7 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
 
 end_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1229,7 +1229,7 @@ add_text_to_end_of_buffer(FileBuffer* buffer, string value) {
 
 add_text_to_line(string text) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1378,7 +1378,7 @@ block_insert_data: BlockInsertData;
 
 init_block_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1389,7 +1389,7 @@ init_block_insert_mode() {
 
 start_block_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1406,7 +1406,7 @@ start_block_insert_mode() {
 
 add_text_to_block(string text) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1428,7 +1428,7 @@ add_text_to_block(string text) {
 
 delete_from_cursor_block(bool back) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1478,7 +1478,7 @@ delete_from_cursor_block(bool back) {
 // Deletions
 delete_lines(bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1514,7 +1514,7 @@ delete_lines(bool delete_all, bool record = false, bool inserting = false) {
 
 delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1587,7 +1587,7 @@ delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool dele
 
 delete_selected(bool copy = true, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1661,7 +1661,7 @@ delete_selected(bool copy = true, bool record = false, bool inserting = false) {
 
 delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1748,7 +1748,7 @@ delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32
 
 clear_remaining_line(bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1779,7 +1779,7 @@ clear_remaining_line(bool record = false, bool inserting = false) {
 
 delete_from_cursor(bool back) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1824,7 +1824,7 @@ delete_from_cursor(bool back) {
 
 delete_cursor(bool back, u32 cursor_changes) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1930,7 +1930,7 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
 
 join_lines(u32 lines) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -1968,7 +1968,7 @@ join_lines(u32 lines) {
 
 add_new_line(bool above, bool split = false, bool opening = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -2061,7 +2061,7 @@ BufferLine* add_new_line(FileBuffer* buffer, BufferLine* line, u32 cursor) {
 
 change_indentation(bool indent, u32 indentations) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -2118,7 +2118,7 @@ change_indentation(bool indent, u32 indentations) {
 
 replace_characters(u8 char) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -3109,7 +3109,7 @@ bool begin_replace_value_in_buffer(string value, string new_value) {
     if value.length == 0 return false;
 
     find_and_replace_data.buffer_window, find_and_replace_data.buffer = get_current_window_and_buffer();
-    if find_and_replace_data.buffer_window == null || find_and_replace_data.buffer == null {
+    if find_and_replace_data.buffer_window == null || find_and_replace_data.buffer == null || find_and_replace_data.buffer.read_only {
         return false;
     }
 
@@ -3353,7 +3353,7 @@ replace_value_in_buffer() {
 // Formatting specific functions
 change_selected_line_commenting() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
@@ -3465,7 +3465,7 @@ string get_comment_string(string path) {
 
 toggle_casing(bool upper) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer.read_only {
         return;
     }
 
