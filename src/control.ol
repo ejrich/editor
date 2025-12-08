@@ -493,9 +493,13 @@ move_up(ModCode mod) {
     }
 
     post_movement_command.changed_by_line = true;
-    line_changes := get_repeats();
-    // TODO Handle control to exit run buffer
-    move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
+    if edit_mode == EditMode.Normal && (mod & ModCode.Control) == ModCode.Control {
+        toggle_run_buffer_selection(false);
+    }
+    else {
+        line_changes := get_repeats();
+        move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
+    }
 
     if edit_mode == EditMode.Insert {
         start_insert_mode(true);
@@ -513,9 +517,11 @@ move_down(ModCode mod) {
     }
 
     line_changes := get_repeats();
-    // TODO Handle control to enter run buffer
     if mod & ModCode.Shift {
         join_lines(line_changes);
+    }
+    else if edit_mode == EditMode.Normal && (mod & ModCode.Control) == ModCode.Control {
+        toggle_run_buffer_selection(true);
     }
     else {
         post_movement_command.changed_by_line = true;

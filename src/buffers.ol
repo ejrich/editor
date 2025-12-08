@@ -28,7 +28,7 @@ draw_buffers() {
     }
 
     if left_window.displayed {
-        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed, false);
+        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left && !run_window_selected, !right_window.displayed, false);
     }
 
     if right_window.displayed {
@@ -36,11 +36,11 @@ draw_buffers() {
         if !left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed, false);
+        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right && !run_window_selected, !left_window.displayed, false);
     }
 
     if run_window {
-        draw_buffer_window(run_window, -1.0, false, true, true);
+        draw_buffer_window(run_window, -1.0, run_window_selected, true, true);
     }
 
     draw_command();
@@ -86,24 +86,26 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
         return;
     }
 
-    line_background_quad: QuadInstanceData = {
-        color = {
-            x = appearance.background_color.x;
-            y = appearance.background_color.y;
-            z = appearance.background_color.z;
-            w = 1.0;
+    if appearance.background_color.w != 1.0 {
+        line_background_quad: QuadInstanceData = {
+            color = {
+                x = appearance.background_color.x;
+                y = appearance.background_color.y;
+                z = appearance.background_color.z;
+                w = 1.0;
+            }
+            position = {
+                x = x + global_font_config.quad_advance * buffer.line_count_digits / 2.0;
+                y = initial_y + global_font_config.first_line_offset - global_font_config.line_height * max_lines / 2.0;
+                z = 0.4;
+            }
+            flags = QuadFlags.Solid;
+            width = global_font_config.quad_advance * buffer.line_count_digits;
+            height = global_font_config.line_height * max_lines;
         }
-        position = {
-            x = x + global_font_config.quad_advance * buffer.line_count_digits / 2.0;
-            y = global_font_config.line_height;
-            z = 0.4;
-        }
-        flags = QuadFlags.Solid;
-        width = global_font_config.quad_advance * buffer.line_count_digits;
-        height = global_font_config.line_height * max_lines;
-    }
 
-    draw_quad(&line_background_quad, 1);
+        draw_quad(&line_background_quad, 1);
+    }
 
     start_line := clamp(window.start_line, 0, buffer.line_count - 1);
     cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
@@ -373,8 +375,15 @@ switch_to_buffer(SelectedWindow window) {
     reset_key_command();
     reset_post_movement_command();
     edit_mode = EditMode.Normal;
+    run_window_selected = false;
 
     current_window = window;
+}
+
+toggle_run_buffer_selection(bool selected) {
+    if get_run_window() {
+        run_window_selected = selected;
+    }
 }
 
 swap_top_buffer() {
@@ -3587,6 +3596,7 @@ enum SelectedWindow {
 }
 
 current_window: SelectedWindow;
+run_window_selected := false;
 
 BufferWindow* get_current_window() {
     editor_window: EditorWindow*;
@@ -3597,16 +3607,27 @@ BufferWindow* get_current_window() {
             editor_window = &right_window;
     }
 
+    run_window := get_run_window();
+    if run_window_selected && run_window != null {
+        return run_window;
+    }
+
     return editor_window.buffer_window;
 }
 
 BufferWindow*, FileBuffer* get_current_window_and_buffer() {
     buffer_window := get_current_window();
-    if buffer_window == null || buffer_window.buffer_index < 0 {
-        return null, null;
+    if buffer_window {
+        if buffer_window.buffer_index >= 0 {
+            return buffer_window, &buffers[buffer_window.buffer_index];
+        }
+
+        if buffer_window.static_buffer {
+            return buffer_window, buffer_window.static_buffer;
+        }
     }
 
-    return buffer_window, &buffers[buffer_window.buffer_index];
+    return null, null;
 }
 
 BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {
