@@ -547,11 +547,10 @@ adjust_texture_to_window(FontTexture* texture) {
             run_window_max_lines = run_window_lines;
             max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
             max_chars_per_line_full = cast(u32, 2.0 / texture.quad_advance);
-            divider_y = texture.line_height + texture.max_line_bearing_y / 4.0;
-            divider_height = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
-            // TODO Properly set these values
-            divider_y_with_run_window = texture.line_height + texture.max_line_bearing_y / 4.0;
-            divider_height_with_run_window = texture.line_height * max_lines + texture.max_line_bearing_y / 2.0;
+            divider_y = texture.line_height + texture.max_line_bearing_y / 2.5;
+            divider_height = texture.line_height * max_lines;
+            divider_y_with_run_window = texture.line_height + texture.line_height * (run_window_lines + 1) / 2.0 + texture.max_line_bearing_y / 2.5;
+            divider_height_with_run_window = texture.line_height * main_window_lines_with_run_window;
         }
     }
 }

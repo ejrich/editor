@@ -28,7 +28,7 @@ draw_buffers() {
     }
 
     if left_window.displayed {
-        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed, false, run_window != null);
+        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left, !right_window.displayed, false);
     }
 
     if right_window.displayed {
@@ -36,17 +36,17 @@ draw_buffers() {
         if !left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed, false, run_window != null);
+        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right, !left_window.displayed, false);
     }
 
     if run_window {
-        draw_buffer_window(run_window, -1.0, false, true, true, true);
+        draw_buffer_window(run_window, -1.0, false, true, true);
     }
 
     draw_command();
 }
 
-draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window, bool has_run_window) {
+draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window) {
     if window == null {
         window = &scratch_window;
     }
@@ -54,24 +54,18 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     line_max_x := x + 1.0;
     if full_width line_max_x += 1.0;
 
-    y := 1.0 - global_font_config.first_line_offset;
+    initial_y := 1.0 - global_font_config.first_line_offset;
 
     max_lines := determine_max_lines(window);
     if is_run_window {
-        // TODO Adjust y
-        y -= global_font_config.line_height * (global_font_config.max_lines_with_run_window + 1);
-    }
-    else if has_run_window {
-        // TODO Adjust y
-    }
-    else {
+        initial_y -= global_font_config.line_height * (global_font_config.max_lines_with_run_window + 1);
     }
 
     info_quad: QuadInstanceData = {
         color = appearance.current_line_color;
         position = {
             x = (x + line_max_x) / 2;
-            y = y - max_lines * global_font_config.line_height + global_font_config.block_y_offset;
+            y = initial_y - max_lines * global_font_config.line_height + global_font_config.block_y_offset;
             z = 0.2;
         }
         flags = QuadFlags.Solid;
@@ -136,6 +130,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     line_number: u32 = 1;
     line_cursor: u32;
     available_lines_to_render := max_lines;
+    y := initial_y;
 
     while line != null && available_lines_to_render > 0 {
         if line_number > start_line {
@@ -224,7 +219,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     }
 
     // Render the file information
-    y = 1.0 - global_font_config.first_line_offset - global_font_config.line_height * max_lines;
+    y = initial_y - global_font_config.line_height * max_lines;
     highlight_color: Vector4;
     if selected {
         mode_string := empty_string;
