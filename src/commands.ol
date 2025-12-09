@@ -1,5 +1,10 @@
 #import "parse.ol"
 
+// Commands should be specified with the following attributes: [command, {command text}]
+// The commands should return 'string, bool':
+// - string: The result from the command
+// - bool: Whether the string was allocated or not
+
 [command, e]
 string, bool open_file_command(string path) {
     edit_mode = EditMode.Normal;
@@ -33,6 +38,15 @@ string, bool save_all_buffers() {
     }
 
     return empty_string, false;
+}
+
+[command, reload]
+string, bool reload_configurations() {
+    load_settings_file();
+    reload_keybinds();
+    load_local_settings();
+
+    return "Settings reloaded", false;
 }
 
 start_command_mode() {

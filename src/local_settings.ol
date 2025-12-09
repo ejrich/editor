@@ -135,7 +135,9 @@ load_local_settings() {
 #private
 
 get_default_local_settings() {
-    local_settings = {
+    default_local_settings: LocalSettings = {
         source_control = SourceControl.Git;
     }
+
+    local_settings = default_local_settings;
 }

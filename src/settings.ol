@@ -64,14 +64,18 @@ struct AppearanceSettings {
 appearance: AppearanceSettings;
 
 load_settings() {
-    get_default_settings();
-
-    settings_type := cast(StructTypeInfo*, type_of(Settings));
-
     home_directory := get_environment_variable(home_environment_variable, temp_allocate);
     settings_file_path = format_string("%/Documents/%/settings", allocate, home_directory, application_name);
+
+    load_settings_file();
+}
+
+load_settings_file() {
+    get_default_settings();
+
     found, settings_file := read_file(settings_file_path, allocate);
     all_settings_set := true;
+    settings_type := cast(StructTypeInfo*, type_of(Settings));
 
     if found {
         settings_found: Array<bool>[settings_type.fields.length];
@@ -446,7 +450,7 @@ settings_file_path: string;
 default_tab_size: u32 = 4; #const
 
 get_default_settings() {
-    settings = {
+    default_settings: Settings = {
         tab_size = default_tab_size;
         window_width = display_width;
         window_height = display_height;
@@ -465,6 +469,8 @@ get_default_settings() {
         insert_mode_color = 0x83A598;
         visual_mode_color = 0xFE8019;
     }
+
+    settings = default_settings;
 }
 
 Vector4 convert_to_color(u32 rgb, float alpha = 1.0) {

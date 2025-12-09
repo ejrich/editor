@@ -1,6 +1,11 @@
 load_keybinds() {
     home_directory := get_environment_variable(home_environment_variable, temp_allocate);
     keybinds_file_path = format_string("%/Documents/%/keybinds", allocate, home_directory, application_name);
+
+    load_keybinds_file();
+}
+
+load_keybinds_file() {
     found, keybinds_file := read_file(keybinds_file_path, allocate);
 
     if !found {
@@ -16,6 +21,14 @@ load_keybinds() {
     }
 
     write_keybinds();
+}
+
+reload_keybinds() {
+    each lookup in keybind_lookup {
+        lookup = 0;
+    }
+
+    load_keybinds_file();
 }
 
 write_keybinds() {
