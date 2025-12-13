@@ -223,6 +223,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     case CommandMode.Commit;
                         if !string_is_empty(buffer_string) {
                             source_control_commit(buffer_string);
+                            current_command_mode = CommandMode.None;
                             command_prompt_buffer.result = CommandResult.Success;
                         }
                 }
