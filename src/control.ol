@@ -86,8 +86,29 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
         }
         case KeyCommand.GoTo; {
             switch code {
+                case KeyCode.S; {
+                    source_control_status();
+                    result = true;
+                }
+                case KeyCode.F; {
+                    source_control_pull();
+                    result = true;
+                }
+                case KeyCode.E; {
+                    source_control_checkout();
+                    result = true;
+                }
+                case KeyCode.R; {
+                    source_control_revert();
+                    result = true;
+                }
                 case KeyCode.C; {
-                    change_selected_line_commenting();
+                    if mod & ModCode.Shift {
+                        source_control_commit();
+                    }
+                    else {
+                        change_selected_line_commenting();
+                    }
                     result = true;
                 }
             }

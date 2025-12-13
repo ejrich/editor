@@ -12,6 +12,7 @@
 #import "memory.ol"
 #import "run.ol"
 #import "settings.ol"
+#import "source_control.ol"
 #import "text.ol"
 #import "thread_pool.ol"
 #import "window.ol"

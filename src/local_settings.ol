@@ -6,13 +6,6 @@ struct LocalSettings {
     perforce_client_suffix: string;
 }
 
-enum SourceControl {
-    None;
-    Git;
-    Perforce;
-    Svn;
-}
-
 #run {
     local_settings_type := cast(StructTypeInfo*, type_of(Settings));
 
@@ -129,7 +122,21 @@ load_local_settings() {
         free_allocation(local_settings_file.data);
     }
 
-    // TODO Initialize local settings
+    switch local_settings.source_control {
+        case SourceControl.Perforce; {
+            if string_is_empty(local_settings.perforce_client_name) {
+                computer_name := get_environment_variable(computer_name_variable, temp_allocate);
+                each i in computer_name.length {
+                    char := computer_name[i];
+                    if char >= 'A' && char <= 'Z' {
+                        computer_name[i] = char + 0x20;
+                    }
+                }
+
+                local_settings.perforce_client_name = format_string("%%", allocate, computer_name, local_settings.perforce_client_suffix);
+            }
+        }
+    }
 }
 
 #private
@@ -140,4 +147,11 @@ get_default_local_settings() {
     }
 
     local_settings = default_local_settings;
+}
+
+#if os == OS.Windows {
+    computer_name_variable := "computername"; #const
+}
+else {
+    computer_name_variable := "HOSTNAME"; #const
 }
