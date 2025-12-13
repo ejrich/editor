@@ -258,8 +258,8 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
     }
 
     title := buffer.relative_path;
-    if !string_is_empty(buffer.title) {
-        title = buffer.title;
+    if buffer.title != null {
+        title = buffer.title();
     }
 
     render_text(title, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
@@ -3548,13 +3548,15 @@ toggle_casing(bool upper) {
 struct FileBuffer {
     read_only: bool;
     relative_path: string;
-    title: string;
+    title: GetBufferTitle;
     line_count: u32;
     line_count_digits: u32;
     lines: BufferLine*;
     last_change: Change*;
     next_change: Change*;
 }
+
+interface string GetBufferTitle()
 
 line_buffer_length := 500; #const
 

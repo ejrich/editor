@@ -63,12 +63,6 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
         }
 
         switch code {
-            case KeyCode.Escape; {
-                if mod & ModCode.Shift {
-                    signal_shutdown();
-                    return;
-                }
-            }
             case KeyCode.Zero; {
                 if mod == ModCode.None && key_command.repeats > 0 {
                     add_repeats(code);

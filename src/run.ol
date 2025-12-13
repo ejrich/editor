@@ -49,12 +49,14 @@ run_command(int index, JobData data) {
 
     current_command = {
         command = data.string;
-        running = false;
+        running = true;
         exit_code = 0;
         failed = false;
         exited = false;
         displayed = true;
     }
+
+    defer current_command.running = false;
 
     #if os == OS.Windows {
         sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
@@ -84,7 +86,6 @@ run_command(int index, JobData data) {
             thread = pi.hThread;
             process = pi.hProcess;
         }
-        current_command.running = true;
 
         CloseHandle(si.hStdInput);
         CloseHandle(write_handle);
@@ -112,8 +113,6 @@ run_command(int index, JobData data) {
         add_to_run_buffer("snths\nsnthsnth\nthsnthnst\nnthsnthn\nthsnthsn\nnsnthsnth\n\nsnthnsthsnth\nsthnsnthsnths");
     }
 
-    current_command.running = false;
-
     log("Exit code: %\n", current_command.exit_code);
 }
 
@@ -127,7 +126,6 @@ clear_run_buffer_window(string command) {
     line := run_buffer.lines;
 
     run_buffer = {
-        title = command;
         line_count = 1;
         line_count_digits = 1;
         lines = allocate_line();
@@ -178,7 +176,23 @@ else {
     }
 }
 
+string get_run_buffer_title() {
+    if current_command.running {
+        return format_string("Running: %", temp_allocate, current_command.command);
+    }
+
+    if current_command.failed {
+        return format_string("Failed to execute: %", temp_allocate, current_command.command);
+    }
+
+    if current_command.exit_code == 0 {
+        return format_string("Success: %", temp_allocate, current_command.command);
+    }
+
+    return format_string("Failed with code %: %", temp_allocate, current_command.exit_code, current_command.command);
+}
+
 current_process: RunProcessData;
 
-run_buffer: FileBuffer = { read_only = true; }
+run_buffer: FileBuffer = { read_only = true; title = get_run_buffer_title; }
 run_buffer_window: BufferWindow;
