@@ -61,6 +61,10 @@ start_replace_mode() {
     clear_buffer(CommandMode.FindAndReplace);
 }
 
+start_commit_mode() {
+    clear_buffer(CommandMode.Commit);
+}
+
 show_current_search_result() {
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
@@ -81,6 +85,8 @@ draw_command() {
                     start = "Replace:";
                 case CommandMode.FindAndReplaceConfirm;
                     start = "Confirm Replacement:";
+                case CommandMode.Commit;
+                    start = "Commit Message:";
             }
 
             if start.length {
@@ -214,6 +220,11 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                         set_search(buffer_string, allocated);
                     case CommandMode.FindAndReplace;
                         find_and_replace(buffer_string, allocated);
+                    case CommandMode.Commit;
+                        if !string_is_empty(buffer_string) {
+                            source_control_commit(buffer_string);
+                            command_prompt_buffer.result = CommandResult.Success;
+                        }
                 }
             }
             default; {
@@ -466,6 +477,7 @@ enum CommandMode {
     Search;
     FindAndReplace;
     FindAndReplaceConfirm;
+    Commit;
 }
 
 current_command_mode: CommandMode;

@@ -104,7 +104,7 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                 }
                 case KeyCode.C; {
                     if mod & ModCode.Shift {
-                        source_control_commit();
+                        start_commit_mode();
                     }
                     else {
                         change_selected_line_commenting();
