@@ -5,26 +5,7 @@ draw_buffers() {
     run_window := get_run_window();
 
     if left_window.displayed && right_window.displayed {
-        divider_quad: QuadInstanceData = {
-            color = appearance.font_color;
-            flags = QuadFlags.Solid;
-            width = 1.0 / settings.window_width;
-        }
-
-        if run_window {
-            divider_quad = {
-                position = { y = global_font_config.divider_y_with_run_window; }
-                height = global_font_config.divider_height_with_run_window;
-            }
-        }
-        else {
-            divider_quad = {
-                position = { y = global_font_config.divider_y; }
-                height = global_font_config.divider_height;
-            }
-        }
-
-        draw_quad(&divider_quad, 1);
+        draw_divider(run_window == null);
     }
 
     if left_window.displayed {
@@ -44,6 +25,29 @@ draw_buffers() {
     }
 
     draw_command();
+}
+
+draw_divider(bool full_height) {
+    divider_quad: QuadInstanceData = {
+        color = appearance.font_color;
+        flags = QuadFlags.Solid;
+        width = 1.0 / settings.window_width;
+    }
+
+    if full_height {
+        divider_quad = {
+            position = { y = global_font_config.divider_y; }
+            height = global_font_config.divider_height;
+        }
+    }
+    else {
+        divider_quad = {
+            position = { y = global_font_config.divider_y_with_run_window; }
+            height = global_font_config.divider_height_with_run_window;
+        }
+    }
+
+    draw_quad(&divider_quad, 1);
 }
 
 draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window) {

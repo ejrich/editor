@@ -8,6 +8,7 @@
 #import "graphics.ol"
 #import "jumps.ol"
 #import "keybinds.ol"
+#import "list.ol"
 #import "local_settings.ol"
 #import "memory.ol"
 #import "run.ol"
@@ -57,7 +58,11 @@ main() {
         // Render buffers
         if set_current_command_buffer() {
             begin_ui_render_pass();
-            draw_buffers();
+
+            if !draw_list() {
+                draw_buffers();
+            }
+
             draw_performance_stats(average_frame_time, frequency);
             submit_frame();
         }

@@ -61,6 +61,10 @@ start_replace_mode() {
     clear_buffer(CommandMode.FindAndReplace);
 }
 
+start_list_command_mode() {
+    clear_buffer(CommandMode.List);
+}
+
 start_commit_mode() {
     clear_buffer(CommandMode.Commit);
 }
@@ -478,6 +482,7 @@ enum CommandMode {
     Search;
     FindAndReplace;
     FindAndReplaceConfirm;
+    List;
     Commit;
 }
 

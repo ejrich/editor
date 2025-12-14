@@ -5,15 +5,24 @@ enum SourceControl {
     Svn;
 }
 
-// TODO Implement these
 source_control_status() {
+    list_title: string;
+
+    // TODO Add list sources
     switch local_settings.source_control {
         case SourceControl.Git; {
+            list_title = "Git Status";
         }
         case SourceControl.Perforce; {
+            list_title = "P4 Status";
         }
         case SourceControl.Svn; {
+            list_title = "SVN Status";
         }
+    }
+
+    if !string_is_empty(list_title) {
+        start_list_mode(list_title);
     }
 }
 
