@@ -4,6 +4,14 @@ start_list_mode(string title) {
     start_list_command_mode();
 }
 
+enter_list_browse_mode() {
+    browsing = true;
+}
+
+exit_list_mode() {
+    display_list = false;
+}
+
 bool draw_list() {
     if !display_list || !is_font_ready(settings.font_size) return false;
 
@@ -11,10 +19,34 @@ bool draw_list() {
 
     draw_list_title();
 
+    draw_list_entries();
+
+    draw_selected_item();
+
     draw_command();
 
     return true;
 }
+
+bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char) {
+    if !display_list || !browsing return false;
+
+    switch code {
+        case KeyCode.Escape; {
+            display_list = false;
+            browsing = false;
+            exit_command_mode();
+        }
+        case KeyCode.I; {
+            browsing = false;
+        }
+    }
+
+    // TODO Implement browsing
+    return true;
+}
+
+#private
 
 draw_list_title() {
     initial_y := 1.0 - global_font_config.first_line_offset;
@@ -37,7 +69,15 @@ draw_list_title() {
     render_text(list_title, settings.font_size, 0.0, y, appearance.font_color, vec4(), TextAlignment.Center);
 }
 
-#private
+draw_list_entries() {
+    // TODO Implement
+    initial_y := 1.0 - global_font_config.first_line_offset;
+}
+
+draw_selected_item() {
+    // TODO Implement
+}
 
 display_list := false;
+browsing := false;
 list_title: string;

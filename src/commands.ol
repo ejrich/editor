@@ -69,6 +69,10 @@ start_commit_mode() {
     clear_buffer(CommandMode.Commit);
 }
 
+exit_command_mode() {
+    current_command_mode = CommandMode.None;
+}
+
 show_current_search_result() {
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
@@ -80,6 +84,7 @@ draw_command() {
     switch command_prompt_buffer.result {
         case CommandResult.None; {
             start, value: string;
+            display_command := false;
             switch current_command_mode {
                 case CommandMode.Command;
                     start = ":";
@@ -91,9 +96,11 @@ draw_command() {
                     start = "Confirm Replacement:";
                 case CommandMode.Commit;
                     start = "Commit Message:";
+                case CommandMode.List;
+                    display_command = true;
             }
 
-            if start.length {
+            if start.length > 0 || display_command {
                 render_text(start, settings.font_size, x, y, appearance.font_color, background_color);
                 x += start.length * global_font_config.quad_advance;
 
@@ -153,8 +160,14 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
     }
     else {
         switch code {
-            case KeyCode.Escape;
-                current_command_mode = CommandMode.None;
+            case KeyCode.Escape; {
+                switch current_command_mode {
+                    case CommandMode.List;
+                        enter_list_browse_mode();
+                    default;
+                        current_command_mode = CommandMode.None;
+                }
+            }
             case KeyCode.Backspace; {
                 set_buffer_value();
                 if command_prompt_buffer.length > 0 {

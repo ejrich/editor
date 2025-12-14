@@ -55,6 +55,8 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             }
         }
 
+        if handle_list_press(state, code, mod, char) return;
+
         if handle_command_press(state, code, mod, char) return;
 
         if handle_key_command(state, code, mod, char) {
