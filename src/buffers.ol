@@ -79,7 +79,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     draw_quad(&info_quad, 1);
 
-    buffer: FileBuffer;
+    buffer: Buffer;
     if window.buffer_index >= 0 {
         buffer = buffers[window.buffer_index];
     }
@@ -283,7 +283,7 @@ open_file_buffer(string path) {
     }
 
     if buffer_index < 0 {
-        buffer: FileBuffer = {
+        buffer: Buffer = {
             relative_path = path;
         }
 
@@ -670,7 +670,7 @@ copy_lines(u32 start_line, u32 end_line) {
     copy_lines(buffer_window, buffer, start_line, end_line);
 }
 
-copy_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line) {
+copy_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 end_line) {
     line := get_buffer_line(buffer, start_line);
     copy_string: string;
 
@@ -727,7 +727,7 @@ copy_selected() {
     }
 }
 
-copy_block(FileBuffer* buffer, u32 start_line, u32 start_cursor, u32 end_line, u32 end_cursor) {
+copy_block(Buffer* buffer, u32 start_line, u32 start_cursor, u32 end_line, u32 end_cursor) {
     copy_string: string;
 
     line := get_buffer_line(buffer, start_line);
@@ -795,7 +795,7 @@ copy_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2) {
     copy_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2);
 }
 
-copy_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool include_end = true) {
+copy_selected(BufferWindow* buffer_window, Buffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool include_end = true) {
     copy_string: string;
 
     if line_1 == line_2 {
@@ -1017,7 +1017,7 @@ paste_over_selected(u32 paste_count) {
     }
 }
 
-paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bool over_lines, u32 paste_count, bool change_recorded, u32 additional_lines_to_record = 0) {
+paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool over_lines, u32 paste_count, bool change_recorded, u32 additional_lines_to_record = 0) {
     recording_start_line, recording_end_line := buffer_window.line;
     line := get_buffer_line(buffer, buffer_window.line);
 
@@ -1143,7 +1143,7 @@ paste_clipboard(BufferWindow* buffer_window, FileBuffer* buffer, bool before, bo
     adjust_start_line(buffer_window);
 }
 
-BufferLine* paste_lines(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, Array<string> clipboard_lines, u32 paste_count, u32 cursor = 0, bool wrap = false) {
+BufferLine* paste_lines(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, Array<string> clipboard_lines, u32 paste_count, u32 cursor = 0, bool wrap = false) {
     each paste in paste_count {
         each clipboard_line, i in clipboard_lines {
             add_text_to_line(line, clipboard_line, cursor);
@@ -1203,7 +1203,7 @@ end_insert_mode() {
     record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
-add_text_to_end_of_buffer(FileBuffer* buffer, string value) {
+add_text_to_end_of_buffer(Buffer* buffer, string value) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
     text: string = { data = value.data; }
 
@@ -1547,7 +1547,7 @@ delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false, bool 
     }
 }
 
-delete_lines_in_range(FileBuffer* buffer, BufferLine* line, u32 count, bool delete_all = false) {
+delete_lines_in_range(Buffer* buffer, BufferLine* line, u32 count, bool delete_all = false) {
     start := line;
     new_next := line.next;
 
@@ -1672,7 +1672,7 @@ delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_
     delete_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor, true, record, inserting);
 }
 
-delete_selected(BufferWindow* buffer_window, FileBuffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool copy, bool record, bool inserting) {
+delete_selected(BufferWindow* buffer_window, Buffer* buffer, u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool copy, bool record, bool inserting) {
     if copy {
         copy_selected(buffer_window, buffer, line_1, cursor_1, line_2, cursor_2, delete_end_cursor);
     }
@@ -1999,7 +1999,7 @@ add_new_line(bool above, bool split = false, bool opening = false) {
     adjust_start_line(buffer_window);
 }
 
-BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, BufferLine* line, bool above, bool split) {
+BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, bool above, bool split) {
     new_line := allocate_line();
 
     if above {
@@ -2042,7 +2042,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, FileBuffer* buffer, Buffer
     return new_line;
 }
 
-BufferLine* add_new_line(FileBuffer* buffer, BufferLine* line, u32 cursor) {
+BufferLine* add_new_line(Buffer* buffer, BufferLine* line, u32 cursor) {
     new_line := allocate_line();
 
     if cursor <= line.length {
@@ -3092,7 +3092,7 @@ find_value_in_buffer(string value, bool next) {
 
 struct FindAndReplaceData {
     buffer_window: BufferWindow*;
-    buffer: FileBuffer*;
+    buffer: Buffer*;
     value: string;
     new_value: string;
     start_line: u32;
@@ -3549,7 +3549,7 @@ toggle_casing(bool upper) {
 
 
 // Data structures
-struct FileBuffer {
+struct Buffer {
     read_only: bool;
     relative_path: string;
     title: GetBufferTitle;
@@ -3576,7 +3576,7 @@ struct BufferLine {
     child: BufferLine*;
 }
 
-buffers: Array<FileBuffer>;
+buffers: Array<Buffer>;
 
 struct BufferWindow {
     cursor: u32;
@@ -3585,7 +3585,7 @@ struct BufferWindow {
     buffer_index := -1;
     previous: BufferWindow*;
     next: BufferWindow*;
-    static_buffer: FileBuffer*;
+    static_buffer: Buffer*;
 }
 
 struct EditorWindow {
@@ -3621,7 +3621,7 @@ BufferWindow* get_current_window() {
     return editor_window.buffer_window;
 }
 
-BufferWindow*, FileBuffer* get_current_window_and_buffer() {
+BufferWindow*, Buffer* get_current_window_and_buffer() {
     buffer_window := get_current_window();
     if buffer_window {
         if buffer_window.buffer_index >= 0 {
@@ -3636,7 +3636,7 @@ BufferWindow*, FileBuffer* get_current_window_and_buffer() {
     return null, null;
 }
 
-BufferLine* get_buffer_line(FileBuffer* buffer, u32 target_line) {
+BufferLine* get_buffer_line(Buffer* buffer, u32 target_line) {
     line_number: u32;
     target_line = clamp(target_line, 0, buffer.line_count - 1);
     line := buffer.lines;
@@ -3783,7 +3783,7 @@ adjust_start_line(BufferWindow* window) {
     }
 }
 
-calculate_line_digits(FileBuffer* buffer) {
+calculate_line_digits(Buffer* buffer) {
     digit_count: u32 = 1;
     value := 10;
     while value < buffer.line_count {
@@ -3937,7 +3937,7 @@ BufferLine* get_next_line_with_text(BufferLine* line) {
 }
 
 // Functions for merging/deleting lines
-merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true, bool joining = false) {
+merge_lines(Buffer* buffer, BufferLine* start_line, BufferLine* end_line, u32 end_start_line, u32 beginning_end_line, bool delete_end_cursor = true, bool joining = false) {
     start_line.length = end_start_line;
     if beginning_end_line < end_line.length {
         if joining {
@@ -4012,7 +4012,7 @@ merge_lines(FileBuffer* buffer, BufferLine* start_line, BufferLine* end_line, u3
     calculate_line_digits(buffer);
 }
 
-delete_lines(BufferWindow* buffer_window, FileBuffer* buffer, u32 start_line, u32 end_line, bool delete_all, bool indent = true, bool copy = true) {
+delete_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 end_line, bool delete_all, bool indent = true, bool copy = true) {
     if copy {
         copy_lines(buffer_window, buffer, start_line, end_line);
     }

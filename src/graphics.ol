@@ -14,7 +14,7 @@ struct Vertex {
     texture_coordinate: Vector2;
 }
 
-struct Buffer {
+struct BufferObject {
     length: u64;
     buffer: VkBuffer*;
     memory: VkDeviceMemory*;
@@ -83,7 +83,7 @@ struct DescriptorSet {
 }
 
 struct InstanceBuffer {
-    buffer: Buffer;
+    buffer: BufferObject;
     descriptor_set: DescriptorSet;
     data: void*;
 }
@@ -724,16 +724,16 @@ recreate_swap_chain() {
     create_swap_chain();
 }
 
-Buffer create_staging_buffer<T>(int length) {
+BufferObject create_staging_buffer<T>(int length) {
     size := size_of(T) * length;
 
     return create_buffer(size, VkBufferUsageFlagBits.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
-Buffer create_vertex_buffer<T>(int length) {
+BufferObject create_vertex_buffer<T>(int length) {
     size := size_of(T) * length;
 
-    return create_buffer(size, VkBufferUsageFlagBits.VK_BUFFER_USAGE_TRANSFER_DST_BIT | VkBufferUsageFlagBits.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    return create_buffer(size, VkBufferObjectUsageFlagBits.VK_BUFFER_USAGE_TRANSFER_DST_BIT | VkBufferUsageFlagBits.VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
 u64 calculate_ubo_length_with_offsets<T>(int elements) {
@@ -748,7 +748,7 @@ u64 calculate_ubo_alignment(u32 size) {
     return (size + ubo_offset_alignment - 1) & alignment_mask;
 }
 
-Buffer create_uniform_buffer(u64 length) {
+BufferObject create_uniform_buffer(u64 length) {
     assert(length <= max_ubo_size);
     return create_buffer(length, VkBufferUsageFlagBits.VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
@@ -766,12 +766,12 @@ u64 calculate_ssbo_alignment(u32 size) {
     return (size + ssbo_offset_alignment - 1) & alignment_mask;
 }
 
-Buffer create_storage_buffer(u64 length) {
+BufferObject create_storage_buffer(u64 length) {
     assert(length <= max_ssbo_size);
     return create_buffer(length, VkBufferUsageFlagBits.VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
-Array<T> map_buffer_to_array<T>(Buffer buffer, int length, int offset = 0) {
+Array<T> map_buffer_to_array<T>(BufferObject buffer, int length, int offset = 0) {
     array: Array<T>;
     array.length = length;
     array.data = map_buffer_to_memory<T>(buffer, length, offset);
@@ -779,7 +779,7 @@ Array<T> map_buffer_to_array<T>(Buffer buffer, int length, int offset = 0) {
     return array;
 }
 
-void* map_buffer_to_memory<T>(Buffer buffer, int length, int offset = 0) {
+void* map_buffer_to_memory<T>(BufferObject buffer, int length, int offset = 0) {
     buffer_length := size_of(T) * length;
 
     buffer_pointer: void*;
@@ -788,11 +788,11 @@ void* map_buffer_to_memory<T>(Buffer buffer, int length, int offset = 0) {
     return buffer_pointer;
 }
 
-unmap_buffer_memory(Buffer buffer) {
+unmap_buffer_memory(BufferObject buffer) {
     vkUnmapMemory(device, buffer.memory);
 }
 
-copy_memory_to_buffer<T>(Buffer buffer, T* data, int length = 1, u64 offset = 0) {
+copy_memory_to_buffer<T>(BufferObject buffer, T* data, int length = 1, u64 offset = 0) {
     copy_length := size_of(T) * length;
 
     buffer_pointer: void*;
@@ -801,7 +801,7 @@ copy_memory_to_buffer<T>(Buffer buffer, T* data, int length = 1, u64 offset = 0)
     vkUnmapMemory(device, buffer.memory);
 }
 
-destroy_buffer(Buffer buffer) {
+destroy_buffer(BufferObject buffer) {
     vkDestroyBuffer(device, buffer.buffer, &allocator);
     vkFreeMemory(device, buffer.memory, &allocator);
 }
@@ -961,7 +961,7 @@ destroy_texture(Texture texture) {
 }
 
 struct DescriptorSetInput {
-    buffer: Buffer*;
+    buffer: BufferObject*;
     texture: Texture*;
 }
 
@@ -1152,7 +1152,7 @@ bind_descriptor_sets(Array<DescriptorSet> descriptor_sets, Params<u32> offsets) 
     vkCmdBindDescriptorSets(current_command_buffer, VkPipelineBindPoint.VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0, set_handles.length, set_handles.data, offsets.length, offsets.data);
 }
 
-write_uniform_buffer<T>(Buffer buffer, T* data, u64 offset = 0) {
+write_uniform_buffer<T>(BufferObject buffer, T* data, u64 offset = 0) {
     ubo_size := size_of(T);
 
     ubo_data: void*;
@@ -1175,7 +1175,7 @@ set_push_constant_data(void* data, u32 length) {
     vkCmdPushConstants(current_command_buffer, pipeline.layout, stage_bits(layout.push_constant_stage), 0, length, data);
 }
 
-draw(int vertices, int instance_count = 1, int first_instance = 0, int buffer_length = 1, Params<Buffer> vertex_buffers) {
+draw(int vertices, int instance_count = 1, int first_instance = 0, int buffer_length = 1, Params<BufferObject> vertex_buffers) {
     if vertex_buffers.length {
         offset: u64;
         each vertex_buffer in vertex_buffers {
@@ -1787,7 +1787,7 @@ deinit_graphics_pipeline(int index, bool keep_existing = false) {
     vkDestroyPipelineLayout(device, pipeline.layout, &allocator);
 }
 
-set_descriptor_set_buffer_data(int i, VkDescriptorType descriptor_type, Buffer* buffer, int binding_index, u32 range, Array<VkDescriptorPoolSize> pool_sizes, Array<VkWriteDescriptorSet> descriptor_writes, Array<VkDescriptorBufferInfo> buffer_infos) {
+set_descriptor_set_buffer_data(int i, VkDescriptorType descriptor_type, BufferObject* buffer, int binding_index, u32 range, Array<VkDescriptorPoolSize> pool_sizes, Array<VkWriteDescriptorSet> descriptor_writes, Array<VkDescriptorBufferInfo> buffer_infos) {
     pool_sizes[i] = { type = descriptor_type; descriptorCount = 1; }
 
     buffer_infos[i] = { buffer = buffer.buffer; offset = 0; range = range; }
@@ -1843,7 +1843,7 @@ VkShaderModule* create_shader_module(string shader_file, s64* position) {
     return shader_module;
 }
 
-Buffer create_buffer_and_copy<T>(Array<T> values, VkBufferUsageFlagBits flags, int index) {
+BufferObject create_buffer_and_copy<T>(Array<T> values, VkBufferUsageFlagBits flags, int index) {
     size := size_of(T) * values.length;
 
     staging_buffer := create_buffer(size, VkBufferUsageFlagBits.VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VkMemoryPropertyFlagBits.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -1861,7 +1861,7 @@ Buffer create_buffer_and_copy<T>(Array<T> values, VkBufferUsageFlagBits flags, i
     return buffer;
 }
 
-Buffer create_buffer(u64 size, VkBufferUsageFlagBits usage, VkMemoryPropertyFlagBits properties) {
+BufferObject create_buffer(u64 size, VkBufferUsageFlagBits usage, VkMemoryPropertyFlagBits properties) {
     assert(size > 0);
     buffer_info: VkBufferCreateInfo = {
         size = size;
@@ -1869,7 +1869,7 @@ Buffer create_buffer(u64 size, VkBufferUsageFlagBits usage, VkMemoryPropertyFlag
         sharingMode = VkSharingMode.VK_SHARING_MODE_EXCLUSIVE;
     }
 
-    buffer: Buffer = { length = size; }
+    buffer: BufferObject = { length = size; }
     result := vkCreateBuffer(device, &buffer_info, &allocator, &buffer.buffer);
     if result != VkResult.VK_SUCCESS {
         log("Unable to create buffer %\n", result);

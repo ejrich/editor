@@ -1,5 +1,5 @@
 // Recording prior states
-begin_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+begin_change(Buffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     value: ChangeValue = {
         start_line = start_line;
         end_line = end_line;
@@ -32,7 +32,7 @@ begin_line_change(BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line
     pending_changes.old = value;
 }
 
-begin_insert_mode_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+begin_insert_mode_change(Buffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     if pending_changes return;
 
     value: ChangeValue = {
@@ -72,7 +72,7 @@ begin_insert_mode_change(BufferLine* line, u32 line_number, u32 cursor) {
     }
 }
 
-begin_block_insert_mode_change(FileBuffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+begin_block_insert_mode_change(Buffer* buffer, u32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     if pending_changes return;
 
     value: ChangeValue = {
@@ -112,7 +112,7 @@ begin_open_line_change(BufferLine* line, u32 line_number, u32 cursor, bool above
     }
 }
 
-update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = false) {
+update_insert_mode_change(Buffer* buffer, u32 line_number, bool merging = false) {
     if line_number < insert_mode_changes.start_line {
         // Change the start line to the line_number and record what was on the line before
         line := get_buffer_line(buffer, line_number);
@@ -180,7 +180,7 @@ update_insert_mode_change(FileBuffer* buffer, u32 line_number, bool merging = fa
 
 
 // Recording new state
-record_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
+record_change(Buffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 cursor_line) {
     assert(pending_changes != null);
 
     value: ChangeValue = {
@@ -197,7 +197,7 @@ record_change(FileBuffer* buffer, s32 start_line, u32 end_line, u32 cursor, u32 
     add_changes_to_buffer(buffer, value);
 }
 
-record_line_change(FileBuffer* buffer, BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line = -1) {
+record_line_change(Buffer* buffer, BufferLine* line, u32 line_number, u32 cursor, s32 cursor_line = -1) {
     assert(pending_changes != null);
 
     value: ChangeValue = {
@@ -215,7 +215,7 @@ record_line_change(FileBuffer* buffer, BufferLine* line, u32 line_number, u32 cu
     add_changes_to_buffer(buffer, value);
 }
 
-record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
+record_insert_mode_change(Buffer* buffer, u32 line_number, u32 cursor) {
     assert(pending_changes != null);
 
     // Check if there were no changes made
@@ -255,7 +255,7 @@ record_insert_mode_change(FileBuffer* buffer, u32 line_number, u32 cursor) {
     add_changes_to_buffer(buffer, value);
 }
 
-add_changes_to_buffer(FileBuffer* buffer, ChangeValue value) {
+add_changes_to_buffer(Buffer* buffer, ChangeValue value) {
     pending_changes.new = value;
     pending_changes.previous = buffer.last_change;
 
@@ -275,7 +275,7 @@ add_changes_to_buffer(FileBuffer* buffer, ChangeValue value) {
     pending_changes = null;
 }
 
-string record_change_lines(FileBuffer* buffer, u32 start_line, u32 end_line) {
+string record_change_lines(Buffer* buffer, u32 start_line, u32 end_line) {
     start := get_buffer_line(buffer, start_line);
 
     line := start;
@@ -352,7 +352,7 @@ apply_changes(bool forward, u32 changes) {
     set_current_location(buffer_window.buffer_index, line, cursor);
 }
 
-apply_change(BufferWindow* buffer_window, FileBuffer* buffer, ChangeValue change_from, ChangeValue change_to) {
+apply_change(BufferWindow* buffer_window, Buffer* buffer, ChangeValue change_from, ChangeValue change_to) {
     value_lines := split_string(change_to.value);
 
     if change_from.start_line < 0 {

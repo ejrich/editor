@@ -1,19 +1,31 @@
-start_list_mode(string title) {
-    list_title = title;
-    display_list = true;
+start_list_mode(string title, ListEntries entries) {
+    list = {
+        displaying = true;
+        browsing = false;
+        title = title;
+        entries = entries;
+    }
     start_list_command_mode();
 }
 
+start_list_mode(string title, ListEntries entries, ListCleanup cleanup) {
+    start_list_mode(title, entries);
+    list.cleanup = cleanup;
+}
+
 enter_list_browse_mode() {
-    browsing = true;
+    list.browsing = true;
 }
 
 exit_list_mode() {
-    display_list = false;
+    list.displaying = false;
+    if list.cleanup != null {
+        list.cleanup();
+    }
 }
 
 bool draw_list() {
-    if !display_list || !is_font_ready(settings.font_size) return false;
+    if !list.displaying || !is_font_ready(settings.font_size) return false;
 
     draw_divider(true);
 
@@ -29,16 +41,18 @@ bool draw_list() {
 }
 
 bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char) {
-    if !display_list || !browsing return false;
+    if !list.displaying || !list.browsing return false;
 
     switch code {
         case KeyCode.Escape; {
-            display_list = false;
-            browsing = false;
+            list = {
+                displaying = false;
+                browsing = false;
+            }
             exit_command_mode();
         }
         case KeyCode.I; {
-            browsing = false;
+            list.browsing = false;
         }
     }
 
@@ -66,18 +80,31 @@ draw_list_title() {
     draw_quad(&info_quad, 1);
 
     y := initial_y - global_font_config.line_height * global_font_config.max_lines_without_run_window;
-    render_text(list_title, settings.font_size, 0.0, y, appearance.font_color, vec4(), TextAlignment.Center);
+    render_text(list.title, settings.font_size, 0.0, y, appearance.font_color, vec4(), TextAlignment.Center);
 }
 
 draw_list_entries() {
+    if list.entries == null return;
+
     // TODO Implement
     initial_y := 1.0 - global_font_config.first_line_offset;
+
+    entries := list.entries();
 }
 
 draw_selected_item() {
     // TODO Implement
 }
 
-display_list := false;
-browsing := false;
-list_title: string;
+struct ListData {
+    displaying := false;
+    browsing := false;
+    title: string;
+    entries: ListEntries;
+    cleanup: ListCleanup;
+}
+
+interface Array<string> ListEntries()
+interface ListCleanup()
+
+list: ListData;

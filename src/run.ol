@@ -37,6 +37,17 @@ BufferWindow* get_run_window() {
     return null;
 }
 
+Buffer* run_command_and_save_to_buffer(string command) {
+    buffer := new<Buffer>();
+    buffer.line_count = 1;
+    buffer.line_count_digits = 1;
+    buffer.lines = allocate_line();
+
+    success, exit_code := execute_command(command, buffer, add_text_to_end_of_buffer);
+
+    return buffer;
+}
+
 #private
 
 run_command(int index, JobData data) {
@@ -56,15 +67,28 @@ run_command(int index, JobData data) {
         displayed = true;
     }
 
-    defer current_command.running = false;
+    success, exit_code := execute_command(data.string, &run_buffer, add_to_run_buffer, &current_process, &current_command.exited);
+
+    if success {
+        current_command.exit_code = exit_code;
+    }
+    else {
+        current_command.failed = true;
+    }
+
+    current_command.running = false;
+    log("Exit code: %\n", current_command.exit_code);
+}
+
+bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_buffer, ProcessData* process_data = null, bool* exited = null) {
+    exit_code: int;
 
     #if os == OS.Windows {
         sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
         read_handle, write_handle: Handle*;
 
         if !CreatePipe(&read_handle, &write_handle, &sa, 0) {
-            current_command.failed = true;
-            return;
+            return false, 0;
         }
         SetHandleInformation(read_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
 
@@ -75,33 +99,32 @@ run_command(int index, JobData data) {
         }
         pi: PROCESS_INFORMATION;
 
-        if !CreateProcessA(null, current_command.command, null, null, true, 0x8, null, null, &si, &pi) {
+        if !CreateProcessA(null, command, null, null, true, 0x8, null, null, &si, &pi) {
             CloseHandle(read_handle);
             CloseHandle(write_handle);
-            current_command.failed = true;
-            return;
+            return false, 0;
         }
 
-        current_process = {
-            thread = pi.hThread;
-            process = pi.hProcess;
+        if process_data {
+            process_data.thread = pi.hThread;
+            process_data.process = pi.hProcess;
         }
 
         CloseHandle(si.hStdInput);
         CloseHandle(write_handle);
 
         buf: CArray<u8>[1000];
-        while !current_command.exited {
+        while exited == null || !(*exited) {
             read: int;
             success := ReadFile(read_handle, &buf, buf.length, &read, null);
 
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
-            add_to_run_buffer(text);
+            save_to_buffer(buffer, text);
         }
 
-        GetExitCodeProcess(pi.hProcess, &current_command.exit_code);
+        GetExitCodeProcess(pi.hProcess, &exit_code);
 
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
@@ -109,11 +132,11 @@ run_command(int index, JobData data) {
     }
     else {
         // TODO Implement for linux
-        current_command.exit_code = system(data.string);
-        add_to_run_buffer("snths\nsnthsnth\nthsnthnst\nnthsnthn\nthsnthsn\nnsnthsnth\n\nsnthnsthsnth\nsthnsnthsnths");
+        exit_code = system(data.string);
+        save_to_buffer("snths\nsnthsnth\nthsnthnst\nnthsnthn\nthsnthsn\nnsnthsnth\n\nsnthnsthsnth\nsthnsnthsnths");
     }
 
-    log("Exit code: %\n", current_command.exit_code);
+    return true, exit_code;
 }
 
 clear_run_buffer_window(string command) {
@@ -138,7 +161,9 @@ clear_run_buffer_window(string command) {
     }
 }
 
-add_to_run_buffer(string text) {
+interface SaveToBuffer(Buffer* buffer, string text)
+
+add_to_run_buffer(Buffer* _, string text) {
     change_line := run_buffer_window.line == run_buffer.line_count - 1;
 
     add_text_to_end_of_buffer(&run_buffer, text);
@@ -165,16 +190,18 @@ struct CommandRunData {
 current_command: CommandRunData;
 
 #if os == OS.Windows {
-    struct RunProcessData {
+    struct ProcessData {
         thread: Handle*;
         process: Handle*;
     }
 }
 else {
-    struct RunProcessData {
+    struct ProcessData {
         handle: s64;
     }
 }
+
+current_process: ProcessData;
 
 string get_run_buffer_title() {
     if current_command.running {
@@ -192,7 +219,5 @@ string get_run_buffer_title() {
     return format_string("Failed with code %: %", temp_allocate, current_command.exit_code, current_command.command);
 }
 
-current_process: RunProcessData;
-
-run_buffer: FileBuffer = { read_only = true; title = get_run_buffer_title; }
+run_buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
 run_buffer_window: BufferWindow;

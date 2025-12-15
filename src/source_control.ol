@@ -7,22 +7,26 @@ enum SourceControl {
 
 source_control_status() {
     list_title: string;
+    data: JobData;
 
     // TODO Add list sources
     switch local_settings.source_control {
         case SourceControl.Git; {
             list_title = "Git Status";
+            queue_work(&low_priority_queue, load_git_status, data);
         }
         case SourceControl.Perforce; {
             list_title = "P4 Status";
+            queue_work(&low_priority_queue, load_p4_status, data);
         }
         case SourceControl.Svn; {
             list_title = "SVN Status";
+            queue_work(&low_priority_queue, load_svn_status, data);
         }
     }
 
     if !string_is_empty(list_title) {
-        start_list_mode(list_title);
+        start_list_mode(list_title, get_status_entries);
     }
 }
 
@@ -87,3 +91,23 @@ source_control_commit(string message) {
 #private
 
 commit_command: string;
+
+load_git_status(int index, JobData data) {
+    // TODO Implement
+}
+
+load_p4_status(int index, JobData data) {
+    status_buffer := run_command_and_save_to_buffer("p4 diff -f -sa");
+
+    // TODO Save to status entries
+}
+
+load_svn_status(int index, JobData data) {
+    // TODO Implement
+}
+
+status_entries: Array<string>;
+
+Array<string> get_status_entries() {
+    return status_entries;
+}
