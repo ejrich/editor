@@ -3562,6 +3562,33 @@ struct Buffer {
 
 interface string GetBufferTitle()
 
+free_buffer(Buffer* buffer) {
+    if buffer == null return;
+
+    line := buffer.lines;
+    while line {
+        next := line.next;
+        free_line_and_children(line);
+        line = next;
+    }
+
+    last := buffer.last_change;
+    while last {
+        new_last := last.previous;
+        free_change(last);
+        last = new_last;
+    }
+
+    next := buffer.next_change;
+    while next {
+        new_next := next.next;
+        free_change(next);
+        next = new_next;
+    }
+
+    free_allocation(buffer);
+}
+
 line_buffer_length := 500; #const
 
 struct BufferLine {

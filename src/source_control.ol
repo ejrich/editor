@@ -9,7 +9,6 @@ source_control_status() {
     list_title: string;
     data: JobData;
 
-    // TODO Add list sources
     switch local_settings.source_control {
         case SourceControl.Git; {
             list_title = "Git Status";
@@ -93,20 +92,94 @@ source_control_commit(string message) {
 commit_command: string;
 
 load_git_status(int index, JobData data) {
-    // TODO Implement
+    status_buffer := run_command_and_save_to_buffer("git status -s");
+    defer free_buffer(status_buffer);
+
+    get_status_result_count(status_buffer);
+    // TODO Save to status entries
 }
 
 load_p4_status(int index, JobData data) {
     status_buffer := run_command_and_save_to_buffer("p4 diff -f -sa");
+    defer free_buffer(status_buffer);
 
-    // TODO Save to status entries
+    get_status_result_count(status_buffer);
+
+    i := 0;
+    line = status_buffer.lines;
+    while line {
+        if line.length {
+            status_entries[i++] = line_to_string(line);
+        }
+        line = line.next;
+    }
 }
 
 load_svn_status(int index, JobData data) {
-    // TODO Implement
+    status_buffer := run_command_and_save_to_buffer("svn status --quiet");
+    defer free_buffer(status_buffer);
+
+    get_status_result_count(status_buffer);
+    // TODO Save to status entries
 }
 
 status_entries: Array<string>;
+entries_reserved := 0;
+entries_block_size := 50; #const
+
+get_status_result_count(Buffer* buffer) {
+    result_count := 0;
+    line := buffer.lines;
+    while line {
+        if line.length {
+            result_count++;
+        }
+        line = line.next;
+    }
+
+    prepare_status_entries(result_count);
+}
+
+prepare_status_entries(int count) {
+    each entry in status_entries {
+        free_allocation(entry.data);
+    }
+    status_entries.length = 0;
+
+    if count > entries_reserved {
+        free_allocation(status_entries.data);
+
+        while entries_reserved < count {
+            entries_reserved += entries_block_size;
+        }
+
+        array_resize(&status_entries, entries_reserved, allocate);
+    }
+
+    status_entries.length = count;
+}
+
+string line_to_string(BufferLine* line) {
+    value: string = { length = line.length; }
+    if line.length <= line_buffer_length {
+        value.data = line.data.data;
+        allocate_strings(&value);
+    }
+    else {
+        value.data = allocate(line.length);
+        memory_copy(value.data, line.data.data, line_buffer_length);
+        i := line_buffer_length;
+
+        line = line.child;
+        while line {
+            memory_copy(value.data + i, line.data.data, line.length);
+            i += line.length;
+            line = line.next;
+        }
+    }
+
+    return value;
+}
 
 Array<string> get_status_entries() {
     return status_entries;

@@ -86,10 +86,25 @@ draw_list_title() {
 draw_list_entries() {
     if list.entries == null return;
 
-    // TODO Implement
-    initial_y := 1.0 - global_font_config.first_line_offset;
+    initial_y := 1.0 - global_font_config.first_line_offset - (global_font_config.max_lines_without_run_window - 1) * global_font_config.line_height + global_font_config.block_y_offset;
 
     entries := list.entries();
+
+    // TODO Implement filtering
+    entries_to_display := clamp(entries.length, 0, global_font_config.max_lines_without_run_window);
+    max_chars_per_line := global_font_config.max_chars_per_line - 4;
+    x := -1.0 + global_font_config.quad_advance * 2;
+
+    each i in entries_to_display {
+        entry := entries[i];
+        if entry.length > max_chars_per_line {
+            entry.length = max_chars_per_line;
+        }
+
+        y := initial_y + global_font_config.line_height * i;
+        render_text(entry, settings.font_size, x, y, appearance.font_color, vec4());
+    }
+
 }
 
 draw_selected_item() {

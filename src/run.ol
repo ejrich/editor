@@ -39,6 +39,7 @@ BufferWindow* get_run_window() {
 
 Buffer* run_command_and_save_to_buffer(string command) {
     buffer := new<Buffer>();
+    buffer.read_only = true;
     buffer.line_count = 1;
     buffer.line_count_digits = 1;
     buffer.lines = allocate_line();
