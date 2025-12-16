@@ -7,25 +7,22 @@ enum SourceControl {
 
 source_control_status() {
     list_title: string;
-    data: JobData;
 
     switch local_settings.source_control {
         case SourceControl.Git; {
             list_title = "Git Status";
-            queue_work(&low_priority_queue, load_git_status, data);
         }
         case SourceControl.Perforce; {
             list_title = "P4 Status";
-            queue_work(&low_priority_queue, load_p4_status, data);
         }
         case SourceControl.Svn; {
             list_title = "SVN Status";
-            queue_work(&low_priority_queue, load_svn_status, data);
         }
     }
 
     if !string_is_empty(list_title) {
-        start_list_mode(list_title, get_status_entries);
+        queue_work(&low_priority_queue, load_status);
+        start_list_mode(list_title, get_status_entries, load_diff);
     }
 }
 
@@ -91,36 +88,33 @@ source_control_commit(string message) {
 
 commit_command: string;
 
-load_git_status(int index, JobData data) {
-    status_buffer := run_command_and_save_to_buffer("git status -s");
+load_status(int index, JobData data) {
+    status_buffer: Buffer*;
+    switch local_settings.source_control {
+        case SourceControl.Git; {
+            status_buffer = run_command_and_save_to_buffer("git status -s");
+        }
+        case SourceControl.Perforce; {
+            status_buffer = run_command_and_save_to_buffer("p4 diff -f -sa");
+        }
+        case SourceControl.Svn; {
+            status_buffer = run_command_and_save_to_buffer("svn status --quiet");
+        }
+        default; return;
+    }
+
     defer free_buffer(status_buffer);
-
-    get_status_result_count(status_buffer);
-    // TODO Save to status entries
-}
-
-load_p4_status(int index, JobData data) {
-    status_buffer := run_command_and_save_to_buffer("p4 diff -f -sa");
-    defer free_buffer(status_buffer);
-
     get_status_result_count(status_buffer);
 
+    // TODO Change this for git staging
     i := 0;
-    line = status_buffer.lines;
+    line := status_buffer.lines;
     while line {
         if line.length {
             status_entries[i++] = line_to_string(line);
         }
         line = line.next;
     }
-}
-
-load_svn_status(int index, JobData data) {
-    status_buffer := run_command_and_save_to_buffer("svn status --quiet");
-    defer free_buffer(status_buffer);
-
-    get_status_result_count(status_buffer);
-    // TODO Save to status entries
 }
 
 status_entries: Array<string>;
@@ -183,4 +177,24 @@ string line_to_string(BufferLine* line) {
 
 Array<string> get_status_entries() {
     return status_entries;
+}
+
+load_diff(int index, JobData data) {
+    entry := cast(SelectedEntry*, data.pointer);
+
+    command: string;
+    switch local_settings.source_control {
+        case SourceControl.Git; {
+            command = temp_string("git diff ", entry.value, "\0");
+        }
+        case SourceControl.Perforce; {
+            command = temp_string("p4 diff ", entry.value, "\0");
+        }
+        case SourceControl.Svn; {
+            command = temp_string("svn diff ", entry.value, "\0");
+        }
+        default; return;
+    }
+
+    entry.buffer = run_command_and_save_to_buffer(command);
 }

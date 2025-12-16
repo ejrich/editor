@@ -1,15 +1,17 @@
-start_list_mode(string title, ListEntries entries) {
+start_list_mode(string title, ListEntries entries, Callback load_entry) {
     list = {
         displaying = true;
         browsing = false;
         title = title;
+        selected_index = 0;
         entries = entries;
+        load_entry = load_entry;
     }
     start_list_command_mode();
 }
 
-start_list_mode(string title, ListEntries entries, ListCleanup cleanup) {
-    start_list_mode(title, entries);
+start_list_mode(string title, ListEntries entries, Callback load_entry, ListCleanup cleanup) {
+    start_list_mode(title, entries, load_entry);
     list.cleanup = cleanup;
 }
 
@@ -33,7 +35,7 @@ bool draw_list() {
 
     draw_list_entries();
 
-    draw_selected_item();
+    draw_selected_entry();
 
     draw_command();
 
@@ -58,6 +60,11 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
 
     // TODO Implement browsing
     return true;
+}
+
+struct SelectedEntry {
+    value: string;
+    buffer: Buffer*;
 }
 
 #private
@@ -91,6 +98,27 @@ draw_list_entries() {
     entries := list.entries();
 
     // TODO Implement filtering
+
+    if entries.length == 0 {
+        free_buffer(selected_entry.buffer);
+        selected_entry = {
+            value = empty_string;
+            buffer = null;
+        }
+        return;
+    }
+    else if entries[list.selected_index] != selected_entry.value {
+        free_buffer(selected_entry.buffer);
+        selected_entry = {
+            value = entries[list.selected_index];
+            buffer = null;
+        }
+
+        load_entry_data: JobData;
+        load_entry_data.pointer = &selected_entry;
+        queue_work(&low_priority_queue, list.load_entry, load_entry_data);
+    }
+
     entries_to_display := clamp(entries.length, 0, global_font_config.max_lines_without_run_window);
     max_chars_per_line := global_font_config.max_chars_per_line - 4;
     x := -1.0 + global_font_config.quad_advance * 2;
@@ -107,7 +135,9 @@ draw_list_entries() {
 
 }
 
-draw_selected_item() {
+draw_selected_entry() {
+    if selected_entry.buffer == null return;
+
     // TODO Implement
 }
 
@@ -115,7 +145,9 @@ struct ListData {
     displaying := false;
     browsing := false;
     title: string;
+    selected_index: int;
     entries: ListEntries;
+    load_entry: Callback;
     cleanup: ListCleanup;
 }
 
@@ -123,3 +155,4 @@ interface Array<string> ListEntries()
 interface ListCleanup()
 
 list: ListData;
+selected_entry: SelectedEntry;

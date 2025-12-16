@@ -46,6 +46,11 @@ union JobData {
 
 interface Callback(int index, JobData data)
 
+queue_work(WorkQueue* queue, Callback callback) {
+    data: JobData;
+    queue_work(queue, callback, data);
+}
+
 queue_work(WorkQueue* queue, Callback callback, JobData data) {
     current_end := queue.end;
     next_end := (current_end + 1) % queue_size;
