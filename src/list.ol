@@ -56,6 +56,14 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
         case KeyCode.I; {
             list.browsing = false;
         }
+        case KeyCode.Up; {
+            entries := list.entries();
+            list.selected_index = clamp(list.selected_index + 1, 0, entries.length - 1);
+        }
+        case KeyCode.Down; {
+            entries := list.entries();
+            list.selected_index = clamp(list.selected_index - 1, 0, entries.length - 1);
+        }
     }
 
     // TODO Implement browsing
@@ -133,6 +141,9 @@ draw_list_entries() {
         }
 
         y := initial_y + global_font_config.line_height * i;
+        if i == list.selected_index {
+            draw_line_background(-1.0, y, 0.0);
+        }
         render_text(entry, settings.font_size, x, y, appearance.font_color, vec4());
     }
 

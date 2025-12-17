@@ -181,20 +181,28 @@ Array<string> get_status_entries() {
 
 load_diff(int index, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
+    value := entry.value;
 
     command: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            command = temp_string(true, "git diff ", entry.value);
+            command = temp_string(true, "git diff ", value);
         }
         case SourceControl.Perforce; {
-            command = temp_string(true, "p4 diff ", entry.value);
+            command = temp_string(true, "p4 diff ", value);
         }
         case SourceControl.Svn; {
-            command = temp_string(true, "svn diff ", entry.value);
+            command = temp_string(true, "svn diff ", value);
         }
         default; return;
     }
 
-    entry.buffer = run_command_and_save_to_buffer(command);
+    diff_buffer := run_command_and_save_to_buffer(command);
+
+    if value == entry.value {
+        entry.buffer = diff_buffer;
+    }
+    else {
+        free_buffer(diff_buffer);
+    }
 }

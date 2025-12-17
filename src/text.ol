@@ -123,18 +123,7 @@ u32 render_line(BufferLine* line, float x, float y, u32 line_number, u32 digits,
         full_line_width := line.length * font_texture.quad_advance;
         rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
 
-        current_line_quad: QuadInstanceData = {
-            color = appearance.current_line_color;
-            flags = QuadFlags.Solid;
-            position = {
-                x = (max_x + x) / 2;
-                y = y - font_texture.max_line_bearing_y / 3 + font_texture.line_height * (1 - rendered_line_count / 2.0);
-                z = 0.2; }
-            width = max_x - x;
-            height = rendered_line_count * font_texture.line_height;
-        }
-
-        draw_quad(&current_line_quad, 1);
+        draw_line_background(font_texture, x, y, max_x, rendered_line_count);
     }
 
     // Create the glyphs for the line number
@@ -178,6 +167,14 @@ u32 render_line(BufferLine* line, float x, float y, float max_x, u32 lines_avail
     if font_texture == null return 0;
 
     return render_line(line, font_texture, x, x, y, max_x, lines_available);
+}
+
+draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1) {
+    // Load the font and texture
+    font_texture := load_font_texture(settings.font_size);
+    if font_texture == null return;
+
+    draw_line_background(font_texture, x, y, max_x, rendered_line_count);
 }
 
 render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
@@ -253,6 +250,22 @@ global_font_config: GlobalFontConfig;
 #private
 
 library: FT_Library*;
+
+draw_line_background(FontTexture* font_texture, float x, float y, float max_x, u32 rendered_line_count) {
+    current_line_quad: QuadInstanceData = {
+        color = appearance.current_line_color;
+        flags = QuadFlags.Solid;
+        position = {
+            x = (max_x + x) / 2;
+            y = y - font_texture.max_line_bearing_y / 3 + font_texture.line_height * (1 - rendered_line_count / 2.0);
+            z = 0.2;
+        }
+        width = max_x - x;
+        height = rendered_line_count * font_texture.line_height;
+    }
+
+    draw_quad(&current_line_quad, 1);
+}
 
 u32 render_line(BufferLine* line, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 lines_available, int cursor = 0, bool render_cursor = false, int visual_start = -1, int visual_end = -1) {
     line_count: u32;
