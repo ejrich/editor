@@ -65,6 +65,7 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
 struct SelectedEntry {
     value: string;
     buffer: Buffer*;
+    start_line: int;
 }
 
 #private
@@ -104,6 +105,7 @@ draw_list_entries() {
         selected_entry = {
             value = empty_string;
             buffer = null;
+            start_line = 0;
         }
         return;
     }
@@ -112,6 +114,7 @@ draw_list_entries() {
         selected_entry = {
             value = entries[list.selected_index];
             buffer = null;
+            start_line = 0;
         }
 
         load_entry_data: JobData;
@@ -138,7 +141,22 @@ draw_list_entries() {
 draw_selected_entry() {
     if selected_entry.buffer == null return;
 
-    // TODO Implement
+    line_index := 0;
+    available_lines_to_render := global_font_config.max_lines_without_run_window;
+    line := selected_entry.buffer.lines;
+
+    y := 1.0 - global_font_config.first_line_offset;
+
+    while line != null && available_lines_to_render > 0 {
+        if line_index >= selected_entry.start_line {
+            lines := render_line(line, 0.0, y, 1.0, available_lines_to_render);
+            y -= global_font_config.line_height * lines;
+            available_lines_to_render -= lines;
+        }
+
+        line = line.next;
+        line_index++;
+    }
 }
 
 struct ListData {

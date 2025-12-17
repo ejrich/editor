@@ -1219,7 +1219,7 @@ add_text_to_end_of_buffer(Buffer* buffer, string value) {
 
             text = { length = 0; data = value.data + i + 1; }
         }
-        else {
+        else if char != '\r' {
             text.length++;
         }
     }

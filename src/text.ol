@@ -169,24 +169,15 @@ u32 render_line(BufferLine* line, float x, float y, u32 line_number, u32 digits,
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    line_count: u32;
-    text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
+    return render_line(line, font_texture, x_start, x, y, max_x, lines_available, cursor, render_cursor, visual_start, visual_end);
+}
 
-    line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
+u32 render_line(BufferLine* line, float x, float y, float max_x, u32 lines_available) {
+    // Load the font and texture
+    font_texture := load_font_texture(settings.font_size);
+    if font_texture == null return 0;
 
-    if line.child {
-        child := line.child;
-        index := text.length;
-        while child {
-            text = { length = child.length; data = child.data.data; }
-            line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
-
-            index += child.length;
-            child = child.next;
-        }
-    }
-
-    return line_count;
+    return render_line(line, font_texture, x, x, y, max_x, lines_available);
 }
 
 render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
@@ -262,6 +253,27 @@ global_font_config: GlobalFontConfig;
 #private
 
 library: FT_Library*;
+
+u32 render_line(BufferLine* line, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 lines_available, int cursor = 0, bool render_cursor = false, int visual_start = -1, int visual_end = -1) {
+    line_count: u32;
+    text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
+
+    line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end);
+
+    if line.child {
+        child := line.child;
+        index := text.length;
+        while child {
+            text = { length = child.length; data = child.data.data; }
+            line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index);
+
+            index += child.length;
+            child = child.next;
+        }
+    }
+
+    return line_count;
+}
 
 u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0) {
     // Create the glyphs for the text string

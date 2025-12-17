@@ -185,13 +185,13 @@ load_diff(int index, JobData data) {
     command: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            command = temp_string("git diff ", entry.value, "\0");
+            command = temp_string(true, "git diff ", entry.value);
         }
         case SourceControl.Perforce; {
-            command = temp_string("p4 diff ", entry.value, "\0");
+            command = temp_string(true, "p4 diff ", entry.value);
         }
         case SourceControl.Svn; {
-            command = temp_string("svn diff ", entry.value, "\0");
+            command = temp_string(true, "svn diff ", entry.value);
         }
         default; return;
     }

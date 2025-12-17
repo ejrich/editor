@@ -501,9 +501,11 @@ bool starts_with(string value, string start) {
     return true;
 }
 
-string temp_string(Params<string> parts) #inline {
+string temp_string(bool null_terminate = true, Params<string> parts) #inline {
     length := 0;
     each part in parts length += part.length;
+
+    if null_terminate length++;
 
     string_data: Array<u8>[length];
     result: string = { length = string_data.length; data = string_data.data; }
@@ -512,6 +514,11 @@ string temp_string(Params<string> parts) #inline {
     each part in parts {
         memory_copy(result.data + i, part.data, part.length);
         i += part.length;
+    }
+
+    if null_terminate {
+        result[length - 1] = 0;
+        result.length--;
     }
 
     return result;
