@@ -15,6 +15,11 @@ start_list_mode(string title, ListEntries entries, Callback load_entry, ListClea
     list.cleanup = cleanup;
 }
 
+filter_list(string filter) {
+    // TODO Implement filtering
+    log("Filter changed to '%'\n", filter);
+}
+
 enter_list_browse_mode() {
     list.browsing = true;
 }
@@ -37,7 +42,7 @@ bool draw_list() {
 
     draw_selected_entry();
 
-    draw_command();
+    draw_command(!list.browsing);
 
     return true;
 }

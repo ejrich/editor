@@ -177,12 +177,12 @@ draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1)
     draw_line_background(font_texture, x, y, max_x, rendered_line_count);
 }
 
-render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1) {
+render_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1, bool render_cursor = true) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    render_line_with_cursor(font_texture, text, x, x, y, cursor, true, max_x, lines_available);
+    render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
 

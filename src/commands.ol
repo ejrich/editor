@@ -77,7 +77,7 @@ show_current_search_result() {
     command_prompt_buffer.result = CommandResult.SearchResult;
 }
 
-draw_command() {
+draw_command(bool draw_cursor = true) {
     background_color: Vector4;
     x := -1.0;
     y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines_without_run_window + 1);
@@ -105,7 +105,7 @@ draw_command() {
                 x += start.length * global_font_config.quad_advance;
 
                 buffer_string, _ := get_buffer_string();
-                render_line_with_cursor(buffer_string, x, y, command_prompt_buffer.cursor, 1.0);
+                render_line_with_cursor(buffer_string, x, y, command_prompt_buffer.cursor, 1.0, render_cursor = draw_cursor);
             }
         }
         case CommandResult.Success; {
@@ -159,11 +159,15 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
         }
     }
     else {
+        update_list := current_command_mode == CommandMode.List;
+
         switch code {
             case KeyCode.Escape; {
                 switch current_command_mode {
-                    case CommandMode.List;
+                    case CommandMode.List; {
+                        update_list = false;
                         enter_list_browse_mode();
+                    }
                     default;
                         current_command_mode = CommandMode.None;
                 }
@@ -181,7 +185,10 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     }
                 }
                 else {
-                    current_command_mode = CommandMode.None;
+                    update_list = false;
+                    if current_command_mode != CommandMode.List {
+                        current_command_mode = CommandMode.None;
+                    }
                 }
             }
             case KeyCode.Delete; {
@@ -195,7 +202,10 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     }
                 }
                 else {
-                    current_command_mode = CommandMode.None;
+                    update_list = false;
+                    if current_command_mode != CommandMode.List {
+                        current_command_mode = CommandMode.None;
+                    }
                 }
             }
             case KeyCode.Up; {
@@ -208,6 +218,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     case CommandMode.FindAndReplace;
                         find_previous_string(buffer_string, false, replacements, &replacement_index);
                 }
+                update_list = false;
             }
             case KeyCode.Down; {
                 buffer_string: string = { length = command_prompt_buffer.length; data = command_prompt_buffer.buffer.data; }
@@ -219,14 +230,17 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                     case CommandMode.FindAndReplace;
                         find_previous_string(buffer_string, true, replacements, &replacement_index);
                 }
+                update_list = false;
             }
             case KeyCode.Left; {
                 buffer_string, _ := get_buffer_string();
                 command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor - 1, 0, buffer_string.length);
+                update_list = false;
             }
             case KeyCode.Right; {
                 buffer_string, _ := get_buffer_string();
                 command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor + 1, 0, buffer_string.length);
+                update_list = false;
             }
             case KeyCode.Enter; {
                 buffer_string, allocated := get_buffer_string();
@@ -244,6 +258,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                             command_prompt_buffer.result = CommandResult.Success;
                         }
                 }
+                update_list = false;
             }
             default; {
                 set_buffer_value();
@@ -264,8 +279,12 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 }
             }
         }
-    }
 
+        if update_list {
+            buffer_string, _ := get_buffer_string();
+            filter_list(buffer_string);
+        }
+    }
 
     return true;
 }
