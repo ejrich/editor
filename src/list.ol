@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, Callback load_entry) {
+start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter) {
     list = {
         displaying = true;
         browsing = false;
@@ -6,18 +6,18 @@ start_list_mode(string title, ListEntries entries, Callback load_entry) {
         selected_index = 0;
         entries = entries;
         load_entry = load_entry;
+        filter = filter;
     }
     start_list_command_mode();
 }
 
-start_list_mode(string title, ListEntries entries, Callback load_entry, ListCleanup cleanup) {
-    start_list_mode(title, entries, load_entry);
+start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListCleanup cleanup) {
+    start_list_mode(title, entries, load_entry, filter);
     list.cleanup = cleanup;
 }
 
 filter_list(string filter) {
-    // TODO Implement filtering
-    log("Filter changed to '%'\n", filter);
+    list.filter(filter);
 }
 
 enter_list_browse_mode() {
@@ -75,8 +75,13 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
     return true;
 }
 
+struct ListEntry {
+    key: string;
+    display: string;
+}
+
 struct SelectedEntry {
-    value: string;
+    key: string;
     buffer: Buffer*;
     start_line: int;
 }
@@ -111,21 +116,21 @@ draw_list_entries() {
 
     entries := list.entries();
 
-    // TODO Implement filtering
-
     if entries.length == 0 {
         free_buffer(selected_entry.buffer);
         selected_entry = {
-            value = empty_string;
+            key = empty_string;
             buffer = null;
             start_line = 0;
         }
         return;
     }
-    else if entries[list.selected_index] != selected_entry.value {
+
+    list.selected_index = clamp(list.selected_index, 0, entries.length - 1);
+    if entries[list.selected_index].key != selected_entry.key {
         free_buffer(selected_entry.buffer);
         selected_entry = {
-            value = entries[list.selected_index];
+            key = entries[list.selected_index].key;
             buffer = null;
             start_line = 0;
         }
@@ -141,15 +146,15 @@ draw_list_entries() {
 
     each i in entries_to_display {
         entry := entries[i];
-        if entry.length > max_chars_per_line {
-            entry.length = max_chars_per_line;
+        if entry.display.length > max_chars_per_line {
+            entry.display.length = max_chars_per_line;
         }
 
         y := initial_y + global_font_config.line_height * i;
         if i == list.selected_index {
             draw_line_background(-1.0, y, 0.0);
         }
-        render_text(entry, settings.font_size, x, y, appearance.font_color, vec4());
+        render_text(entry.display, settings.font_size, x, y, appearance.font_color, vec4());
     }
 
 }
@@ -182,10 +187,12 @@ struct ListData {
     selected_index: int;
     entries: ListEntries;
     load_entry: Callback;
+    filter: ListFilter;
     cleanup: ListCleanup;
 }
 
-interface Array<string> ListEntries()
+interface Array<ListEntry> ListEntries()
+interface ListFilter(string filter)
 interface ListCleanup()
 
 list: ListData;

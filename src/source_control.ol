@@ -22,7 +22,7 @@ source_control_status() {
 
     if !string_is_empty(list_title) {
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, load_diff);
+        start_list_mode(list_title, get_status_entries, load_diff, change_filter);
     }
 }
 
@@ -89,6 +89,11 @@ source_control_commit(string message) {
 commit_command: string;
 
 load_status(int index, JobData data) {
+    if !string_is_empty(status_filter) {
+        free_allocation(status_filter.data);
+    }
+    status_filter = empty_string;
+
     status_buffer: Buffer*;
     switch local_settings.source_control {
         case SourceControl.Git; {
@@ -111,13 +116,23 @@ load_status(int index, JobData data) {
     line := status_buffer.lines;
     while line {
         if line.length {
-            status_entries[i++] = line_to_string(line);
+            file := line_to_string(line);
+            status_entries[i++] = {
+                key = file;
+                display = file;
+            }
         }
         line = line.next;
     }
+
+    apply_status_filter();
 }
 
-status_entries: Array<string>;
+status_entries: Array<ListEntry>;
+
+status_filter: string;
+filtered_status_entries: Array<ListEntry>;
+
 entries_reserved := 0;
 entries_block_size := 50; #const
 
@@ -136,21 +151,25 @@ get_status_result_count(Buffer* buffer) {
 
 prepare_status_entries(int count) {
     each entry in status_entries {
-        free_allocation(entry.data);
+        free_allocation(entry.key.data);
     }
     status_entries.length = 0;
+    filtered_status_entries.length = 0;
 
     if count > entries_reserved {
         free_allocation(status_entries.data);
+        free_allocation(filtered_status_entries.data);
 
         while entries_reserved < count {
             entries_reserved += entries_block_size;
         }
 
         array_resize(&status_entries, entries_reserved, allocate);
+        array_resize(&filtered_status_entries, entries_reserved, allocate);
     }
 
     status_entries.length = count;
+    filtered_status_entries.length = count;
 }
 
 string line_to_string(BufferLine* line) {
@@ -175,34 +194,61 @@ string line_to_string(BufferLine* line) {
     return value;
 }
 
-Array<string> get_status_entries() {
-    return status_entries;
+Array<ListEntry> get_status_entries() {
+    return filtered_status_entries;
 }
 
-load_diff(int index, JobData data) {
+load_diff(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
-    value := entry.value;
+    file := entry.key;
 
     command: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            command = temp_string(true, "git diff ", value);
+            command = temp_string(true, "git diff ", file);
         }
         case SourceControl.Perforce; {
-            command = temp_string(true, "p4 diff ", value);
+            command = temp_string(true, "p4 diff ", file);
         }
         case SourceControl.Svn; {
-            command = temp_string(true, "svn diff ", value);
+            command = temp_string(true, "svn diff ", file);
         }
         default; return;
     }
 
     diff_buffer := run_command_and_save_to_buffer(command);
 
-    if value == entry.value {
+    if file == entry.key {
         entry.buffer = diff_buffer;
     }
     else {
         free_buffer(diff_buffer);
+    }
+}
+
+change_filter(string filter) {
+    if !string_is_empty(status_filter) {
+        free_allocation(status_filter.data);
+    }
+    allocate_strings(&filter);
+    status_filter = filter;
+
+    apply_status_filter();
+}
+
+apply_status_filter() {
+    if string_is_empty(status_filter) {
+        filtered_status_entries.length = status_entries.length;
+        each entry, i in status_entries {
+            filtered_status_entries[i] = entry;
+        }
+    }
+    else {
+        filtered_status_entries.length = 0;
+        each entry in status_entries {
+            if string_contains(entry.key, status_filter) {
+                filtered_status_entries[filtered_status_entries.length++] = entry;
+            }
+        }
     }
 }

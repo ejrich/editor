@@ -159,6 +159,26 @@ allocate_strings(bool null_terminate = false, Params<string*> strings) {
     }
 }
 
+bool string_contains(string value, string sub_value) {
+    if sub_value.length == 0 return true;
+    if sub_value.length > value.length return false;
+    if sub_value.length == value.length return value == sub_value;
+
+    each i in value.length - sub_value.length + 1 {
+        if value[i] == sub_value[0] {
+            test_value: string = {
+                length = sub_value.length;
+                data = value.data + i;
+            }
+            if test_value == sub_value {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 s32 clamp(s32 value, s32 min, s32 max) {
     if value < min return min;
     if value > max return max;
