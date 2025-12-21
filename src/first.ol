@@ -81,9 +81,11 @@ application_name := "Editor";
                             keybind_function: KeybindFunction = {
                                 name = function.name;
                                 no_repeat = array_contains(function.attributes, "no_repeat");
+                                list = array_contains(function.attributes, "list");
                             }
-                            keybind_definitions_length += function.name.length * 2 + 43;
+                            keybind_definitions_length += function.name.length * 2 + 56;
                             if !keybind_function.no_repeat keybind_definitions_length++;
+                            if !keybind_function.list keybind_definitions_length++;
                             array_insert(&keybind_functions, keybind_function);
                         }
                         else if array_contains(function.attributes, "command") {
@@ -181,8 +183,10 @@ application_name := "Editor";
                         each function in keybind_functions {
                             prefix := "{name = \""; #const
                             handler := "\"; handler = "; #const
-                            no_repeat_true := "; no_repeat = true;},"; #const
-                            no_repeat_false := "; no_repeat = false;},"; #const
+                            no_repeat_true := "; no_repeat = true;"; #const
+                            no_repeat_false := "; no_repeat = false;"; #const
+                            list_true := " list = true;},"; #const
+                            list_false := " list = false;},"; #const
 
                             memory_copy(keybind_definitions_initial_value.data + i, prefix.data, prefix.length);
                             i += prefix.length;
@@ -203,6 +207,15 @@ application_name := "Editor";
                             else {
                                 memory_copy(keybind_definitions_initial_value.data + i, no_repeat_false.data, no_repeat_false.length);
                                 i += no_repeat_false.length;
+                            }
+
+                            if function.list {
+                                memory_copy(keybind_definitions_initial_value.data + i, list_true.data, list_true.length);
+                                i += list_true.length;
+                            }
+                            else {
+                                memory_copy(keybind_definitions_initial_value.data + i, list_false.data, list_false.length);
+                                i += list_false.length;
                             }
                         }
 
@@ -369,6 +382,7 @@ bool add_profiling_to_function(FunctionAst* function, int index) {
 struct KeybindFunction {
     name: string;
     no_repeat: bool;
+    list: bool;
 }
 
 // Code for verifying and generating commands

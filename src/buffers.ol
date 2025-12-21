@@ -286,6 +286,7 @@ open_file_buffer(string path, bool allocate_path) {
         if allocate_path {
             allocate_strings(&path);
         }
+
         buffer: Buffer = {
             relative_path = path;
         }

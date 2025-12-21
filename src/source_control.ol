@@ -100,7 +100,7 @@ load_status(int index, JobData data) {
             status_buffer = run_command_and_save_to_buffer("git status -s");
         }
         case SourceControl.Perforce; {
-            status_buffer = run_command_and_save_to_buffer("p4 diff -f -sa");
+            status_buffer = run_command_and_save_to_buffer("p4 diff -sa");
         }
         case SourceControl.Svn; {
             status_buffer = run_command_and_save_to_buffer("svn status --quiet");

@@ -248,8 +248,10 @@ search(ModCode mod) {
     start_search_mode();
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 normal_mode(ModCode mod) {
+    if exit_list_mode() return;
+
     if edit_mode == EditMode.Insert || edit_mode == EditMode.BlockInsert {
         end_insert_mode();
     }
@@ -288,8 +290,10 @@ visual_mode(ModCode mod) {
     reset_post_movement_command();
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 insert(ModCode mod) {
+    if change_list_cursor(false, (mod & ModCode.Shift) == ModCode.Shift) return;
+
     if mod & ModCode.Shift {
         switch edit_mode {
             case EditMode.Visual;
@@ -308,8 +312,10 @@ insert(ModCode mod) {
     start_insert_mode(false);
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 append(ModCode mod) {
+    if change_list_cursor(true, (mod & ModCode.Shift) == ModCode.Shift) return;
+
     if mod & ModCode.Shift {
         switch edit_mode {
             case EditMode.Visual;
@@ -503,8 +509,10 @@ quit(ModCode mod) {
 }
 
 // Movement keybinds
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 move_up(ModCode mod) {
+    if change_list_select(1) return;
+
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
     }
@@ -527,8 +535,10 @@ move_up(ModCode mod) {
     }
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 move_down(ModCode mod) {
+    if change_list_select(-1) return;
+
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
     }

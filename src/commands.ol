@@ -125,6 +125,23 @@ draw_command(bool draw_cursor = true) {
     }
 }
 
+move_command_cursor(bool append, bool boundary) {
+    buffer_string, _ := get_buffer_string();
+    if boundary {
+        if append {
+            command_prompt_buffer.cursor = buffer_string.length;
+        }
+        else {
+            command_prompt_buffer.cursor = 0;
+        }
+    }
+    else if append {
+        command_prompt_buffer.cursor++;
+    }
+
+    command_prompt_buffer.cursor = clamp(command_prompt_buffer.cursor, 0, buffer_string.length);
+}
+
 bool handle_command_press(PressState state, KeyCode code, ModCode mod, string char) {
     if current_command_mode == CommandMode.None return false;
 

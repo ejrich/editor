@@ -21,13 +21,6 @@ enter_list_browse_mode() {
     list.browsing = true;
 }
 
-exit_list_mode() {
-    list.displaying = false;
-    if list.cleanup != null {
-        list.cleanup();
-    }
-}
-
 bool draw_list() {
     if !list.displaying || !is_font_ready(settings.font_size) return false;
 
@@ -48,13 +41,6 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
     if !list.displaying || !list.browsing return false;
 
     switch code {
-        case KeyCode.Escape; {
-            list = {
-                displaying = false;
-                browsing = false;
-            }
-            exit_command_mode();
-        }
         case KeyCode.Enter; {
             if list.select != null && !string_is_empty(selected_entry.key) {
                 list.select(selected_entry.key);
@@ -65,20 +51,56 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
                 exit_command_mode();
             }
         }
-        case KeyCode.I; {
-            list.browsing = false;
-        }
         case KeyCode.Up; {
-            entries := list.entries();
-            list.selected_index = clamp(list.selected_index + 1, 0, entries.length - 1);
+            change_list_select(1);
         }
         case KeyCode.Down; {
-            entries := list.entries();
-            list.selected_index = clamp(list.selected_index - 1, 0, entries.length - 1);
+            change_list_select(-1);
         }
     }
 
-    // TODO Implement browsing
+    handle_keybind_event(code, mod, true);
+    return true;
+}
+
+bool exit_list_mode() {
+    if !list.displaying || !list.browsing return false;
+
+    list = {
+        displaying = false;
+        browsing = false;
+    }
+    free_buffer(selected_entry.buffer);
+    exit_command_mode();
+    if list.cleanup != null {
+        list.cleanup();
+    }
+
+    return true;
+}
+
+bool change_list_select(int change) {
+    if !list.displaying || !list.browsing return false;
+
+    new_index := list.selected_index + change;
+
+    entries := list.entries();
+    if new_index >= entries.length {
+        new_index = 0;
+    }
+    else if new_index < 0 {
+        new_index = entries.length;
+    }
+
+    list.selected_index = new_index;
+    return true;
+}
+
+bool change_list_cursor(bool append, bool boundary) {
+    if !list.displaying || !list.browsing return false;
+
+    move_command_cursor(append, boundary);
+    list.browsing = false;
     return true;
 }
 

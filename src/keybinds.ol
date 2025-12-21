@@ -65,7 +65,7 @@ write_keybinds() {
     close_file(keybinds_file);
 }
 
-bool handle_keybind_event(KeyCode code, ModCode mod) {
+bool handle_keybind_event(KeyCode code, ModCode mod, bool list_only = false) {
     code_value := cast(int, code);
     mod_value := (cast(int, mod) << 9) | code_value;
 
@@ -77,6 +77,13 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
     if handler_index > 0 {
         keybind := keybind_definitions[handler_index - 1];
 
+        if list_only {
+            if keybind.list {
+                keybind.handler(mod);
+            }
+            return true;
+        }
+
         result: bool;
         if keybind.no_repeat || key_command.repeats == 0 {
             keybind.handler(mod);
@@ -87,7 +94,7 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
             }
         }
     }
-    else {
+    else if !list_only {
         command := command_keybinds[mod_value];
         if string_is_empty(command) {
             return false;
@@ -96,8 +103,10 @@ bool handle_keybind_event(KeyCode code, ModCode mod) {
         queue_command_to_run(command);
     }
 
-    reset_key_command();
-    handle_post_movement_command();
+    if !list_only {
+        reset_key_command();
+        handle_post_movement_command();
+    }
 
     return true;
 }
@@ -208,6 +217,7 @@ struct KeybindDefinition {
     name: string;
     handler: KeybindHandler;
     no_repeat: bool;
+    list: bool;
 }
 
 keybind_definitions: Array<KeybindDefinition>;
