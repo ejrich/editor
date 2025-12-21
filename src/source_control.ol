@@ -22,7 +22,7 @@ source_control_status() {
 
     if !string_is_empty(list_title) {
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, load_diff, change_filter);
+        start_list_mode(list_title, get_status_entries, load_diff, change_filter, open_status_file);
     }
 }
 
@@ -191,6 +191,31 @@ string line_to_string(BufferLine* line) {
         }
     }
 
+    switch local_settings.source_control {
+        case SourceControl.Perforce; {
+            if starts_with(value, current_directory) {
+                relative_path: string = {
+                    length = value.length - current_directory.length;
+                    data = value.data + current_directory.length;
+                }
+                if relative_path[0] == '\\' || relative_path[0] == '/' {
+                    relative_path.length--;
+                    relative_path.data = relative_path.data + 1;
+                }
+
+                allocate_strings(&relative_path);
+                each i in relative_path.length {
+                    if relative_path[i] == '\\' {
+                        relative_path[i] = '/';
+                    }
+                }
+
+                free_allocation(value.data);
+                value = relative_path;
+            }
+        }
+    }
+
     return value;
 }
 
@@ -251,4 +276,8 @@ apply_status_filter() {
             }
         }
     }
+}
+
+open_status_file(string file) {
+    open_file_buffer(file, true);
 }

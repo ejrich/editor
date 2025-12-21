@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter) {
+start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListCleanup cleanup = null) {
     list = {
         displaying = true;
         browsing = false;
@@ -7,13 +7,10 @@ start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilt
         entries = entries;
         load_entry = load_entry;
         filter = filter;
+        select = select;
+        cleanup = cleanup;
     }
     start_list_command_mode();
-}
-
-start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListCleanup cleanup) {
-    start_list_mode(title, entries, load_entry, filter);
-    list.cleanup = cleanup;
 }
 
 filter_list(string filter) {
@@ -57,6 +54,16 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
                 browsing = false;
             }
             exit_command_mode();
+        }
+        case KeyCode.Enter; {
+            if list.select != null && !string_is_empty(selected_entry.key) {
+                list.select(selected_entry.key);
+                list = {
+                    displaying = false;
+                    browsing = false;
+                }
+                exit_command_mode();
+            }
         }
         case KeyCode.I; {
             list.browsing = false;
@@ -188,11 +195,13 @@ struct ListData {
     entries: ListEntries;
     load_entry: Callback;
     filter: ListFilter;
+    select: ListEntrySelect;
     cleanup: ListCleanup;
 }
 
 interface Array<ListEntry> ListEntries()
 interface ListFilter(string filter)
+interface ListEntrySelect(string key)
 interface ListCleanup()
 
 list: ListData;

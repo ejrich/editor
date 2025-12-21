@@ -272,7 +272,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 }
 
 // Opening buffers with files
-open_file_buffer(string path) {
+open_file_buffer(string path, bool allocate_path) {
     buffer_index := -1;
 
     each buffer, i in buffers {
@@ -283,6 +283,9 @@ open_file_buffer(string path) {
     }
 
     if buffer_index < 0 {
+        if allocate_path {
+            allocate_strings(&path);
+        }
         buffer: Buffer = {
             relative_path = path;
         }

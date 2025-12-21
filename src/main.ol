@@ -22,7 +22,7 @@ main() {
     init_subsystems();
 
     each input_file in get_command_line_arguments() {
-        open_file_buffer(input_file);
+        open_file_buffer(input_file, false);
     }
 
     frequency := cast(float, get_performance_frequency());
@@ -263,6 +263,8 @@ string create_empty_string(u32 length) #inline {
     return str;
 }
 
+current_directory: string;
+
 #private
 
 running := true;
@@ -274,6 +276,7 @@ program_directory: string;
 
 init_subsystems() {
     init_memory();
+    get_working_directory();
     init_logging();
     init_display();
     load_settings();
@@ -300,4 +303,17 @@ deinit_subsystems() {
     deallocate_arenas();
 
     deinit_logging();
+}
+
+get_working_directory() {
+    #if os == OS.Windows {
+        current_directory = {
+            length = GetCurrentDirectoryA(0, null);
+        }
+        current_directory.data = allocate(current_directory.length);
+        current_directory.length = GetCurrentDirectoryA(current_directory.length, current_directory.data);
+    }
+    #if os == OS.Linux {
+        // TODO Use the syscall getcwd
+    }
 }

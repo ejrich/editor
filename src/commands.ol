@@ -8,8 +8,7 @@
 [command, e]
 string, bool open_file_command(string path) {
     edit_mode = EditMode.Normal;
-    allocate_strings(&path);
-    open_file_buffer(path);
+    open_file_buffer(path, true);
     return empty_string, false;
 }
 
