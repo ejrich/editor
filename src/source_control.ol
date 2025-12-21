@@ -111,15 +111,14 @@ load_status(int index, JobData data) {
     defer free_buffer(status_buffer);
     get_status_result_count(status_buffer);
 
-    // TODO Change this for git staging
     i := 0;
     line := status_buffer.lines;
     while line {
         if line.length {
-            file := line_to_string(line);
+            file, display := line_to_entry(line);
             status_entries[i++] = {
                 key = file;
-                display = file;
+                display = display;
             }
         }
         line = line.next;
@@ -151,6 +150,9 @@ get_status_result_count(Buffer* buffer) {
 
 prepare_status_entries(int count) {
     each entry in status_entries {
+        if entry.key != entry.display {
+            free_allocation(entry.display.data);
+        }
         free_allocation(entry.key.data);
     }
     status_entries.length = 0;
@@ -172,7 +174,7 @@ prepare_status_entries(int count) {
     filtered_status_entries.length = count;
 }
 
-string line_to_string(BufferLine* line) {
+string, string line_to_entry(BufferLine* line) {
     value: string = { length = line.length; }
     if line.length <= line_buffer_length {
         value.data = line.data.data;
@@ -191,7 +193,13 @@ string line_to_string(BufferLine* line) {
         }
     }
 
+    file, display: string;
     switch local_settings.source_control {
+        case SourceControl.Git; {
+            // TODO Implement
+            file = value;
+            display = value;
+        }
         case SourceControl.Perforce; {
             if starts_with(value, current_directory) {
                 relative_path: string = {
@@ -213,10 +221,17 @@ string line_to_string(BufferLine* line) {
                 free_allocation(value.data);
                 value = relative_path;
             }
+            file = value;
+            display = value;
+        }
+        case SourceControl.Svn; {
+            // TODO Implement
+            file = value;
+            display = value;
         }
     }
 
-    return value;
+    return file, display;
 }
 
 Array<ListEntry> get_status_entries() {
