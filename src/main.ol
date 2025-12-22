@@ -314,6 +314,9 @@ get_working_directory() {
         current_directory.length = GetCurrentDirectoryA(current_directory.length, current_directory.data);
     }
     #if os == OS.Linux {
-        // TODO Use the syscall getcwd
+        buffer: CArray<u8>[1000];
+        getcwd(&buffer, buffer.length);
+        current_directory = convert_c_string(&buffer);
+        allocate_strings(&current_directory);
     }
 }

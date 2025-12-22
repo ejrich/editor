@@ -49,6 +49,12 @@ Buffer* run_command_and_save_to_buffer(string command) {
     return buffer;
 }
 
+#if os == OS.Linux {
+    void* popen(string command, string type) #extern "c"
+    int pclose(void* stream) #extern "c"
+    u8* fgets(u8* s, int n, void* stream) #extern "c"
+}
+
 #private
 
 run_command(int index, JobData data) {
@@ -132,9 +138,20 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
         CloseHandle(read_handle);
     }
     else {
-        // TODO Implement for linux
-        exit_code = system(data.string);
-        save_to_buffer("snths\nsnthsnth\nthsnthnst\nnthsnthn\nthsnthsn\nnsnthsnth\n\nsnthnsthsnth\nsthnsnthsnths");
+        pid := popen(command, "r");
+
+        buf: CArray<u8>[1000];
+        while exited == null || !(*exited) {
+            read: int;
+            result := fgets(&buf, buf.length, pid);
+
+            if result == null break;
+
+            text := convert_c_string(result);
+            save_to_buffer(buffer, text);
+        }
+
+        exit_code = pclose(pid);
     }
 
     return true, exit_code;
