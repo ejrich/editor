@@ -17,7 +17,7 @@ force_command_to_stop() {
             TerminateProcess(current_process.process, command_exited_code);
         }
         else {
-            // TODO Exit the process for linux
+            kill(current_process.pid, command_exited_code);
         }
 
         current_command.exited = true;
@@ -47,12 +47,6 @@ Buffer* run_command_and_save_to_buffer(string command) {
     success, exit_code := execute_command(command, buffer, add_text_to_end_of_buffer);
 
     return buffer;
-}
-
-#if os == OS.Linux {
-    void* popen(string command, string type) #extern "c"
-    int pclose(void* stream) #extern "c"
-    u8* fgets(u8* s, int n, void* stream) #extern "c"
 }
 
 #private
@@ -138,20 +132,58 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
         CloseHandle(read_handle);
     }
     else {
-        pid := popen(command, "r");
+        pipe_files: Array<int>[2];
+        if pipe2(pipe_files.data, 0x400000) < 0 {
+            return false, 0;
+        }
+
+        stack_size := 2 * 1024 * 1024; #const
+        stack := allocate(stack_size);
+        defer free_allocation(stack);
+
+        args: clone_args = {
+            flags = CloneFlags.CLONE_VM | CloneFlags.CLONE_FS | CloneFlags.CLONE_FILES | CloneFlags.CLONE_SYSVSEM | CloneFlags.CLONE_CLEAR_SIGHAND;
+            exit_signal = 17;
+            stack = stack;
+            stack_size = stack_size;
+        }
+
+        handler_args: CloneArguments = {
+            command = command;
+        }
+
+        asm {
+            in rdi, &args;
+            in rsi, size_of(args);
+            in rax, 435; // clone3
+            in r8, &handler_args;
+            syscall;
+
+            // Set arguments for __clone_handler
+            mov rdi, rax;
+            mov rsi, r8;
+        }
+
+        pid := __clone_handler();
+        if pid < 0 {
+            return false, 0;
+        }
+
+        if process_data {
+            process_data.pid = pid;
+        }
 
         buf: CArray<u8>[1000];
         while exited == null || !(*exited) {
-            read: int;
-            result := fgets(&buf, buf.length, pid);
+            length := read(pipe_files[0], &buf, buf.length);
 
-            if result == null break;
+            if length <= 0 break;
 
-            text := convert_c_string(result);
+            text: string = { length = length; data = &buf; }
             save_to_buffer(buffer, text);
         }
 
-        exit_code = pclose(pid);
+        wait4(pid, &exit_code, 0, null);
     }
 
     return true, exit_code;
@@ -215,7 +247,7 @@ current_command: CommandRunData;
 }
 else {
     struct ProcessData {
-        handle: s64;
+        pid: int;
     }
 }
 
