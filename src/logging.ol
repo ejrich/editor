@@ -19,7 +19,9 @@ deinit_logging() {
 log(string format, Params args) {
     timestamped_format: string;
     #if os == OS.Linux {
-        t := time(null);
+        now: Timespec;
+        clock_gettime(ClockId.CLOCK_REALTIME, &now);
+        t := now.tv_sec;
         time := localtime(&t);
         write_to_console_and_file("[ %/%/% %:%:% ] ", int_format(time.tm_mon, min_chars = 2), int_format(time.tm_mday, min_chars = 2), int_format(time.tm_year - 100, min_chars = 2), int_format(time.tm_hour, min_chars = 2), int_format(time.tm_min, min_chars = 2), int_format(time.tm_sec, min_chars = 2));
     }
