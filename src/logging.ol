@@ -17,13 +17,10 @@ deinit_logging() {
 }
 
 log(string format, Params args) {
-    timestamped_format: string;
     #if os == OS.Linux {
-        now: Timespec;
-        clock_gettime(ClockId.CLOCK_REALTIME, &now);
-        t := now.tv_sec;
-        time := localtime(&t);
-        write_to_console_and_file("[ %/%/% %:%:% ] ", int_format(time.tm_mon, min_chars = 2), int_format(time.tm_mday, min_chars = 2), int_format(time.tm_year - 100, min_chars = 2), int_format(time.tm_hour, min_chars = 2), int_format(time.tm_min, min_chars = 2), int_format(time.tm_sec, min_chars = 2));
+        month, day, year, hour, min, sec: u32;
+        calculate_timestamp(&month, &day, &year, &hour, &min, &sec);
+        write_to_console_and_file("[ %/%/% %:%:% ] ", int_format(month, min_chars = 2), int_format(day, min_chars = 2), int_format(year, min_chars = 2), int_format(hour, min_chars = 2), int_format(min, min_chars = 2), int_format(sec, min_chars = 2));
     }
     else #if os == OS.Windows {
         time: SYSTEMTIME;
@@ -55,3 +52,20 @@ string_buffer_write_to_console_and_file(void* data, u8* buffer, s64 length) {
 }
 
 log_file: File;
+
+#if os == OS.Linux {
+    calculate_timestamp(u32* month, u32* day, u32* year, u32* hour, u32* min, u32* sec) {
+        now: Timespec;
+        clock_gettime(ClockId.CLOCK_REALTIME, &now);
+        t := now.tv_sec;
+        // TODO Calculate the time instead of using localtime
+        time := localtime(&t);
+
+        *month = time.tm_mon;
+        *day = time.tm_mday;
+        *year = time.tm_year - 100;
+        *hour = time.tm_hour;
+        *min = time.tm_min;
+        *sec = time.tm_sec;
+    }
+}
