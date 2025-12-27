@@ -86,7 +86,7 @@ init_work_queue(WorkQueue* queue, int thread_count) {
     create_semaphore(&queue.semaphore, 65536);
 
     each i in thread_count {
-        create_thread(thread_worker, queue, allocate);
+        create_thread(thread_worker, queue);
     }
 }
 

@@ -10,6 +10,7 @@ init_logging() {
         print("Unable to write to log file: '%'\n", log_file_path);
     }
 
+    // TODO Set the time_adjust on linux
     log("Test\n");
 }
 

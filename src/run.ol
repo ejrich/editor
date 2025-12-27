@@ -49,6 +49,8 @@ Buffer* run_command_and_save_to_buffer(string command) {
     return buffer;
 }
 
+void* fdopen(int fd, u8* mode) #extern "c"
+
 #private
 
 run_command(int index, JobData data) {
@@ -133,41 +135,69 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
     }
     else {
         pipe_files: Array<int>[2];
-        if pipe2(pipe_files.data, 0x400000) < 0 {
+        // if pipe2(pipe_files.data, 0x400000) < 0 {
+        if pipe(pipe_files.data) < 0 {
             return false, 0;
         }
 
-        stack_size := 2 * 1024 * 1024; #const
-        stack := allocate(stack_size);
-        defer free_allocation(stack);
+        // stack_size := 2 * 1024 * 1024; #const
+        // stack := allocate(stack_size);
+        // defer free_allocation(stack);
 
-        args: clone_args = {
-            flags = CloneFlags.CLONE_VM | CloneFlags.CLONE_FS | CloneFlags.CLONE_FILES | CloneFlags.CLONE_SYSVSEM | CloneFlags.CLONE_CLEAR_SIGHAND;
-            exit_signal = 17;
-            stack = stack;
-            stack_size = stack_size;
-        }
+        // args: clone_args = {
+        //     flags = CloneFlags.CLONE_VM | CloneFlags.CLONE_FS | CloneFlags.CLONE_FILES | CloneFlags.CLONE_SYSVSEM | CloneFlags.CLONE_CLEAR_SIGHAND;
+        //     exit_signal = 17;
+        //     stack = stack;
+        //     stack_size = stack_size;
+        // }
 
-        handler_args: CloneArguments = {
-            command = command;
-        }
+        // handler_args: CloneArguments = {
+        //     command = command;
+        //     pipes = pipe_files.data;
+        // }
 
-        asm {
-            in rdi, &args;
-            in rsi, size_of(args);
-            in rax, 435; // clone3
-            in r8, &handler_args;
-            syscall;
+        // asm {
+        //     in rdi, &args;
+        //     in rsi, size_of(args);
+        //     in rax, 435; // clone3
+        //     in r8, &handler_args;
+        //     syscall;
 
-            // Set arguments for __clone_handler
-            mov rdi, rax;
-            mov rsi, r8;
-        }
+        //     // Set arguments for __clone_handler
+        //     mov rdi, rax;
+        //     mov rsi, r8;
+        // }
 
-        pid := __clone_handler();
+        // pid := __clone_handler();
+        pid := fork();
+
         if pid < 0 {
             return false, 0;
         }
+
+        read_pipe := 0; #const
+        write_pipe := 1; #const
+
+        if pid == 0 {
+            c := close(pipe_files[read_pipe]);
+            a := dup2(pipe_files[write_pipe], 1);
+            if a != 1 {
+                print("WHY IS THIS NOT WORKING % % % %\n", c, a, pipe_files[read_pipe], pipe_files[write_pipe]);
+            }
+            print("% % % %\n", c, a, pipe_files[read_pipe], pipe_files[write_pipe]);
+
+            exec_args: Array<u8*>[5];
+            exec_args[0] = "sh".data;
+            exec_args[1] = "-c".data;
+            exec_args[2] = "--".data;
+            exec_args[3] = command.data;
+            exec_args[4] = null;
+            execve("/bin/sh".data, exec_args.data, __environment_variables_pointer);
+            exit(-1);
+        }
+
+        snth := close(pipe_files[write_pipe]);
+        print("% % %\n", snth, pipe_files[read_pipe], pipe_files[write_pipe]);
 
         if process_data {
             process_data.pid = pid;
@@ -175,7 +205,7 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
 
         buf: CArray<u8>[1000];
         while exited == null || !(*exited) {
-            length := read(pipe_files[0], &buf, buf.length);
+            length := read(pipe_files[read_pipe], &buf, buf.length);
 
             if length <= 0 break;
 
@@ -184,6 +214,7 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
         }
 
         wait4(pid, &exit_code, 0, null);
+        print("Done\n");
     }
 
     return true, exit_code;
