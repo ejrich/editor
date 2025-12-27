@@ -135,40 +135,10 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
     }
     else {
         pipe_files: Array<int>[2];
-        // if pipe2(pipe_files.data, 0x400000) < 0 {
-        if pipe(pipe_files.data) < 0 {
+        if pipe2(pipe_files.data, 0x80000) < 0 {
             return false, 0;
         }
 
-        // stack_size := 2 * 1024 * 1024; #const
-        // stack := allocate(stack_size);
-        // defer free_allocation(stack);
-
-        // args: clone_args = {
-        //     flags = CloneFlags.CLONE_VM | CloneFlags.CLONE_FS | CloneFlags.CLONE_FILES | CloneFlags.CLONE_SYSVSEM | CloneFlags.CLONE_CLEAR_SIGHAND;
-        //     exit_signal = 17;
-        //     stack = stack;
-        //     stack_size = stack_size;
-        // }
-
-        // handler_args: CloneArguments = {
-        //     command = command;
-        //     pipes = pipe_files.data;
-        // }
-
-        // asm {
-        //     in rdi, &args;
-        //     in rsi, size_of(args);
-        //     in rax, 435; // clone3
-        //     in r8, &handler_args;
-        //     syscall;
-
-        //     // Set arguments for __clone_handler
-        //     mov rdi, rax;
-        //     mov rsi, r8;
-        // }
-
-        // pid := __clone_handler();
         pid := fork();
 
         if pid < 0 {
@@ -179,12 +149,8 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
         write_pipe := 1; #const
 
         if pid == 0 {
-            c := close(pipe_files[read_pipe]);
-            a := dup2(pipe_files[write_pipe], 1);
-            if a != 1 {
-                print("WHY IS THIS NOT WORKING % % % %\n", c, a, pipe_files[read_pipe], pipe_files[write_pipe]);
-            }
-            print("% % % %\n", c, a, pipe_files[read_pipe], pipe_files[write_pipe]);
+            close(pipe_files[read_pipe]);
+            dup2(pipe_files[write_pipe], stdout);
 
             exec_args: Array<u8*>[5];
             exec_args[0] = "sh".data;
@@ -196,8 +162,7 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
             exit(-1);
         }
 
-        snth := close(pipe_files[write_pipe]);
-        print("% % %\n", snth, pipe_files[read_pipe], pipe_files[write_pipe]);
+        close(pipe_files[write_pipe]);
 
         if process_data {
             process_data.pid = pid;
@@ -214,7 +179,6 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
         }
 
         wait4(pid, &exit_code, 0, null);
-        print("Done\n");
     }
 
     return true, exit_code;
