@@ -9,6 +9,8 @@ init_logging() {
     if !opened {
         print("Unable to write to log file: '%'\n", log_file_path);
     }
+
+    log("Test\n");
 }
 
 deinit_logging() {
@@ -57,15 +59,57 @@ log_file: File;
     calculate_timestamp(u32* month, u32* day, u32* year, u32* hour, u32* min, u32* sec) {
         now: Timespec;
         clock_gettime(ClockId.CLOCK_REALTIME, &now);
-        t := now.tv_sec;
-        // TODO Calculate the time instead of using localtime
-        time := localtime(&t);
+        time := now.tv_sec + time_adjust;
 
-        *month = time.tm_mon;
-        *day = time.tm_mday;
-        *year = time.tm_year - 100;
-        *hour = time.tm_hour;
-        *min = time.tm_min;
-        *sec = time.tm_sec;
+        seconds_in_day := 60 * 60 * 24; #const
+        secs := time % seconds_in_day;
+
+        seconds := secs % 60;
+        mins := secs / 60;
+        minutes := mins % 60;
+        hours := mins / 60;
+
+        days := time / seconds_in_day;
+
+        actual_year := 1970;
+        leap_index := 2;
+        while true {
+            if leap_index == 4 {
+                if days < 366 break;
+
+                days -= 366;
+                leap_index = 1;
+            }
+            else {
+                if days < 365 break;
+
+                days -= 365;
+                leap_index++;
+            }
+
+            actual_year++;
+        }
+
+        month_index := 0;
+        while true {
+            month_days := month_day_count[month_index];
+            if leap_index == 4 && month_index == 1
+                month_days++;
+
+            if days < month_days break;
+
+            days -= month_days;
+            month_index++;
+        }
+
+        *month = month_index + 1;
+        *day = days + 1;
+        *year = actual_year % 100;
+        *hour = hours;
+        *min = minutes;
+        *sec = seconds;
     }
+
+    time_adjust := 0;
+    month_day_count: Array<u8> = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 }
