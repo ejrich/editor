@@ -49,6 +49,10 @@ Buffer* run_command_and_save_to_buffer(string command) {
     return buffer;
 }
 
+run_command_silent(string command) {
+    execute_command(command, null, null);
+}
+
 void* fdopen(int fd, u8* mode) #extern "c"
 
 #private
@@ -124,7 +128,8 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
-            save_to_buffer(buffer, text);
+            if save_to_buffer != null
+                save_to_buffer(buffer, text);
         }
 
         GetExitCodeProcess(pi.hProcess, &exit_code);
@@ -175,7 +180,8 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
             if length <= 0 break;
 
             text: string = { length = length; data = &buf; }
-            save_to_buffer(buffer, text);
+            if save_to_buffer != null
+                save_to_buffer(buffer, text);
         }
 
         wait4(pid, &exit_code, 0, null);

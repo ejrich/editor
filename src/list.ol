@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListCleanup cleanup = null) {
+start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null) {
     list = {
         displaying = true;
         browsing = false;
@@ -8,6 +8,7 @@ start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilt
         load_entry = load_entry;
         filter = filter;
         select = select;
+        action = action;
         cleanup = cleanup;
     }
     start_list_command_mode();
@@ -51,6 +52,11 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
                 exit_command_mode();
             }
         }
+        case KeyCode.Tab; {
+            if list.action != null && !string_is_empty(selected_entry.key) {
+                list.action(selected_entry.key);
+            }
+        }
         case KeyCode.Up; {
             change_list_select(1);
         }
@@ -70,7 +76,14 @@ bool exit_list_mode() {
         displaying = false;
         browsing = false;
     }
+
     free_buffer(selected_entry.buffer);
+    selected_entry = {
+        key = empty_string;
+        buffer = null;
+        start_line = 0;
+    }
+
     exit_command_mode();
     if list.cleanup != null {
         list.cleanup();
@@ -218,12 +231,14 @@ struct ListData {
     load_entry: Callback;
     filter: ListFilter;
     select: ListEntrySelect;
+    action: ListEntryAction;
     cleanup: ListCleanup;
 }
 
 interface Array<ListEntry> ListEntries()
 interface ListFilter(string filter)
 interface ListEntrySelect(string key)
+interface ListEntryAction(string key)
 interface ListCleanup()
 
 list: ListData;

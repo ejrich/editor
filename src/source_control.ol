@@ -21,8 +21,24 @@ source_control_status() {
     }
 
     if !string_is_empty(list_title) {
+        // Free the existing entries before loading
+        each entry in status_entries {
+            switch local_settings.source_control {
+                case SourceControl.Git; {
+                    free_allocation(entry.key.data);
+                    free_allocation(entry.display.data);
+                }
+                case SourceControl.Perforce;
+                case SourceControl.Svn;
+                    free_allocation(entry.display.data);
+            }
+        }
+        status_entries.length = 0;
+        git_status_entries.length = 0;
+        filtered_status_entries.length = 0;
+
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, load_diff, change_filter, open_status_file);
+        start_list_mode(list_title, get_status_entries, load_diff, change_filter, open_status_file, change_status);
     }
 }
 
@@ -115,7 +131,7 @@ load_status(int index, JobData data) {
     line := status_buffer.lines;
     while line {
         if line.length {
-            file, display := line_to_entry(line);
+            file, display := line_to_entry(line, i);
             status_entries[i++] = {
                 key = file;
                 display = display;
@@ -128,6 +144,17 @@ load_status(int index, JobData data) {
 }
 
 status_entries: Array<ListEntry>;
+git_status_entries: Array<GitStatus>;
+
+enum GitStatus {
+    None          = 0x0;
+    Untracked     = 0x1;
+    Added         = 0x2;
+    Changed       = 0x4;
+    ChangedStaged = 0x8;
+    Deleted       = 0x10;
+    DeletedStaged = 0x20;
+}
 
 status_filter: string;
 filtered_status_entries: Array<ListEntry>;
@@ -149,17 +176,9 @@ get_status_result_count(Buffer* buffer) {
 }
 
 prepare_status_entries(int count) {
-    each entry in status_entries {
-        if entry.key != entry.display {
-            free_allocation(entry.display.data);
-        }
-        free_allocation(entry.key.data);
-    }
-    status_entries.length = 0;
-    filtered_status_entries.length = 0;
-
     if count > entries_reserved {
         free_allocation(status_entries.data);
+        free_allocation(git_status_entries.data);
         free_allocation(filtered_status_entries.data);
 
         while entries_reserved < count {
@@ -167,6 +186,7 @@ prepare_status_entries(int count) {
         }
 
         array_resize(&status_entries, entries_reserved, allocate);
+        array_resize(&git_status_entries, entries_reserved, allocate);
         array_resize(&filtered_status_entries, entries_reserved, allocate);
     }
 
@@ -174,31 +194,23 @@ prepare_status_entries(int count) {
     filtered_status_entries.length = count;
 }
 
-string, string line_to_entry(BufferLine* line) {
-    value: string = { length = line.length; }
-    if line.length <= line_buffer_length {
-        value.data = line.data.data;
-        allocate_strings(&value);
-    }
-    else {
-        value.data = allocate(line.length);
-        memory_copy(value.data, line.data.data, line_buffer_length);
-        i := line_buffer_length;
-
-        line = line.child;
-        while line {
-            memory_copy(value.data + i, line.data.data, line.length);
-            i += line.length;
-            line = line.next;
-        }
+string, string line_to_entry(BufferLine* line, int status_index) {
+    value: string = {
+        length = clamp(line.length, 0, line_buffer_length);
+        data = line.data.data;
     }
 
     file, display: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            // TODO Implement
-            file = value;
-            display = value;
+            status := char_to_git_status(value[0], true) | char_to_git_status(value[1]);
+            file = {
+                length = value.length - 3;
+                data = value.data + 3;
+            }
+            allocate_strings(&file);
+            display = build_git_entry_display(file, status);
+            git_status_entries[status_index] = status;
         }
         case SourceControl.Perforce; {
             if starts_with(value, current_directory) {
@@ -218,8 +230,10 @@ string, string line_to_entry(BufferLine* line) {
                     }
                 }
 
-                free_allocation(value.data);
                 value = relative_path;
+            }
+            else {
+                allocate_strings(&value);
             }
             file = value;
             display = value;
@@ -234,6 +248,67 @@ string, string line_to_entry(BufferLine* line) {
     return file, display;
 }
 
+GitStatus char_to_git_status(u8 char, bool first = false) {
+    if first {
+        switch char {
+            case '?'; return GitStatus.Untracked;
+            case 'A'; return GitStatus.Added;
+            case 'D'; return GitStatus.DeletedStaged;
+            case 'M'; return GitStatus.ChangedStaged;
+        }
+
+        return GitStatus.None;
+    }
+
+    switch char {
+        case '?'; return GitStatus.Untracked;
+        case 'D'; return GitStatus.Deleted;
+        case 'M'; return GitStatus.Changed;
+    }
+
+    return GitStatus.None;
+}
+
+string build_git_entry_display(string file, GitStatus status) {
+    display: string = {
+        length = file.length + 4;
+        data = allocate(file.length + 4);
+    }
+
+    set_git_status_display(display, status);
+    memory_copy(display.data + 4, file.data, file.length);
+
+    return display;
+}
+
+set_git_status_display(string display, GitStatus status) {
+    display[0] = ' ';
+    display[1] = ' ';
+    display[2] = ' ';
+    display[3] = ' ';
+
+    if status == GitStatus.Untracked {
+        display[0] = '?';
+    }
+    else {
+        if status & GitStatus.Added {
+            display[0] = '+';
+        }
+        if status & GitStatus.Changed {
+            display[2] = '~';
+        }
+        if status & GitStatus.ChangedStaged {
+            display[0] = '~';
+        }
+        if status & GitStatus.Deleted {
+            display[2] = '-';
+        }
+        if status & GitStatus.DeletedStaged {
+            display[0] = '-';
+        }
+    }
+}
+
 Array<ListEntry> get_status_entries() {
     return filtered_status_entries;
 }
@@ -245,7 +320,7 @@ load_diff(int thread, JobData data) {
     command: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            command = temp_string(true, "git diff ", file);
+            command = temp_string(true, "git --no-pager diff HEAD -- ", file);
         }
         case SourceControl.Perforce; {
             command = temp_string(true, "p4 diff ", file);
@@ -295,4 +370,61 @@ apply_status_filter() {
 
 open_status_file(string file) {
     open_file_buffer(file, true);
+}
+
+change_status(string file) {
+    switch local_settings.source_control {
+        case SourceControl.Git; {
+            each entry, i in status_entries {
+                if file == entry.key {
+                    status := git_status_entries[i];
+                    add, reset := false;
+                    add_status, reset_status := GitStatus.None;
+
+                    if status == GitStatus.Untracked {
+                        add = true;
+                        add_status = GitStatus.Added;
+                    }
+                    if status & GitStatus.Added {
+                        reset = true;
+                        reset_status = GitStatus.Untracked;
+                    }
+                    if status & GitStatus.Changed {
+                        add = true;
+                        add_status = GitStatus.ChangedStaged;
+                    }
+                    if status & GitStatus.ChangedStaged {
+                        reset = true;
+                        reset_status = GitStatus.Changed;
+                    }
+                    if status & GitStatus.Deleted {
+                        add = true;
+                        add_status = GitStatus.DeletedStaged;
+                    }
+                    if status & GitStatus.DeletedStaged {
+                        reset = true;
+                        reset_status = GitStatus.Deleted;
+                    }
+
+                    if add {
+                        command := temp_string("git add ", entry.key);
+                        run_command_silent(command);
+                        git_status_entries[i] = add_status;
+                        set_git_status_display(entry.display, add_status);
+                    }
+                    else if reset {
+                        command := temp_string("git restore --staged ", entry.key);
+                        run_command_silent(command);
+                        git_status_entries[i] = reset_status;
+                        set_git_status_display(entry.display, reset_status);
+                    }
+                    break;
+                }
+            }
+
+            apply_status_filter();
+        }
+        case SourceControl.Perforce;
+        case SourceControl.Svn; {} // No action needed
+    }
 }
