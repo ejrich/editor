@@ -48,6 +48,7 @@ source_control_pull() {
             queue_command_to_run("git pull");
         }
         case SourceControl.Perforce; {
+            set_perforce_client();
             queue_command_to_run("p4 sync");
         }
         case SourceControl.Svn; {
@@ -59,6 +60,7 @@ source_control_pull() {
 source_control_checkout() {
     switch local_settings.source_control {
         case SourceControl.Perforce; {
+            set_perforce_client();
             queue_command_to_run("p4 edit ...");
         }
     }
@@ -70,6 +72,7 @@ source_control_revert() {
             queue_command_to_run("git reset --hard");
         }
         case SourceControl.Perforce; {
+            set_perforce_client();
             queue_command_to_run("p4 revert -a");
         }
         case SourceControl.Svn; {
@@ -88,6 +91,7 @@ source_control_commit(string message) {
             commit_command = format_string("git commit -m \"%\"", allocate, message);
         }
         case SourceControl.Perforce; {
+            set_perforce_client();
             commit_command = format_string("p4 submit -d \"%\"", allocate, message);
         }
         case SourceControl.Svn; {
@@ -116,6 +120,7 @@ load_status(int index, JobData data) {
             status_buffer = run_command_and_save_to_buffer("git status -s");
         }
         case SourceControl.Perforce; {
+            set_perforce_client();
             status_buffer = run_command_and_save_to_buffer("p4 diff -sa");
         }
         case SourceControl.Svn; {
@@ -248,67 +253,6 @@ string, string line_to_entry(BufferLine* line, int status_index) {
     return file, display;
 }
 
-GitStatus char_to_git_status(u8 char, bool first = false) {
-    if first {
-        switch char {
-            case '?'; return GitStatus.Untracked;
-            case 'A'; return GitStatus.Added;
-            case 'D'; return GitStatus.DeletedStaged;
-            case 'M'; return GitStatus.ChangedStaged;
-        }
-
-        return GitStatus.None;
-    }
-
-    switch char {
-        case '?'; return GitStatus.Untracked;
-        case 'D'; return GitStatus.Deleted;
-        case 'M'; return GitStatus.Changed;
-    }
-
-    return GitStatus.None;
-}
-
-string build_git_entry_display(string file, GitStatus status) {
-    display: string = {
-        length = file.length + 4;
-        data = allocate(file.length + 4);
-    }
-
-    set_git_status_display(display, status);
-    memory_copy(display.data + 4, file.data, file.length);
-
-    return display;
-}
-
-set_git_status_display(string display, GitStatus status) {
-    display[0] = ' ';
-    display[1] = ' ';
-    display[2] = ' ';
-    display[3] = ' ';
-
-    if status == GitStatus.Untracked {
-        display[0] = '?';
-    }
-    else {
-        if status & GitStatus.Added {
-            display[0] = '+';
-        }
-        if status & GitStatus.Changed {
-            display[2] = '~';
-        }
-        if status & GitStatus.ChangedStaged {
-            display[0] = '~';
-        }
-        if status & GitStatus.Deleted {
-            display[2] = '-';
-        }
-        if status & GitStatus.DeletedStaged {
-            display[0] = '-';
-        }
-    }
-}
-
 Array<ListEntry> get_status_entries() {
     return filtered_status_entries;
 }
@@ -323,6 +267,7 @@ load_diff(int thread, JobData data) {
             command = temp_string(true, "git --no-pager diff HEAD -- ", file);
         }
         case SourceControl.Perforce; {
+            set_perforce_client();
             command = temp_string(true, "p4 diff ", file);
         }
         case SourceControl.Svn; {
@@ -427,4 +372,74 @@ change_status(string file) {
         case SourceControl.Perforce;
         case SourceControl.Svn; {} // No action needed
     }
+}
+
+
+// Git specific functions
+GitStatus char_to_git_status(u8 char, bool first = false) {
+    if first {
+        switch char {
+            case '?'; return GitStatus.Untracked;
+            case 'A'; return GitStatus.Added;
+            case 'D'; return GitStatus.DeletedStaged;
+            case 'M'; return GitStatus.ChangedStaged;
+        }
+
+        return GitStatus.None;
+    }
+
+    switch char {
+        case '?'; return GitStatus.Untracked;
+        case 'D'; return GitStatus.Deleted;
+        case 'M'; return GitStatus.Changed;
+    }
+
+    return GitStatus.None;
+}
+
+string build_git_entry_display(string file, GitStatus status) {
+    display: string = {
+        length = file.length + 4;
+        data = allocate(file.length + 4);
+    }
+
+    set_git_status_display(display, status);
+    memory_copy(display.data + 4, file.data, file.length);
+
+    return display;
+}
+
+set_git_status_display(string display, GitStatus status) {
+    display[0] = ' ';
+    display[1] = ' ';
+    display[2] = ' ';
+    display[3] = ' ';
+
+    if status == GitStatus.Untracked {
+        display[0] = '?';
+    }
+    else {
+        if status & GitStatus.Added {
+            display[0] = '+';
+        }
+        if status & GitStatus.Changed {
+            display[2] = '~';
+        }
+        if status & GitStatus.ChangedStaged {
+            display[0] = '~';
+        }
+        if status & GitStatus.Deleted {
+            display[2] = '-';
+        }
+        if status & GitStatus.DeletedStaged {
+            display[0] = '-';
+        }
+    }
+}
+
+
+// Perforce specific functions
+set_perforce_client() {
+    command := temp_string("p4 set P4CLIENT=", local_settings.perforce_client_name);
+    run_command_silent(command);
 }
