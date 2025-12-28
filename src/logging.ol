@@ -10,8 +10,43 @@ init_logging() {
         print("Unable to write to log file: '%'\n", log_file_path);
     }
 
-    // TODO Set the time_adjust on linux
-    log("Test\n");
+    #if os == OS.Linux {
+        found, tzfile := read_file("/etc/localtime", allocate);
+        if found {
+            defer free_allocation(tzfile.data);
+
+            head := cast(tzhead*, tzfile.data);
+            timecnt := decode(&head.tzh_timecnt);
+            typecnt := decode(&head.tzh_typecnt);
+            index := size_of(tzhead);
+
+            now: Timespec;
+            clock_gettime(ClockId.CLOCK_REALTIME, &now);
+            time := now.tv_sec + time_adjust;
+
+            highest: u64;
+            transition_index: u8;
+            each i in timecnt {
+                transition := decode(tzfile.data + index);
+                if time > transition && transition > highest {
+                    highest = transition;
+                    transition_index = i;
+                }
+                index += 4;
+            }
+
+            type_index := *(tzfile.data + index + transition_index);
+            index += timecnt;
+
+            each i in typecnt {
+                if i == type_index {
+                    time_adjust = decode(tzfile.data + index);
+                    break;
+                }
+                index += 6;
+            }
+        }
+    }
 }
 
 deinit_logging() {
@@ -113,4 +148,25 @@ log_file: File;
 
     time_adjust := 0;
     month_day_count: Array<u8> = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+    struct tzhead {
+        tzh_magic: CArray<u8>[4];
+        tzh_version: u8;
+        tzh_reserved: CArray<u8>[15];
+        tzh_ttisutcnt: CArray<u8>[4];
+        tzh_ttisstdcnt: CArray<u8>[4];
+        tzh_leapcnt: CArray<u8>[4];
+        tzh_timecnt: CArray<u8>[4];
+        tzh_typecnt: CArray<u8>[4];
+        tzh_charcnt: CArray<u8>[4];
+    }
+
+    u32 decode(u8* bytes) {
+        value: u32 = bytes[0];
+        value = (value << 8) | bytes[1];
+        value = (value << 8) | bytes[2];
+        value = (value << 8) | bytes[3];
+
+        return value;
+    }
 }
