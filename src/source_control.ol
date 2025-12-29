@@ -244,8 +244,11 @@ string, string line_to_entry(BufferLine* line, int status_index) {
             display = value;
         }
         case SourceControl.Svn; {
-            // TODO Implement
-            file = value;
+            allocate_strings(&value);
+            file = {
+                length = value.length - 8;
+                data = value.data + 8;
+            }
             display = value;
         }
     }
