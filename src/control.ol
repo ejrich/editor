@@ -20,6 +20,7 @@ enum KeyCommand {
     None;
     FindChar;
     UntilChar;
+    Find;
     GoTo;
     Replace;
     ScrollTo;
@@ -83,6 +84,22 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
         case KeyCommand.UntilChar; {
             find_character_in_line(!key_command.shifted, true, char);
             result = true;
+        }
+        case KeyCommand.Find; {
+            switch code {
+                case KeyCode.B; {
+                    open_buffers_list();
+                    result = true;
+                }
+                case KeyCode.F; {
+                    // open_files_list();
+                    result = true;
+                }
+                case KeyCode.G; {
+                    // open_search_list();
+                    result = true;
+                }
+            }
         }
         case KeyCommand.GoTo; {
             switch code {
@@ -686,9 +703,14 @@ go_to(ModCode mod) {
 }
 
 [keybind, no_repeat]
-find_char(ModCode mod) {
-    post_movement_command.include_end_cursor = true;
-    set_key_command(KeyCommand.FindChar, mod);
+find(ModCode mod) {
+    if mod & ModCode.Shift {
+        set_key_command(KeyCommand.Find, mod);
+    }
+    else {
+        post_movement_command.include_end_cursor = true;
+        set_key_command(KeyCommand.FindChar, mod);
+    }
 }
 
 [keybind, no_repeat]
@@ -698,7 +720,7 @@ until_char(ModCode mod) {
 }
 
 [keybind]
-find(ModCode mod) {
+get_next_value(ModCode mod) {
     show_current_search_result();
     value := get_current_search();
     find_value_in_buffer(value, (mod & ModCode.Shift) != ModCode.Shift);
