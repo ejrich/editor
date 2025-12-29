@@ -77,10 +77,13 @@ bool exit_list_mode() {
         browsing = false;
     }
 
-    free_buffer(selected_entry.buffer);
+    if selected_entry.can_free_buffer {
+        free_buffer(selected_entry.buffer);
+    }
     selected_entry = {
         key = empty_string;
         buffer = null;
+        can_free_buffer = true;
         start_line = 0;
     }
 
@@ -125,6 +128,7 @@ struct ListEntry {
 struct SelectedEntry {
     key: string;
     buffer: Buffer*;
+    can_free_buffer: bool;
     start_line: int;
 }
 
@@ -159,10 +163,13 @@ draw_list_entries() {
     entries := list.entries();
 
     if entries.length == 0 {
-        free_buffer(selected_entry.buffer);
+        if selected_entry.can_free_buffer {
+            free_buffer(selected_entry.buffer);
+        }
         selected_entry = {
             key = empty_string;
             buffer = null;
+            can_free_buffer = true;
             start_line = 0;
         }
         return;
@@ -170,10 +177,13 @@ draw_list_entries() {
 
     list.selected_index = clamp(list.selected_index, 0, entries.length - 1);
     if entries[list.selected_index].key != selected_entry.key {
-        free_buffer(selected_entry.buffer);
+        if selected_entry.can_free_buffer {
+            free_buffer(selected_entry.buffer);
+        }
         selected_entry = {
             key = entries[list.selected_index].key;
             buffer = null;
+            can_free_buffer = true;
             start_line = 0;
         }
 

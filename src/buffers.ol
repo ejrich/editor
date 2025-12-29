@@ -3609,6 +3609,71 @@ struct BufferLine {
 
 buffers: Array<Buffer>;
 
+// Buffer list
+open_buffers_list() {
+    change_buffer_filter(empty_string);
+    start_list_mode("Buffers", get_open_buffers, get_buffer, change_buffer_filter, open_buffer);
+}
+
+Array<ListEntry> get_open_buffers() {
+    return buffer_entries;
+}
+
+get_buffer(int thread, JobData data) {
+    entry := cast(SelectedEntry*, data.pointer);
+    key := entry.key;
+    entry.can_free_buffer = false;
+
+    each buffer in buffers {
+        if buffer.relative_path == key {
+            entry.buffer = &buffer;
+            break;
+        }
+    }
+}
+
+change_buffer_filter(string filter) {
+    if buffers.length > buffer_entries_reserved {
+        free_allocation(buffer_entries.data);
+
+        while buffer_entries_reserved < buffers.length {
+            buffer_entries_reserved += buffer_entries_block_size;
+        }
+
+        array_resize(&buffer_entries, buffer_entries_reserved, allocate);
+    }
+
+    if string_is_empty(filter) {
+        buffer_entries.length = buffers.length;
+        each buffer, i in buffers {
+            buffer_entries[i] = {
+                key = buffer.relative_path;
+                display = buffer.relative_path;
+            }
+        }
+    }
+    else {
+        buffer_entries.length = 0;
+        each buffer in buffers {
+            if string_contains(buffer.relative_path, filter) {
+                buffer_entries[buffer_entries.length++] = {
+                    key = buffer.relative_path;
+                    display = buffer.relative_path;
+                }
+            }
+        }
+    }
+}
+
+open_buffer(string file) {
+    open_file_buffer(file, false);
+}
+
+buffer_entries: Array<ListEntry>;
+buffer_entries_reserved := 0;
+buffer_entries_block_size := 10; #const
+
+// Buffer and window functions
 struct BufferWindow {
     cursor: u32;
     line: u32;
