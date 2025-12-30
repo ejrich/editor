@@ -120,6 +120,8 @@ bool change_list_cursor(bool append, bool boundary) {
     return true;
 }
 
+// TODO Add handlers to change selected_entry.start_line
+
 struct ListEntry {
     key: string;
     display: string;

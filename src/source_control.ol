@@ -267,14 +267,14 @@ load_diff(int thread, JobData data) {
     command: string;
     switch local_settings.source_control {
         case SourceControl.Git; {
-            command = temp_string(true, "git --no-pager diff HEAD -- ", file);
+            command = temp_string("git --no-pager diff HEAD -- ", file);
         }
         case SourceControl.Perforce; {
             set_perforce_client();
-            command = temp_string(true, "p4 diff ", file);
+            command = temp_string("p4 diff ", file);
         }
         case SourceControl.Svn; {
-            command = temp_string(true, "svn diff ", file);
+            command = temp_string("svn diff ", file);
         }
         default; return;
     }

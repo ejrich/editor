@@ -140,6 +140,7 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
     line_memory_size := size_of(BufferLine) + line_buffer_length; #const
     lines_to_allocate := 0x10000; #const
 
+    // TODO Make this thread safe
     each line_arena, i in line_arenas {
         if !line_arena.initialized {
             line_arena.initialized = true;

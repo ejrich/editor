@@ -37,6 +37,7 @@ BufferWindow* get_run_window() {
     return null;
 }
 
+// TODO Add a cancel signal
 Buffer* run_command_and_save_to_buffer(string command) {
     buffer := new<Buffer>();
     buffer.read_only = true;

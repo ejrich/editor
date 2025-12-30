@@ -92,11 +92,11 @@ bool handle_key_command(PressState state, KeyCode code, ModCode mod, string char
                     result = true;
                 }
                 case KeyCode.F; {
-                    // open_files_list();
+                    open_files_list();
                     result = true;
                 }
                 case KeyCode.G; {
-                    // open_search_list();
+                    open_search_list();
                     result = true;
                 }
             }

@@ -12,6 +12,7 @@
 #import "local_settings.ol"
 #import "memory.ol"
 #import "run.ol"
+#import "search.ol"
 #import "settings.ol"
 #import "source_control.ol"
 #import "text.ol"
