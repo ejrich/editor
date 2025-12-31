@@ -43,14 +43,7 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
 
     switch code {
         case KeyCode.Enter; {
-            if list.select != null && !string_is_empty(selected_entry.key) {
-                list.select(selected_entry.key);
-                list = {
-                    displaying = false;
-                    browsing = false;
-                }
-                exit_command_mode();
-            }
+            select_list_entry();
         }
         case KeyCode.Tab; {
             if list.action != null && !string_is_empty(selected_entry.key) {
@@ -95,6 +88,19 @@ bool exit_list_mode() {
     return true;
 }
 
+select_list_entry() {
+    if !list.displaying return;
+
+    if list.select != null && !string_is_empty(selected_entry.key) {
+        list.select(selected_entry.key);
+        list = {
+            displaying = false;
+            browsing = false;
+        }
+        exit_command_mode();
+    }
+}
+
 bool change_list_select(int change) {
     if !list.displaying || !list.browsing return false;
 
@@ -120,7 +126,15 @@ bool change_list_cursor(bool append, bool boundary) {
     return true;
 }
 
-// TODO Add handlers to change selected_entry.start_line
+bool change_selected_entry_start_line(int change) {
+    if !list.displaying return false;
+
+    if selected_entry.buffer {
+        selected_entry.start_line = clamp(selected_entry.start_line + change, 0, selected_entry.buffer.line_count - 1);
+    }
+
+    return true;
+}
 
 struct ListEntry {
     key: string;

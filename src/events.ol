@@ -47,10 +47,12 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             }
 
             if cast(u32, code) >= ' ' && char.length > 0 {
-                if edit_mode == EditMode.BlockInsert
-                    add_text_to_block(char);
-                else
-                    add_text_to_line(char);
+                if (mod & ModCode.Control) != ModCode.Control {
+                    if edit_mode == EditMode.BlockInsert
+                        add_text_to_block(char);
+                    else
+                        add_text_to_line(char);
+                }
                 return;
             }
         }

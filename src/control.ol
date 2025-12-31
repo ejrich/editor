@@ -677,15 +677,21 @@ syntax_match(ModCode mod) {
     move_to_syntax_match();
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 screen_half_up(ModCode mod) {
     half_screen := determine_max_lines() / 2;
+
+    if change_selected_entry_start_line(-half_screen) return;
+
     move_line(true, true, half_screen);
 }
 
-[keybind, no_repeat]
+[keybind, no_repeat, list]
 screen_half_down(ModCode mod) {
     half_screen := determine_max_lines() / 2;
+
+    if change_selected_entry_start_line(half_screen) return;
+
     move_line(false, true, half_screen);
 }
 

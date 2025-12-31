@@ -140,10 +140,9 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
     line_memory_size := size_of(BufferLine) + line_buffer_length; #const
     lines_to_allocate := 0x10000; #const
 
-    // TODO Make this thread safe
     each line_arena, i in line_arenas {
-        if !line_arena.initialized {
-            line_arena.initialized = true;
+        // Initialize the line arena or wait until it has been initialized
+        if !line_arena.initializing && !compare_exchange(&line_arena.initializing, true, false) {
             line_arena.index = i;
             line_arena.first_available = 0;
             line_arena.data = allocate_memory(line_memory_size * lines_to_allocate);
@@ -155,33 +154,48 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
                 line.data.length = line_buffer_length;
                 line.data.data = cast(void*, line) + size_of(BufferLine);
             }
+
+            line_arena.initialized = true;
+        }
+        else {
+            while !line_arena.initialized {}
         }
 
-        if line_arena.first_available < lines_to_allocate {
+        tries := 0;
+        max_tries := 10; #const
+        while line_arena.first_available < lines_to_allocate && tries++ < max_tries {
             line: BufferLine* = line_arena.data + (line_arena.first_available * line_memory_size);
-            line.allocated = true;
-            line.length = 0;
+            if !line.allocated && !compare_exchange(&line.allocated, true, false) {
+                line.length = 0;
 
-            available_line := false;
-            each j in line_arena.first_available + 1..lines_to_allocate - 1 {
-                target_line: BufferLine* = line_arena.data + (j * line_memory_size);
-                if !target_line.allocated {
-                    available_line = true;
-                    line_arena.first_available = j;
-                    break;
+                available_line := false;
+                original_first_available := line_arena.first_available;
+                each j in line_arena.first_available + 1..lines_to_allocate - 1 {
+                    target_line: BufferLine* = line_arena.data + (j * line_memory_size);
+                    if line_arena.first_available < original_first_available {
+                        available_line = true;
+                        break;
+                    }
+                    else if !target_line.allocated {
+                        available_line = true;
+                            if line_arena.first_available == original_first_available || j < line_arena.first_available {
+                                line_arena.first_available = j;
+                            }
+                        break;
+                    }
                 }
+
+                if !available_line && line_arena.first_available != original_first_available {
+                    line_arena.first_available = lines_to_allocate;
+                }
+
+                line.parent = parent;
+                line.previous = previous;
+                line.next = null;
+                line.child = null;
+
+                return line;
             }
-
-            if !available_line {
-                line_arena.first_available = lines_to_allocate;
-            }
-
-            line.parent = parent;
-            line.previous = previous;
-            line.next = null;
-            line.child = null;
-
-            return line;
         }
     }
 
@@ -362,6 +376,7 @@ bool merge_blocks(MemoryBlock* check_block, MemoryBlock* previous, MemoryBlock* 
 
 // Line allocation
 struct LineArena {
+    initializing: bool;
     initialized: bool;
     index: u8;
     first_available: u32;

@@ -93,10 +93,10 @@ draw_command(bool draw_cursor = true) {
                     start = "Replace:";
                 case CommandMode.FindAndReplaceConfirm;
                     start = "Confirm Replacement:";
-                case CommandMode.Commit;
-                    start = "Commit Message:";
                 case CommandMode.List;
                     display_command = true;
+                case CommandMode.Commit;
+                    start = "Commit Message:";
             }
 
             if start.length > 0 || display_command {
@@ -199,6 +199,9 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                         command_prompt_buffer.cursor--;
                         command_prompt_buffer.length--;
                     }
+                    else {
+                        update_list = false;
+                    }
                 }
                 else {
                     update_list = false;
@@ -215,6 +218,9 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                             memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.cursor, command_prompt_buffer.buffer.data + command_prompt_buffer.cursor + 1, command_prompt_buffer.length - command_prompt_buffer.cursor);
                         }
                         command_prompt_buffer.length--;
+                    }
+                    else {
+                        update_list = false;
                     }
                 }
                 else {
@@ -267,6 +273,8 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                         set_search(buffer_string, allocated);
                     case CommandMode.FindAndReplace;
                         find_and_replace(buffer_string, allocated);
+                    case CommandMode.List;
+                        select_list_entry();
                     case CommandMode.Commit;
                         if !string_is_empty(buffer_string) {
                             source_control_commit(buffer_string);
@@ -278,7 +286,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
             }
             default; {
                 set_buffer_value();
-                if command_prompt_buffer.length + char.length < command_prompt_buffer_length {
+                if (mod & ModCode.Control) != ModCode.Control && command_prompt_buffer.length + char.length < command_prompt_buffer_length {
                     if command_prompt_buffer.length == command_prompt_buffer.cursor {
                         memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
                     }
@@ -292,6 +300,9 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
 
                     command_prompt_buffer.length += char.length;
                     command_prompt_buffer.cursor += char.length;
+                }
+                else {
+                    update_list = false;
                 }
             }
         }
