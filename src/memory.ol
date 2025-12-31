@@ -178,9 +178,9 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
                     }
                     else if !target_line.allocated {
                         available_line = true;
-                            if line_arena.first_available == original_first_available || j < line_arena.first_available {
-                                line_arena.first_available = j;
-                            }
+                        if line_arena.first_available == original_first_available || j < line_arena.first_available {
+                            line_arena.first_available = j;
+                        }
                         break;
                     }
                 }
