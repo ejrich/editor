@@ -174,7 +174,7 @@ draw_list_title() {
 draw_list_entries() {
     if list.entries == null return;
 
-    initial_y := 1.0 - global_font_config.first_line_offset - (global_font_config.max_lines_without_run_window - 1) * global_font_config.line_height + global_font_config.block_y_offset;
+    initial_y := 1.0 - global_font_config.first_line_offset - (global_font_config.max_lines_without_run_window - 1) * global_font_config.line_height;
 
     entries := list.entries();
 
@@ -208,23 +208,36 @@ draw_list_entries() {
         queue_work(&low_priority_queue, list.load_entry, load_entry_data);
     }
 
-    entries_to_display := clamp(entries.length, 0, global_font_config.max_lines_without_run_window);
+    entries_to_display, start_index: int;
+    if entries.length > global_font_config.max_lines_without_run_window {
+        entries_to_display = global_font_config.max_lines_without_run_window;
+        if list.selected_index < global_font_config.max_lines_without_run_window {
+            start_index = 0;
+        }
+        else {
+            start_index = list.selected_index - global_font_config.max_lines_without_run_window + 1;
+        }
+    }
+    else {
+        entries_to_display = entries.length;
+        start_index = 0;
+    }
     max_chars_per_line := global_font_config.max_chars_per_line - 4;
     x := -1.0 + global_font_config.quad_advance * 2;
 
     each i in entries_to_display {
-        entry := entries[i];
+        index := i + start_index;
+        entry := entries[index];
         if entry.display.length > max_chars_per_line {
             entry.display.length = max_chars_per_line;
         }
 
         y := initial_y + global_font_config.line_height * i;
-        if i == list.selected_index {
+        if index == list.selected_index {
             draw_line_background(-1.0, y, 0.0);
         }
         render_text(entry.display, settings.font_size, x, y, appearance.font_color, vec4());
     }
-
 }
 
 draw_selected_entry() {

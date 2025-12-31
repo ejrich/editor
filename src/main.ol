@@ -22,8 +22,14 @@
 main() {
     init_subsystems();
 
-    each input_file in get_command_line_arguments() {
-        open_file_buffer(input_file, false);
+    args := get_command_line_arguments();
+    if args.length {
+        each input_file in get_command_line_arguments() {
+            open_file_buffer(input_file, false);
+        }
+    }
+    else {
+        open_files_list();
     }
 
     frequency := cast(float, get_performance_frequency());

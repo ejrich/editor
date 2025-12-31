@@ -136,7 +136,7 @@ load_directory(string path, string display_path, bool counting) {
     }
 }
 
-directories_to_ignore: Array<string> = [".", "..", "bin", "obj"]
+directories_to_ignore: Array<string> = [".", "..", "bin", "obj", ".git"]
 
 Array<ListEntry> get_files() {
     return filtered_file_entries;
