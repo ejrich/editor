@@ -11,12 +11,11 @@ open_search_list() {
 
 // File finder functions
 load_files() {
-    // TODO Make this async and add flag for when loading is finished
-    each entry in file_entries {
-        free_allocation(entry.data);
-    }
+    free_allocation(file_entries_string_pointer);
     file_entries.length = 0;
+
     file_entry_index = 0;
+    length_to_allocate = 0;
 
     workspace := get_workspace();
     load_directory(workspace.directory, empty_string, true);
@@ -35,6 +34,8 @@ load_files() {
 
     file_entries.length = file_entry_index;
     file_entry_index = 0;
+    file_entries_string_pointer = allocate(length_to_allocate);
+    file_entries_string_index = 0;
     load_directory(workspace.directory, empty_string, false);
 
     change_file_filter(empty_string);
@@ -62,16 +63,17 @@ load_directory(string path, string display_path, bool counting) {
 
                 if !array_contains(directories_to_ignore, name) {
                     if dirent.d_type == DirentType.DT_REG {
+                        file_path := name;
+                        if !string_is_empty(display_path) {
+                            file_path = temp_string(display_path, "/", name);
+                        }
+
                         if counting {
                             file_entry_index++;
+                            length_to_allocate += file_path.length;
                         }
                         else {
-                            file_path := name;
-                            if !string_is_empty(display_path) {
-                                file_path = temp_string(display_path, "/", name);
-                            }
-                            allocate_strings(&file_path);
-                            file_entries[file_entry_index++] = file_path;
+                            file_entries[file_entry_index++] = copy_path(file_path);
                         }
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
@@ -117,16 +119,17 @@ load_directory(string path, string display_path, bool counting) {
                     load_directory(sub_path, sub_display_path, counting);
                 }
                 else {
+                    file_path := name;
+                    if !string_is_empty(display_path) {
+                        file_path = temp_string(display_path, "/", name);
+                    }
+
                     if counting {
                         file_entry_index++;
+                        length_to_allocate += file_path.length;
                     }
                     else {
-                        file_path := name;
-                        if !string_is_empty(display_path) {
-                            file_path = temp_string(display_path, "/", name);
-                        }
-                        allocate_strings(&file_path);
-                        file_entries[file_entry_index++] = file_path;
+                        file_entries[file_entry_index++] = copy_path(file_path);
                     }
                 }
             }
@@ -201,6 +204,21 @@ filtered_file_entries: Array<ListEntry>;
 file_entries_reserved := 0;
 file_entries_block_size := 10; #const
 file_entry_index := 0;
+length_to_allocate := 0;
+file_entries_string_pointer: u8*;
+file_entries_string_index := 0;
+
+string copy_path(string file_path) {
+    path: string = {
+        length = file_path.length;
+        data = file_entries_string_pointer + file_entries_string_index;
+    }
+
+    file_entries_string_index += file_path.length;
+    memory_copy(path.data, file_path.data, file_path.length);
+
+    return path;
+}
 
 // Search functions
 // TODO Implement functions
