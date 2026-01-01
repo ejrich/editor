@@ -88,8 +88,6 @@ clear_jumps() {
     }
 }
 
-#private
-
 struct Jump {
     buffer_index: s32;
     line: u32;
@@ -98,13 +96,16 @@ struct Jump {
     previous: Jump*;
 }
 
+#private
+
 Jump** get_jump_pointer() {
     current_jump_pointer: Jump**;
-    switch current_window {
+    workspace := get_workspace();
+    switch workspace.current_window {
         case SelectedWindow.Left;
-            current_jump_pointer = &current_left_jump;
+            current_jump_pointer = &workspace.left_window.current_jump;
         case SelectedWindow.Right;
-            current_jump_pointer = &current_right_jump;
+            current_jump_pointer = &workspace.right_window.current_jump;
     }
 
     return current_jump_pointer;
@@ -126,6 +127,3 @@ bool jump_is_current_location(Jump* jump, BufferWindow* buffer_window) {
 
     return false;
 }
-
-current_left_jump: Jump*;
-current_right_jump: Jump*;

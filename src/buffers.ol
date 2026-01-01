@@ -2,26 +2,28 @@
 draw_buffers() {
     if !is_font_ready(settings.font_size) return;
 
-    run_window := get_run_window();
+    workspace := get_workspace();
 
-    if left_window.displayed && right_window.displayed {
+    run_window := get_run_window(workspace);
+
+    if workspace.left_window.displayed && workspace.right_window.displayed {
         draw_divider(run_window == null);
     }
 
-    if left_window.displayed {
-        draw_buffer_window(left_window.buffer_window, -1.0, current_window == SelectedWindow.Left && !run_window_selected, !right_window.displayed, false);
+    if workspace.left_window.displayed {
+        draw_buffer_window(workspace, workspace.left_window.buffer_window, -1.0, workspace.current_window == SelectedWindow.Left && !workspace.run_window_selected, !workspace.right_window.displayed, false);
     }
 
-    if right_window.displayed {
+    if workspace.right_window.displayed {
         x := 0.0;
-        if !left_window.displayed {
+        if !workspace.left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(right_window.buffer_window, x, current_window == SelectedWindow.Right && !run_window_selected, !left_window.displayed, false);
+        draw_buffer_window(workspace, workspace.right_window.buffer_window, x, workspace.current_window == SelectedWindow.Right && !workspace.run_window_selected, !workspace.left_window.displayed, false);
     }
 
     if run_window {
-        draw_buffer_window(run_window, -1.0, run_window_selected, true, true);
+        draw_buffer_window(workspace, run_window, -1.0, workspace.run_window_selected, true, true);
     }
 
     draw_command();
@@ -50,7 +52,7 @@ draw_divider(bool full_height) {
     draw_quad(&divider_quad, 1);
 }
 
-draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window) {
+draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool selected, bool full_width, bool is_run_window) {
     if window == null {
         window = &scratch_window;
     }
@@ -81,7 +83,7 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 
     buffer: Buffer;
     if window.buffer_index >= 0 {
-        buffer = buffers[window.buffer_index];
+        buffer = workspace.buffers[window.buffer_index];
     }
     else if window.static_buffer {
         buffer = *window.static_buffer;
@@ -274,8 +276,9 @@ draw_buffer_window(BufferWindow* window, float x, bool selected, bool full_width
 // Opening buffers with files
 open_file_buffer(string path, bool allocate_path) {
     buffer_index := -1;
+    workspace := get_workspace();
 
-    each buffer, i in buffers {
+    each buffer, i in workspace.buffers {
         if buffer.relative_path == path {
             buffer_index = i;
             break;
@@ -325,50 +328,53 @@ open_file_buffer(string path, bool allocate_path) {
             calculate_line_digits(&buffer);
         }
 
-        array_insert(&buffers, buffer, allocate, reallocate);
-        buffer_index = buffers.length - 1;
+        array_insert(&workspace.buffers, buffer, allocate, reallocate);
+        buffer_index = workspace.buffers.length - 1;
     }
 
-    switch current_window {
+    switch workspace.current_window {
         case SelectedWindow.Left; {
-            record_jump(left_window.buffer_window);
-            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
+            record_jump(workspace.left_window.buffer_window);
+            workspace.left_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.left_window.buffer_window);
         }
         case SelectedWindow.Right; {
-            record_jump(right_window.buffer_window);
-            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
+            record_jump(workspace.right_window.buffer_window);
+            workspace.right_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.right_window.buffer_window);
         }
     }
 }
 
 switch_or_focus_buffer(SelectedWindow window) {
-    if window != current_window {
+    workspace := get_workspace();
+
+    if window != workspace.current_window {
         switch_to_buffer(window);
         return;
     }
 
     switch window {
         case SelectedWindow.Left; {
-            right_window.displayed = false;
+            workspace.right_window.displayed = false;
         }
         case SelectedWindow.Right; {
-            left_window.displayed = false;
+            workspace.left_window.displayed = false;
         }
     }
 }
 
 switch_to_buffer(SelectedWindow window) {
-    if window == current_window return;
+    workspace := get_workspace();
+    if window == workspace.current_window return;
 
     original_window, new_window: EditorWindow*;
     switch window {
         case SelectedWindow.Left; {
-            original_window = &right_window;
-            new_window = &left_window;
+            original_window = &workspace.right_window;
+            new_window = &workspace.left_window;
         }
         case SelectedWindow.Right; {
-            original_window = &left_window;
-            new_window = &right_window;
+            original_window = &workspace.left_window;
+            new_window = &workspace.right_window;
         }
     }
 
@@ -383,24 +389,26 @@ switch_to_buffer(SelectedWindow window) {
     reset_key_command();
     reset_post_movement_command();
     edit_mode = EditMode.Normal;
-    run_window_selected = false;
+    workspace.run_window_selected = false;
 
-    current_window = window;
+    workspace.current_window = window;
 }
 
 toggle_run_buffer_selection(bool selected) {
-    if get_run_window() {
-        run_window_selected = selected;
+    workspace := get_workspace();
+    if get_run_window(workspace) {
+        workspace.run_window_selected = selected;
     }
 }
 
 swap_top_buffer() {
+    workspace := get_workspace();
     editor_window: EditorWindow*;
-    switch current_window {
+    switch workspace.current_window {
         case SelectedWindow.Left;
-            editor_window = &left_window;
+            editor_window = &workspace.left_window;
         case SelectedWindow.Right;
-            editor_window = &right_window;
+            editor_window = &workspace.right_window;
     }
 
     record_jump(editor_window.buffer_window);
@@ -423,15 +431,17 @@ swap_top_buffer() {
 }
 
 set_current_location(s32 buffer_index, u32 line, u32 cursor) {
+    workspace := get_workspace();
+
     buffer_window: BufferWindow*;
-    switch current_window {
+    switch workspace.current_window {
         case SelectedWindow.Left; {
-            left_window.buffer_window = open_or_create_buffer_window(buffer_index, left_window.buffer_window);
-            buffer_window = left_window.buffer_window;
+            workspace.left_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.left_window.buffer_window);
+            buffer_window = workspace.left_window.buffer_window;
         }
         case SelectedWindow.Right; {
-            right_window.buffer_window = open_or_create_buffer_window(buffer_index, right_window.buffer_window);
-            buffer_window = right_window.buffer_window;
+            workspace.right_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.right_window.buffer_window);
+            buffer_window = workspace.right_window.buffer_window;
         }
     }
 
@@ -441,17 +451,19 @@ set_current_location(s32 buffer_index, u32 line, u32 cursor) {
 }
 
 close_window(bool save) {
+    workspace := get_workspace();
+
     editor_window, other_window: EditorWindow*;
-    switch current_window {
+    switch workspace.current_window {
         case SelectedWindow.Left; {
-            editor_window = &left_window;
-            other_window = &left_window;
-            current_window = SelectedWindow.Right;
+            editor_window = &workspace.left_window;
+            other_window = &workspace.left_window;
+            workspace.current_window = SelectedWindow.Right;
         }
         case SelectedWindow.Right; {
-            editor_window = &right_window;
-            other_window = &right_window;
-            current_window = SelectedWindow.Left;
+            editor_window = &workspace.right_window;
+            other_window = &workspace.right_window;
+            workspace.current_window = SelectedWindow.Left;
         }
     }
 
@@ -478,11 +490,12 @@ close_window(bool save) {
 
 // Saving buffers to a file
 bool, u32, u32, string save_buffer(int buffer_index) {
-    if buffer_index < 0 || buffer_index >= buffers.length
+    workspace := get_workspace();
+    if buffer_index < 0 || buffer_index >= workspace.buffers.length
         return true, 0, 0, empty_string;
 
     lines_written, bytes_written: u32;
-    buffer := &buffers[buffer_index];
+    buffer := &workspace.buffers[buffer_index];
 
     create_directories_recursively(buffer.relative_path);
     opened, file := open_file(buffer.relative_path, FileFlags.Create);
@@ -2215,12 +2228,13 @@ replace_characters_in_line(BufferLine* line, u8 char, u32 start, u32 end) {
 // Event handlers
 handle_buffer_scroll(ScrollDirection direction) {
     x, y := get_cursor_position();
+    workspace := get_workspace();
 
-    if left_window.displayed && (!right_window.displayed || x < 0.0) {
-        scroll_buffer(left_window.buffer_window, direction == ScrollDirection.Up);
+    if workspace.left_window.displayed && (!workspace.right_window.displayed || x < 0.0) {
+        scroll_buffer(workspace, workspace.left_window.buffer_window, direction == ScrollDirection.Up);
     }
-    else if right_window.displayed && (!left_window.displayed || x > 0.0) {
-        scroll_buffer(right_window.buffer_window, direction == ScrollDirection.Up);
+    else if workspace.right_window.displayed && (!workspace.left_window.displayed || x > 0.0) {
+        scroll_buffer(workspace, workspace.right_window.buffer_window, direction == ScrollDirection.Up);
     }
 }
 
@@ -2266,10 +2280,11 @@ scroll_to_position(ScrollTo scroll_position) {
 }
 
 resize_buffers() {
-    if left_window.displayed
-        adjust_start_line(left_window.buffer_window);
-    if right_window.displayed
-        adjust_start_line(right_window.buffer_window);
+    workspace := get_workspace();
+    if workspace.left_window.displayed
+        adjust_start_line(workspace.left_window.buffer_window);
+    if workspace.right_window.displayed
+        adjust_start_line(workspace.right_window.buffer_window);
 }
 
 go_to_line(s32 line) {
@@ -3607,8 +3622,6 @@ struct BufferLine {
     child: BufferLine*;
 }
 
-buffers: Array<Buffer>;
-
 open_buffers_list() {
     change_buffer_filter(empty_string);
     start_list_mode("Buffers", get_open_buffers, get_buffer, change_buffer_filter, open_buffer);
@@ -3628,30 +3641,27 @@ struct BufferWindow {
 struct EditorWindow {
     displayed: bool;
     buffer_window: BufferWindow*;
+    current_jump: Jump*;
 }
-
-left_window: EditorWindow = { displayed = true; }
-right_window: EditorWindow;
 
 enum SelectedWindow {
     Left;
     Right;
 }
 
-current_window: SelectedWindow;
-run_window_selected := false;
-
 BufferWindow* get_current_window() {
+    workspace := get_workspace();
+
     editor_window: EditorWindow*;
-    switch current_window {
+    switch workspace.current_window {
         case SelectedWindow.Left;
-            editor_window = &left_window;
+            editor_window = &workspace.left_window;
         case SelectedWindow.Right;
-            editor_window = &right_window;
+            editor_window = &workspace.right_window;
     }
 
-    run_window := get_run_window();
-    if run_window_selected && run_window != null {
+    run_window := get_run_window(workspace);
+    if workspace.run_window_selected && run_window != null {
         return run_window;
     }
 
@@ -3662,7 +3672,8 @@ BufferWindow*, Buffer* get_current_window_and_buffer() {
     buffer_window := get_current_window();
     if buffer_window {
         if buffer_window.buffer_index >= 0 {
-            return buffer_window, &buffers[buffer_window.buffer_index];
+            workspace := get_workspace();
+            return buffer_window, &workspace.buffers[buffer_window.buffer_index];
         }
 
         if buffer_window.static_buffer {
@@ -3764,7 +3775,8 @@ adjust_start_line(BufferWindow* window) {
 
     buffer := window.static_buffer;
     if buffer == null {
-        buffer = &buffers[window.buffer_index];
+        workspace := get_workspace();
+        buffer = &workspace.buffers[window.buffer_index];
     }
 
     starting_line := buffer.lines;
@@ -3842,7 +3854,8 @@ get_buffer(int thread, JobData data) {
     key := entry.key;
     entry.can_free_buffer = false;
 
-    each buffer in buffers {
+    workspace := get_workspace();
+    each buffer in workspace.buffers {
         if buffer.relative_path == key {
             entry.buffer = &buffer;
             break;
@@ -3851,10 +3864,11 @@ get_buffer(int thread, JobData data) {
 }
 
 change_buffer_filter(string filter) {
-    if buffers.length > buffer_entries_reserved {
+    workspace := get_workspace();
+    if workspace.buffers.length > buffer_entries_reserved {
         free_allocation(buffer_entries.data);
 
-        while buffer_entries_reserved < buffers.length {
+        while buffer_entries_reserved < workspace.buffers.length {
             buffer_entries_reserved += buffer_entries_block_size;
         }
 
@@ -3862,8 +3876,8 @@ change_buffer_filter(string filter) {
     }
 
     if string_is_empty(filter) {
-        buffer_entries.length = buffers.length;
-        each buffer, i in buffers {
+        buffer_entries.length = workspace.buffers.length;
+        each buffer, i in workspace.buffers {
             buffer_entries[i] = {
                 key = buffer.relative_path;
                 display = buffer.relative_path;
@@ -3872,7 +3886,7 @@ change_buffer_filter(string filter) {
     }
     else {
         buffer_entries.length = 0;
-        each buffer in buffers {
+        each buffer in workspace.buffers {
             if string_contains(buffer.relative_path, filter) {
                 buffer_entries[buffer_entries.length++] = {
                     key = buffer.relative_path;
@@ -4224,7 +4238,7 @@ indent_line(BufferLine* line, u32 indent_length) {
 }
 
 // Movement helpers
-scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
+scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_changes = 3) {
     if window.buffer_index < 0 {
         window.line = 0;
         window.start_line = 0;
@@ -4234,7 +4248,7 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     if up window.start_line -= line_changes;
     else  window.start_line += line_changes;
 
-    buffer := buffers[window.buffer_index];
+    buffer := workspace.buffers[window.buffer_index];
     window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
     window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
 
@@ -4294,18 +4308,6 @@ scroll_buffer(BufferWindow* window, bool up, u32 line_changes = 3) {
     }
 }
 
-go_to_buffer_line(BufferWindow* window, u32 line) {
-    if window.buffer_index < 0 {
-        window.line = 0;
-        window.start_line = 0;
-        return;
-    }
-
-    buffer := buffers[window.buffer_index];
-    window.line = clamp(line - 1, 0, buffer.line_count - 1);
-    adjust_start_line(window);
-}
-
 u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
     lines := line_length / max_chars + 1;
 
@@ -4313,8 +4315,9 @@ u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
 }
 
 u32 calculate_max_chars_per_line(u32 digits) {
-    run_window_displayed := get_run_window() != null;
-    full_width := left_window.displayed ^ (right_window.displayed || run_window_displayed);
+    workspace := get_workspace();
+    run_window_displayed := get_run_window(workspace) != null;
+    full_width := workspace.left_window.displayed ^ (workspace.right_window.displayed || run_window_displayed);
 
     if full_width {
         return global_font_config.max_chars_per_line_full - digits - 1;
@@ -4324,7 +4327,8 @@ u32 calculate_max_chars_per_line(u32 digits) {
 }
 
 u32 determine_max_lines(BufferWindow* buffer_window) {
-    run_window := get_run_window();
+    workspace := get_workspace();
+    run_window := get_run_window(workspace);
     if run_window == null {
         return global_font_config.max_lines_without_run_window;
     }

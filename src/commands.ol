@@ -32,7 +32,8 @@ string, bool save_current_buffer() {
 
 [command, wa]
 string, bool save_all_buffers() {
-    each buffer_index in buffers.length {
+    workspace := get_workspace();
+    each buffer_index in workspace.buffers.length {
         save_buffer(buffer_index);
     }
 

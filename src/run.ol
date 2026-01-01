@@ -1,37 +1,38 @@
-init_run() {
-    run_buffer_window.static_buffer = &run_buffer;
-
-    create_semaphore(&run_mutex, initial_value = 1);
-}
-
 queue_command_to_run(string command) {
+    params := new<RunCommandParams>();
+    params.command = command;
+    params.workspace = get_workspace();
+
     data: JobData;
-    data.string = command;
+    data.pointer = params;
     queue_work(&low_priority_queue, run_command, data);
 }
 
 force_command_to_stop() {
-    if current_command.running {
+    workspace := get_workspace();
+
+    if workspace.run_data.current_command.running {
         #if os == OS.Windows {
-            TerminateThread(current_process.thread, command_exited_code);
-            TerminateProcess(current_process.process, command_exited_code);
+            TerminateThread(workspace.run_data.current_process.thread, command_exited_code);
+            TerminateProcess(workspace.run_data.current_process.process, command_exited_code);
         }
         else {
-            kill(current_process.pid, command_exited_code);
+            kill(workspace.run_data.current_process.pid, command_exited_code);
         }
 
-        current_command.exited = true;
+        workspace.run_data.current_command.exited = true;
     }
 }
 
 close_run_buffer_and_stop_command() {
-    current_command.displayed = false;
+    workspace := get_workspace();
+    workspace.run_data.current_command.displayed = false;
     force_command_to_stop();
 }
 
-BufferWindow* get_run_window() {
-    if current_command.displayed {
-        return &run_buffer_window;
+BufferWindow* get_run_window(Workspace* workspace) {
+    if workspace.run_data.current_command.displayed {
+        return &workspace.run_data.run_buffer_window;
     }
 
     return null;
@@ -44,7 +45,7 @@ Buffer* run_command_and_save_to_buffer(string command) {
     buffer.line_count_digits = 1;
     buffer.lines = allocate_line();
 
-    success, exit_code := execute_command(command, buffer, add_text_to_end_of_buffer);
+    success, exit_code := execute_command(command, buffer);
 
     return buffer;
 }
@@ -53,20 +54,34 @@ run_command_silent(string command) {
     execute_command(command, null, null);
 }
 
-void* fdopen(int fd, u8* mode) #extern "c"
+struct RunData {
+    run_buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
+    run_buffer_window: BufferWindow;
+    current_command: CommandRunData;
+    current_process: ProcessData;
+    run_mutex: Semaphore;
+}
 
 #private
 
+struct RunCommandParams {
+    command: string;
+    workspace: Workspace*;
+}
+
 run_command(int index, JobData data) {
-    semaphore_wait(&run_mutex);
-    defer semaphore_release(&run_mutex);
+    params: RunCommandParams* = data.pointer;
+    defer free_allocation(params);
 
-    clear_run_buffer_window(data.string);
+    semaphore_wait(&params.workspace.run_data.run_mutex);
+    defer semaphore_release(&params.workspace.run_data.run_mutex);
 
-    log("Executing command: '%'\n", data.string);
+    clear_run_buffer_window(params.command, params.workspace);
 
-    current_command = {
-        command = data.string;
+    log("Executing command: '%'\n", params.command);
+
+    params.workspace.run_data.current_command = {
+        command = params.command;
         running = true;
         exit_code = 0;
         failed = false;
@@ -74,20 +89,20 @@ run_command(int index, JobData data) {
         displayed = true;
     }
 
-    success, exit_code := execute_command(data.string, &run_buffer, add_to_run_buffer, &current_process, &current_command.exited);
+    success, exit_code := execute_command(params.command, &params.workspace.run_data.run_buffer, &params.workspace.run_data.run_buffer_window, &params.workspace.run_data.current_process, &params.workspace.run_data.current_command.exited);
 
     if success {
-        current_command.exit_code = exit_code;
+        params.workspace.run_data.current_command.exit_code = exit_code;
     }
     else {
-        current_command.failed = true;
+        params.workspace.run_data.current_command.failed = true;
     }
 
-    current_command.running = false;
-    log("Exit code: %\n", current_command.exit_code);
+    params.workspace.run_data.current_command.running = false;
+    log("Exit code: %\n", params.workspace.run_data.current_command.exit_code);
 }
 
-bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_buffer, ProcessData* process_data = null, bool* exited = null) {
+bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_window = null, ProcessData* process_data = null, bool* exited = null) {
     exit_code: int;
 
     #if os == OS.Windows {
@@ -128,8 +143,7 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
-            if save_to_buffer != null
-                save_to_buffer(buffer, text);
+            add_to_buffer(buffer_window, buffer, text);
         }
 
         GetExitCodeProcess(pi.hProcess, &exit_code);
@@ -180,8 +194,7 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
             if length <= 0 break;
 
             text: string = { length = length; data = &buf; }
-            if save_to_buffer != null
-                save_to_buffer(buffer, text);
+            add_to_buffer(buffer_window, buffer, text);
         }
 
         wait4(pid, &exit_code, 0, null);
@@ -190,16 +203,16 @@ bool, int execute_command(string command, Buffer* buffer, SaveToBuffer save_to_b
     return true, exit_code;
 }
 
-clear_run_buffer_window(string command) {
-    run_buffer_window = {
+clear_run_buffer_window(string command, Workspace* workspace) {
+    workspace.run_data.run_buffer_window = {
         cursor = 0;
         line = 0;
         start_line = 0;
     }
 
-    line := run_buffer.lines;
+    line := workspace.run_data.run_buffer.lines;
 
-    run_buffer = {
+    workspace.run_data.run_buffer = {
         line_count = 1;
         line_count_digits = 1;
         lines = allocate_line();
@@ -212,20 +225,19 @@ clear_run_buffer_window(string command) {
     }
 }
 
-interface SaveToBuffer(Buffer* buffer, string text)
+add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
+    change_line := false;
+    if buffer_window {
+        change_line = buffer_window.line == buffer.line_count - 1;
+    }
 
-add_to_run_buffer(Buffer* _, string text) {
-    change_line := run_buffer_window.line == run_buffer.line_count - 1;
-
-    add_text_to_end_of_buffer(&run_buffer, text);
+    add_text_to_end_of_buffer(buffer, text);
 
     if change_line {
-        run_buffer_window.line = run_buffer.line_count - 1;
-        adjust_start_line(&run_buffer_window);
+        buffer_window.line = buffer.line_count - 1;
+        adjust_start_line(buffer_window);
     }
 }
-
-run_mutex: Semaphore;
 
 command_exited_code := -100; #const
 
@@ -237,8 +249,6 @@ struct CommandRunData {
     exited: bool;
     displayed: bool;
 }
-
-current_command: CommandRunData;
 
 #if os == OS.Windows {
     struct ProcessData {
@@ -252,23 +262,20 @@ else {
     }
 }
 
-current_process: ProcessData;
-
 string get_run_buffer_title() {
-    if current_command.running {
-        return format_string("Running: %", temp_allocate, current_command.command);
+    workspace := get_workspace();
+
+    if workspace.run_data.current_command.running {
+        return format_string("Running: %", temp_allocate, workspace.run_data.current_command.command);
     }
 
-    if current_command.failed {
-        return format_string("Failed to execute: %", temp_allocate, current_command.command);
+    if workspace.run_data.current_command.failed {
+        return format_string("Failed to execute: %", temp_allocate, workspace.run_data.current_command.command);
     }
 
-    if current_command.exit_code == 0 {
-        return format_string("Success: %", temp_allocate, current_command.command);
+    if workspace.run_data.current_command.exit_code == 0 {
+        return format_string("Success: %", temp_allocate, workspace.run_data.current_command.command);
     }
 
-    return format_string("Failed with code %: %", temp_allocate, current_command.exit_code, current_command.command);
+    return format_string("Failed with code %: %", temp_allocate, workspace.run_data.current_command.exit_code, workspace.run_data.current_command.command);
 }
-
-run_buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
-run_buffer_window: BufferWindow;

@@ -18,6 +18,7 @@
 #import "text.ol"
 #import "thread_pool.ol"
 #import "window.ol"
+#import "workspaces.ol"
 
 main() {
     init_subsystems();
@@ -270,6 +271,7 @@ string create_empty_string(u32 length) #inline {
     return str;
 }
 
+// TODO Move to workspace
 current_directory: string;
 
 #private
@@ -295,7 +297,7 @@ init_subsystems() {
     init_clipboard();
     init_graphics();
     init_text();
-    init_run();
+    init_workspaces();
 }
 
 deinit_subsystems() {

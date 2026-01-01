@@ -146,7 +146,8 @@ get_file(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
     file := entry.key;
 
-    each buffer in buffers {
+    workspace := get_workspace();
+    each buffer in workspace.buffers {
         if buffer.relative_path == file {
             entry.can_free_buffer = false;
             entry.buffer = &buffer;
@@ -166,16 +167,6 @@ get_file(int thread, JobData data) {
 }
 
 change_file_filter(string filter) {
-    if buffers.length > file_entries_reserved {
-        free_allocation(file_entries.data);
-
-        while file_entries_reserved < buffers.length {
-            file_entries_reserved += file_entries_block_size;
-        }
-
-        array_resize(&file_entries, file_entries_reserved, allocate);
-    }
-
     if string_is_empty(filter) {
         filtered_file_entries.length = file_entries.length;
         each file, i in file_entries {
