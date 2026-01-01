@@ -218,10 +218,11 @@ string, string line_to_entry(BufferLine* line, int status_index) {
             git_status_entries[status_index] = status;
         }
         case SourceControl.Perforce; {
-            if starts_with(value, current_directory) {
+            workspace := get_workspace();
+            if starts_with(value, workspace.directory) {
                 relative_path: string = {
-                    length = value.length - current_directory.length;
-                    data = value.data + current_directory.length;
+                    length = value.length - workspace.directory.length;
+                    data = value.data + workspace.directory.length;
                 }
                 if relative_path[0] == '\\' || relative_path[0] == '/' {
                     relative_path.length--;

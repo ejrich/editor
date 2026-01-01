@@ -11,13 +11,15 @@ open_search_list() {
 
 // File finder functions
 load_files() {
+    // TODO Make this async and add flag for when loading is finished
     each entry in file_entries {
         free_allocation(entry.data);
     }
     file_entries.length = 0;
     file_entry_index = 0;
 
-    load_directory(current_directory, empty_string, true);
+    workspace := get_workspace();
+    load_directory(workspace.directory, empty_string, true);
 
     if file_entry_index > file_entries_reserved {
         free_allocation(file_entries.data);
@@ -33,7 +35,7 @@ load_files() {
 
     file_entries.length = file_entry_index;
     file_entry_index = 0;
-    load_directory(current_directory, empty_string, false);
+    load_directory(workspace.directory, empty_string, false);
 
     change_file_filter(empty_string);
 }

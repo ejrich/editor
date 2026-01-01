@@ -1,4 +1,5 @@
 struct Workspace {
+    active: bool;
     directory: string;
     title: string;
     buffers: Array<Buffer>;
@@ -10,7 +11,14 @@ struct Workspace {
 }
 
 init_workspaces() {
-    init_workspace(&_workspace);
+    initial: Workspace;
+    each workspace in workspaces {
+        workspace = initial;
+        workspace.run_data.run_buffer_window.static_buffer = &workspace.run_data.run_buffer;
+        create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
+    }
+
+    init_workspace(&workspaces[current_workspace]);
 }
 
 open_workspace(string directory) {
@@ -18,16 +26,32 @@ open_workspace(string directory) {
 }
 
 Workspace* get_workspace() {
-    return &_workspace;
+    return &workspaces[current_workspace];
 }
 
 #private
 
-_workspace: Workspace; // TODO Change this to be the array
-workspaces: Array<Workspace>;
+workspaces: Array<Workspace>[10];
 current_workspace := 0;
 
 init_workspace(Workspace* workspace) {
-    workspace.run_data.run_buffer_window.static_buffer = &workspace.run_data.run_buffer;
-    create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
+    workspace.active = true;
+    workspace.directory = get_working_directory();
+    workspace.title = workspace.directory;
+
+    #if os == OS.Windows {
+        dir_char := '\\'; #const
+    }
+    else {
+        dir_char := '/'; #const
+    }
+
+    each i in workspace.directory.length {
+        if workspace.directory[i] == dir_char {
+            workspace.title = {
+                length = workspace.directory.length - i - 1;
+                data = workspace.directory.data + i + 1;
+            }
+        }
+    }
 }

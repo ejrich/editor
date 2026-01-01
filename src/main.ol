@@ -187,6 +187,46 @@ bool string_contains(string value, string sub_value) {
     return false;
 }
 
+Array<string> split_string(string value) #inline {
+    lines := 1;
+    each i in value.length {
+        if value[i] == '\n' {
+            lines++;
+        }
+    }
+
+    value_lines: Array<string>[lines];
+    if lines == 1 {
+        value_lines[0] = value;
+    }
+    else {
+        index := 0;
+        str: string = { data = value.data; }
+        each i in value.length {
+            if value[i] == '\n' {
+                value_lines[index++] = str;
+                str = { length = 0; data = value.data + i + 1; }
+            }
+            else {
+                str.length++;
+            }
+        }
+        value_lines[index++] = str;
+    }
+
+    return value_lines;
+}
+
+string create_empty_string(u32 length) #inline {
+    string_data: Array<u8>[length];
+    str: string = { length = length; data = string_data.data; }
+    each i in length {
+        str[i] = ' ';
+    }
+
+    return str;
+}
+
 s32 clamp(s32 value, s32 min, s32 max) {
     if value < min return min;
     if value > max return max;
@@ -231,48 +271,22 @@ string get_program_directory() {
     return program_directory;
 }
 
-Array<string> split_string(string value) #inline {
-    lines := 1;
-    each i in value.length {
-        if value[i] == '\n' {
-            lines++;
-        }
+string get_working_directory() {
+    directory: string;
+    #if os == OS.Windows {
+        directory.length = GetCurrentDirectoryA(0, null);
+        directory.data = allocate(directory.length);
+        directory.length = GetCurrentDirectoryA(directory.length, directory.data);
+    }
+    #if os == OS.Linux {
+        buffer: CArray<u8>[1000];
+        getcwd(&buffer, buffer.length);
+        directory = convert_c_string(&buffer);
+        allocate_strings(&directory);
     }
 
-    value_lines: Array<string>[lines];
-    if lines == 1 {
-        value_lines[0] = value;
-    }
-    else {
-        index := 0;
-        str: string = { data = value.data; }
-        each i in value.length {
-            if value[i] == '\n' {
-                value_lines[index++] = str;
-                str = { length = 0; data = value.data + i + 1; }
-            }
-            else {
-                str.length++;
-            }
-        }
-        value_lines[index++] = str;
-    }
-
-    return value_lines;
+    return directory;
 }
-
-string create_empty_string(u32 length) #inline {
-    string_data: Array<u8>[length];
-    str: string = { length = length; data = string_data.data; }
-    each i in length {
-        str[i] = ' ';
-    }
-
-    return str;
-}
-
-// TODO Move to workspace
-current_directory: string;
 
 #private
 
@@ -285,8 +299,8 @@ program_directory: string;
 
 init_subsystems() {
     init_memory();
-    get_working_directory();
     init_logging();
+    init_workspaces();
     init_display();
     load_settings();
     load_keybinds();
@@ -297,7 +311,6 @@ init_subsystems() {
     init_clipboard();
     init_graphics();
     init_text();
-    init_workspaces();
 }
 
 deinit_subsystems() {
@@ -312,20 +325,4 @@ deinit_subsystems() {
     deallocate_arenas();
 
     deinit_logging();
-}
-
-get_working_directory() {
-    #if os == OS.Windows {
-        current_directory = {
-            length = GetCurrentDirectoryA(0, null);
-        }
-        current_directory.data = allocate(current_directory.length);
-        current_directory.length = GetCurrentDirectoryA(current_directory.length, current_directory.data);
-    }
-    #if os == OS.Linux {
-        buffer: CArray<u8>[1000];
-        getcwd(&buffer, buffer.length);
-        current_directory = convert_c_string(&buffer);
-        allocate_strings(&current_directory);
-    }
 }
