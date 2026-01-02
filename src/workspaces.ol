@@ -49,6 +49,7 @@ OpenWorkspaceResult open_workspace(string directory, bool replace_current) {
     set_directory(directory);
     init_workspace(&workspaces[new_workspace_index]);
     current_workspace = new_workspace_index;
+    open_files_list();
 
     return OpenWorkspaceResult.Success;
 }

@@ -50,8 +50,6 @@ string, bool change_workspace(string path) {
         }
         case OpenWorkspaceResult.OpenBuffersInCurrent;
             return "Unable to open workspace: Current workspace has unsaved buffers", false;
-        case OpenWorkspaceResult.MaxWorkspacesActive;
-            return "Unable to open new workspace: None available", false;
     }
 
     return empty_string, false;
@@ -59,8 +57,16 @@ string, bool change_workspace(string path) {
 
 [command, wn]
 string, bool new_workspace(string path) {
-    // TODO Implement
     // Open a new workspace with the given path
+    result := open_workspace(path, false);
+    switch result {
+        case OpenWorkspaceResult.InvalidDirectory; {
+            result_string := format_string("Unable to open workspace: '%' is not a directory", allocate, path);
+            return result_string, true;
+        }
+        case OpenWorkspaceResult.MaxWorkspacesActive;
+            return "Unable to open new workspace: None available", false;
+    }
 
     return empty_string, false;
 }
@@ -353,7 +359,14 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
 }
 
 call_command(string command, bool allocated) {
-    defer current_command_mode = CommandMode.None;
+    defer {
+        if current_command_mode == CommandMode.Command {
+            current_command_mode = CommandMode.None;
+        }
+        else {
+            command_prompt_buffer.result = CommandResult.None;
+        }
+    }
 
     // Remove initial padding
     name_start := 0;
