@@ -74,8 +74,13 @@ string, bool new_workspace(string path) {
 [command, wc]
 string, bool close_current_workspace() {
     // Close the current workspace and switch to the next
-    if !close_workspace(true) {
-        return "Unable to close workspace: current workspace has unsaved buffers", false;
+    result := close_workspace(true);
+
+    switch result {
+        case CloseWorkspaceResult.OpenBuffersInCurrent;
+            return "Unable to close workspace: current workspace has unsaved buffers", false;
+        case CloseWorkspaceResult.NoWorkspacesActive;
+            return "Unable to close workspace: no other active workspaces", false;
     }
 
     return empty_string, false;

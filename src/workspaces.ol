@@ -58,9 +58,23 @@ OpenWorkspaceResult open_workspace(string directory, bool replace_current) {
     return OpenWorkspaceResult.Success;
 }
 
-bool close_workspace(bool change_to_next_active = false) {
+enum CloseWorkspaceResult {
+    Success;
+    OpenBuffersInCurrent;
+    NoWorkspacesActive;
+}
+
+CloseWorkspaceResult close_workspace(bool change_to_next_active = false) {
     if !can_close_workspace() {
-        return false;
+        return CloseWorkspaceResult.OpenBuffersInCurrent;
+    }
+
+    next_workspace: int;
+    if change_to_next_active {
+        next_workspace = next_active_workspace();
+        if next_workspace < 0 {
+            return CloseWorkspaceResult.NoWorkspacesActive;
+        }
     }
 
     workspace := &workspaces[current_workspace];
@@ -88,10 +102,11 @@ bool close_workspace(bool change_to_next_active = false) {
     workspace.active = false;
 
     if change_to_next_active {
-        // TODO Implement
+        set_directory(workspaces[next_workspace].directory);
+        current_workspace = next_workspace;
     }
 
-    return true;
+    return CloseWorkspaceResult.Success;
 }
 
 Workspace* get_workspace() {
@@ -154,6 +169,17 @@ bool can_close_workspace() {
     }
 
     return true;
+}
+
+int next_active_workspace() {
+    each i in number_of_workspaces - 1 {
+        index := (current_workspace + i + 1) % number_of_workspaces;
+        if workspaces[index].active {
+            return index;
+        }
+    }
+
+    return -1;
 }
 
 close_editor_window(EditorWindow* window, bool displayed) {
