@@ -497,6 +497,7 @@ bool, u32, u32, string save_buffer(int buffer_index) {
 
     lines_written, bytes_written: u32;
     buffer := &workspace.buffers[buffer_index];
+    buffer.has_changes = false;
 
     create_directories_recursively(buffer.relative_path);
     opened, file := open_file(buffer.relative_path, FileFlags.Create);
@@ -3571,6 +3572,7 @@ toggle_casing(bool upper) {
 // Data structures
 struct Buffer {
     read_only: bool;
+    has_changes: bool;
     path_allocated: bool;
     relative_path: string;
     title: GetBufferTitle;

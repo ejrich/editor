@@ -256,6 +256,7 @@ record_insert_mode_change(Buffer* buffer, u32 line_number, u32 cursor) {
 }
 
 add_changes_to_buffer(Buffer* buffer, ChangeValue value) {
+    buffer.has_changes = true;
     pending_changes.new = value;
     pending_changes.previous = buffer.last_change;
 
@@ -349,6 +350,7 @@ apply_changes(bool forward, u32 changes) {
         }
     }
 
+    buffer.has_changes = true;
     set_current_location(buffer_window.buffer_index, line, cursor);
 }
 

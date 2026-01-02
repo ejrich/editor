@@ -127,7 +127,13 @@ bool can_open_new_workspace(int* index) {
 }
 
 bool can_close_workspace() {
-    // TODO Implement
+    workspace := &workspaces[current_workspace];
+    each buffer in workspace.buffers {
+        if buffer.has_changes {
+            return false;
+        }
+    }
+
     return true;
 }
 
