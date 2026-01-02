@@ -291,6 +291,7 @@ open_file_buffer(string path, bool allocate_path) {
         }
 
         buffer: Buffer = {
+            path_allocated = allocate_path;
             relative_path = path;
         }
 
@@ -3570,6 +3571,7 @@ toggle_casing(bool upper) {
 // Data structures
 struct Buffer {
     read_only: bool;
+    path_allocated: bool;
     relative_path: string;
     title: GetBufferTitle;
     line_count: u32;
@@ -3581,7 +3583,7 @@ struct Buffer {
 
 interface string GetBufferTitle()
 
-free_buffer(Buffer* buffer) {
+free_buffer(Buffer* buffer, bool free_pointer = true, bool free_path = false) {
     if buffer == null return;
 
     line := buffer.lines;
@@ -3605,7 +3607,14 @@ free_buffer(Buffer* buffer) {
         next = new_next;
     }
 
-    free_allocation(buffer);
+    if free_path && buffer.path_allocated {
+        buffer.relative_path.length = 0;
+        free_allocation(buffer.relative_path.data);
+    }
+
+    if free_pointer {
+        free_allocation(buffer);
+    }
 }
 
 line_buffer_length := 500; #const

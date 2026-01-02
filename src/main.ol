@@ -271,6 +271,17 @@ string get_program_directory() {
     return program_directory;
 }
 
+set_directory(string directory) {
+    directory = temp_string(directory); // Null terminate
+
+    #if os == OS.Linux {
+        chdir(directory.data);
+    }
+    #if os == OS.Windows {
+        SetCurrentDirectoryA(directory);
+    }
+}
+
 string get_working_directory() {
     directory: string;
     #if os == OS.Windows {

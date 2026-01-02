@@ -1,6 +1,6 @@
 open_files_list() {
     load_files();
-    start_list_mode("Find Files", get_files, get_file, change_file_filter, open_file_to_buffer);
+    start_list_mode("Find Files", get_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files);
 }
 
 open_search_list() {
@@ -192,6 +192,10 @@ change_file_filter(string filter) {
             }
         }
     }
+}
+
+cleanup_files() {
+    free_allocation(file_entries_string_pointer);
 }
 
 open_file_to_buffer(string file) {

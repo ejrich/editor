@@ -40,6 +40,41 @@ string, bool save_all_buffers() {
     return empty_string, false;
 }
 
+[command, ws]
+string, bool change_workspace(string path) {
+    result := open_workspace(path, true);
+    switch result {
+        case OpenWorkspaceResult.InvalidDirectory; {
+            result_string := format_string("Unable to open workspace: '%' is not a directory", allocate, path);
+            return result_string, true;
+        }
+        case OpenWorkspaceResult.OpenBuffersInCurrent;
+            return "Unable to open workspace: Current workspace has unsaved buffers", false;
+        case OpenWorkspaceResult.MaxWorkspacesActive;
+            return "Unable to open new workspace: None available", false;
+    }
+
+    return empty_string, false;
+}
+
+[command, wn]
+string, bool new_workspace(string path) {
+    // TODO Implement
+    // Open a new workspace with the given path
+
+    return empty_string, false;
+}
+
+[command, wc]
+string, bool close_current_workspace() {
+    // Close the current workspace and switch to the next
+    if !close_workspace(true) {
+        return "Unable to close workspace: current workspace has unsaved buffers", false;
+    }
+
+    return empty_string, false;
+}
+
 [command, reload]
 string, bool reload_configurations() {
     load_settings_file();

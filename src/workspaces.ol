@@ -21,8 +21,66 @@ init_workspaces() {
     init_workspace(&workspaces[current_workspace]);
 }
 
-open_workspace(string directory) {
-    // TODO Implement
+enum OpenWorkspaceResult {
+    Success;
+    InvalidDirectory;
+    OpenBuffersInCurrent;
+    MaxWorkspacesActive;
+}
+
+OpenWorkspaceResult open_workspace(string directory, bool replace_current) {
+    valid_directory := is_directory(directory);
+    if !valid_directory {
+        return OpenWorkspaceResult.InvalidDirectory;
+    }
+
+    new_workspace_index := current_workspace;
+    if replace_current {
+        if !can_close_workspace() {
+            return OpenWorkspaceResult.OpenBuffersInCurrent;
+        }
+
+        close_workspace();
+    }
+    else if !can_open_new_workspace(&new_workspace_index) {
+        return OpenWorkspaceResult.MaxWorkspacesActive;
+    }
+
+    set_directory(directory);
+    init_workspace(&workspaces[new_workspace_index]);
+    current_workspace = new_workspace_index;
+
+    return OpenWorkspaceResult.Success;
+}
+
+bool close_workspace(bool change_to_next_active = false) {
+    if !can_close_workspace() {
+        return false;
+    }
+
+    workspace := &workspaces[current_workspace];
+
+    each buffer in workspace.buffers {
+        free_buffer(&buffer, false, true);
+    }
+    if workspace.buffers.length {
+        workspace.buffers.length = 0;
+        free_allocation(workspace.buffers.data);
+    }
+
+    close_editor_window(&workspace.left_window, true);
+    close_editor_window(&workspace.right_window, false);
+
+    workspace.current_window = SelectedWindow.Left;
+    workspace.run_window_selected = false;
+    workspace.run_data.current_command.displayed = false;
+    workspace.active = false;
+
+    if change_to_next_active {
+        // TODO Implement
+    }
+
+    return true;
 }
 
 Workspace* get_workspace() {
@@ -31,7 +89,8 @@ Workspace* get_workspace() {
 
 #private
 
-workspaces: Array<Workspace>[10];
+number_of_workspaces := 10; #const
+workspaces: Array<Workspace>[number_of_workspaces];
 current_workspace := 0;
 
 init_workspace(Workspace* workspace) {
@@ -54,4 +113,34 @@ init_workspace(Workspace* workspace) {
             }
         }
     }
+}
+
+bool can_open_new_workspace(int* index) {
+    each workspace, i in workspaces {
+        if !workspace.active {
+            *index = i;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool can_close_workspace() {
+    // TODO Implement
+    return true;
+}
+
+close_editor_window(EditorWindow* window, bool displayed) {
+    window.displayed = displayed;
+
+    buffer_window := window.buffer_window;
+    while buffer_window {
+        next := buffer_window.next;
+        free_allocation(buffer_window);
+        buffer_window = next;
+    }
+    window.buffer_window = null;
+
+    clear_jumps(&window.current_jump);
 }
