@@ -315,7 +315,6 @@ init_subsystems() {
     init_display();
     load_settings();
     load_keybinds();
-    load_local_settings();
 
     create_window();
     init_thread_pool();

@@ -8,6 +8,7 @@ struct Workspace {
     current_window: SelectedWindow;
     run_window_selected: bool;
     run_data: RunData;
+    local_settings: LocalSettings;
 }
 
 init_workspaces() {
@@ -72,6 +73,8 @@ bool close_workspace(bool change_to_next_active = false) {
     close_editor_window(&workspace.left_window, true);
     close_editor_window(&workspace.right_window, false);
 
+    close_local_settings(&workspace.local_settings);
+
     workspace.current_window = SelectedWindow.Left;
     workspace.run_window_selected = false;
     workspace.run_data.current_command.displayed = false;
@@ -114,6 +117,8 @@ init_workspace(Workspace* workspace) {
             }
         }
     }
+
+    load_local_settings(&workspace.local_settings);
 }
 
 bool can_open_new_workspace(int* index) {

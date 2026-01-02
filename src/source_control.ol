@@ -8,7 +8,8 @@ enum SourceControl {
 source_control_status() {
     list_title: string;
 
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             list_title = "Git Status";
         }
@@ -23,7 +24,7 @@ source_control_status() {
     if !string_is_empty(list_title) {
         // Free the existing entries before loading
         each entry in status_entries {
-            switch local_settings.source_control {
+            switch workspace.local_settings.source_control {
                 case SourceControl.Git; {
                     free_allocation(entry.key.data);
                     free_allocation(entry.display.data);
@@ -43,7 +44,8 @@ source_control_status() {
 }
 
 source_control_pull() {
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             queue_command_to_run("git pull");
         }
@@ -58,7 +60,8 @@ source_control_pull() {
 }
 
 source_control_checkout() {
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Perforce; {
             set_perforce_client();
             queue_command_to_run("p4 edit ...");
@@ -67,7 +70,8 @@ source_control_checkout() {
 }
 
 source_control_revert() {
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             queue_command_to_run("git reset --hard");
         }
@@ -86,7 +90,8 @@ source_control_commit(string message) {
         free_allocation(commit_command.data);
     }
 
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             commit_command = format_string("git commit -m \"%\"", allocate, message);
         }
@@ -115,7 +120,8 @@ load_status(int index, JobData data) {
     status_filter = empty_string;
 
     status_buffer: Buffer*;
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             status_buffer = run_command_and_save_to_buffer("git status -s");
         }
@@ -206,7 +212,8 @@ string, string line_to_entry(BufferLine* line, int status_index) {
     }
 
     file, display: string;
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             status := char_to_git_status(value[0], true) | char_to_git_status(value[1]);
             file = {
@@ -218,7 +225,6 @@ string, string line_to_entry(BufferLine* line, int status_index) {
             git_status_entries[status_index] = status;
         }
         case SourceControl.Perforce; {
-            workspace := get_workspace();
             if starts_with(value, workspace.directory) {
                 relative_path: string = {
                     length = value.length - workspace.directory.length;
@@ -266,7 +272,8 @@ load_diff(int thread, JobData data) {
     file := entry.key;
 
     command: string;
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             command = temp_string("git --no-pager diff HEAD -- ", file);
         }
@@ -322,7 +329,8 @@ open_status_file(string file) {
 }
 
 change_status(string file) {
-    switch local_settings.source_control {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
         case SourceControl.Git; {
             each entry, i in status_entries {
                 if file == entry.key {
@@ -444,6 +452,7 @@ set_git_status_display(string display, GitStatus status) {
 
 // Perforce specific functions
 set_perforce_client() {
-    command := temp_string("p4 set P4CLIENT=", local_settings.perforce_client_name);
+    workspace := get_workspace();
+    command := temp_string("p4 set P4CLIENT=", workspace.local_settings.perforce_client_name);
     run_command_silent(command);
 }

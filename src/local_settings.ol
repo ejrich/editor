@@ -24,16 +24,14 @@ struct LocalSettings {
     }
 }
 
-local_settings: LocalSettings;
-
 enum LocalSettingsSection {
     Unknown;
     Settings;
     Commands;
 }
 
-load_local_settings() {
-    get_default_local_settings();
+load_local_settings(LocalSettings* local_settings) {
+    get_default_local_settings(local_settings);
 
     local_settings_type := cast(StructTypeInfo*, type_of(LocalSettings));
 
@@ -45,7 +43,7 @@ load_local_settings() {
 
         i: u32;
         line := 1;
-        local_settings_pointer: void* = &local_settings;
+        local_settings_pointer: void* = local_settings;
         section: LocalSettingsSection;
         while i < local_settings_file.length {
             // Determine the section being parsed
@@ -139,14 +137,24 @@ load_local_settings() {
     }
 }
 
+close_local_settings(LocalSettings* local_settings) {
+    if !string_is_empty(local_settings.perforce_client_name) {
+        free_allocation(local_settings.perforce_client_name.data);
+    }
+
+    local_settings.source_control = SourceControl.None;
+    local_settings.perforce_client_name = empty_string;
+    local_settings.perforce_client_suffix = empty_string;
+}
+
 #private
 
-get_default_local_settings() {
+get_default_local_settings(LocalSettings* local_settings) {
     default_local_settings: LocalSettings = {
         source_control = SourceControl.Git;
     }
 
-    local_settings = default_local_settings;
+    *local_settings = default_local_settings;
 }
 
 #if os == OS.Windows {
