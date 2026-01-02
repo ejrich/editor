@@ -95,12 +95,18 @@ bool handle_keybind_event(KeyCode code, ModCode mod, bool list_only = false) {
         }
     }
     else if !list_only {
-        command := command_keybinds[mod_value];
-        if string_is_empty(command) {
-            return false;
+        workspace := get_workspace();
+        found := false;
+        each command in workspace.command_keybinds {
+            if command.code == mod_value {
+                queue_command_to_run(command.command);
+                found = true;
+            }
         }
 
-        queue_command_to_run(command);
+        if !found {
+            return false;
+        }
     }
 
     if !list_only {
@@ -132,13 +138,22 @@ reassign_keybind(KeyCode code, string keybind) {
     log("Unable to reassign keybind '%', not found\n", keybind);
 }
 
-bool add_command_keybind(string keybind, string command) {
+struct CommandKeybind {
+    code: u32;
+    command: string;
+}
+
+bool add_command_keybind(string keybind, string command, Workspace* workspace) {
     valid, lookup_index := parse_keybind_value(keybind);
     if !valid {
         return false;
     }
 
-    command_keybinds[lookup_index] = command;
+    command_keybind: CommandKeybind = {
+        code = lookup_index;
+        command = command;
+    }
+    array_insert(&workspace.command_keybinds, command_keybind, allocate, reallocate);
 
     return true;
 }
@@ -222,7 +237,6 @@ struct KeybindDefinition {
 
 keybind_definitions: Array<KeybindDefinition>;
 keybind_lookup: Array<int>[0xF24];
-command_keybinds: Array<string>[0xF24];
 
 keybinds_file_path: string;
 

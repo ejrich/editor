@@ -1,5 +1,6 @@
 struct Workspace {
     active: bool;
+    index: u8;
     directory: string;
     title: string;
     buffers: Array<Buffer>;
@@ -9,12 +10,14 @@ struct Workspace {
     run_window_selected: bool;
     run_data: RunData;
     local_settings: LocalSettings;
+    command_keybinds: Array<CommandKeybind>;
 }
 
 init_workspaces() {
     initial: Workspace;
-    each workspace in workspaces {
+    each workspace, i in workspaces {
         workspace = initial;
+        workspace.index = (i + 1) % number_of_workspaces;
         workspace.run_data.run_buffer_window.static_buffer = &workspace.run_data.run_buffer;
         create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
     }
@@ -74,6 +77,10 @@ bool close_workspace(bool change_to_next_active = false) {
     close_editor_window(&workspace.right_window, false);
 
     close_local_settings(&workspace.local_settings);
+    if workspace.command_keybinds.length {
+        workspace.command_keybinds.length = 0;
+        free_allocation(workspace.command_keybinds.data);
+    }
 
     workspace.current_window = SelectedWindow.Left;
     workspace.run_window_selected = false;
@@ -89,6 +96,12 @@ bool close_workspace(bool change_to_next_active = false) {
 
 Workspace* get_workspace() {
     return &workspaces[current_workspace];
+}
+
+reload_workspace() {
+    workspace := &workspaces[current_workspace];
+    close_local_settings(&workspace.local_settings);
+    load_local_settings(workspace);
 }
 
 #private
@@ -118,7 +131,7 @@ init_workspace(Workspace* workspace) {
         }
     }
 
-    load_local_settings(&workspace.local_settings);
+    load_local_settings(workspace);
 }
 
 bool can_open_new_workspace(int* index) {

@@ -30,8 +30,8 @@ enum LocalSettingsSection {
     Commands;
 }
 
-load_local_settings(LocalSettings* local_settings) {
-    get_default_local_settings(local_settings);
+load_local_settings(Workspace* workspace) {
+    get_default_local_settings(&workspace.local_settings);
 
     local_settings_type := cast(StructTypeInfo*, type_of(LocalSettings));
 
@@ -43,7 +43,7 @@ load_local_settings(LocalSettings* local_settings) {
 
         i: u32;
         line := 1;
-        local_settings_pointer: void* = local_settings;
+        local_settings_pointer: void* = &workspace.local_settings;
         section: LocalSettingsSection;
         while i < local_settings_file.length {
             // Determine the section being parsed
@@ -107,7 +107,7 @@ load_local_settings(LocalSettings* local_settings) {
             // Parse commands
             else if section == LocalSettingsSection.Commands {
                 allocate_strings(true, &value);
-                if !add_command_keybind(name, value) {
+                if !add_command_keybind(name, value, workspace) {
                     log("Invalid key code for command keybind at line %, value is '%'\n", line, name);
                     free_allocation(value.data);
                 }
@@ -120,9 +120,9 @@ load_local_settings(LocalSettings* local_settings) {
         free_allocation(local_settings_file.data);
     }
 
-    switch local_settings.source_control {
+    switch workspace.local_settings.source_control {
         case SourceControl.Perforce; {
-            if string_is_empty(local_settings.perforce_client_name) {
+            if string_is_empty(workspace.local_settings.perforce_client_name) {
                 computer_name := get_environment_variable(computer_name_variable, temp_allocate);
                 each i in computer_name.length {
                     char := computer_name[i];
@@ -131,7 +131,7 @@ load_local_settings(LocalSettings* local_settings) {
                     }
                 }
 
-                local_settings.perforce_client_name = format_string("%%", allocate, computer_name, local_settings.perforce_client_suffix);
+                workspace.local_settings.perforce_client_name = format_string("%%", allocate, computer_name, workspace.local_settings.perforce_client_suffix);
             }
         }
     }
@@ -140,6 +140,9 @@ load_local_settings(LocalSettings* local_settings) {
 close_local_settings(LocalSettings* local_settings) {
     if !string_is_empty(local_settings.perforce_client_name) {
         free_allocation(local_settings.perforce_client_name.data);
+    }
+    if !string_is_empty(local_settings.perforce_client_suffix) {
+        free_allocation(local_settings.perforce_client_suffix.data);
     }
 
     local_settings.source_control = SourceControl.None;

@@ -85,10 +85,7 @@ string, bool close_current_workspace() {
 string, bool reload_configurations() {
     load_settings_file();
     reload_keybinds();
-
-    workspace := get_workspace();
-    close_local_settings(&workspace.local_settings);
-    load_local_settings(&workspace.local_settings);
+    reload_workspace();
 
     return "Settings reloaded", false;
 }
