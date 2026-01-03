@@ -251,6 +251,7 @@ draw_selected_entry() {
 
     while line != null && available_lines_to_render > 0 {
         if line_index >= selected_entry.start_line {
+            // TODO Only render the visible part of the line aka the first x chars based on the width of the window
             lines := render_line(line, 0.0, y, 1.0, available_lines_to_render);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;

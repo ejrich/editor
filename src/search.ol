@@ -4,7 +4,7 @@ open_files_list() {
 }
 
 open_search_list() {
-    // TODO Implement
+    start_list_mode("Search", get_search_results, get_file_at_line, change_search_filter, open_file_at_line);
 }
 
 #private
@@ -223,4 +223,74 @@ string copy_path(string file_path) {
 }
 
 // Search functions
-// TODO Implement functions
+Array<ListEntry> get_search_results() {
+    return search_results;
+}
+
+get_file_at_line(int thread, JobData data) {
+    entry := cast(SelectedEntry*, data.pointer);
+    search_result := entry.key;
+
+    workspace := get_workspace();
+    each buffer in workspace.buffers {
+        if buffer.relative_path == search_result {
+            entry.can_free_buffer = false;
+            // TODO Set the start_line and highlighted line
+            entry.buffer = &buffer;
+            return;
+        }
+    }
+
+    line, column, file := parse_search_key(search_result);
+    command := temp_string("cat ", file);
+    file_buffer := run_command_and_save_to_buffer(command);
+
+    if search_result == entry.key {
+        // TODO Set the start_line and highlighted line
+        entry.buffer = file_buffer;
+    }
+    else {
+        free_buffer(file_buffer);
+    }
+}
+
+change_search_filter(string filter) {
+    // TODO Implement
+}
+
+open_file_at_line(string search_result) {
+    line, column, file := parse_search_key(search_result);
+    open_file_buffer(file, true);
+    // TODO Set the line
+}
+
+int, int, string parse_search_key(string key) {
+    line, column: int;
+    i := 0;
+    while key[i] != ':' {
+        line *= 10;
+        line += key[i] - '0';
+        i++;
+    }
+
+    i++;
+
+    while key[i] != '-' {
+        column *= 10;
+        column += key[i] - '0';
+        i++;
+    }
+
+    i++;
+    file: string = {
+        length = key.length - i;
+        data = key.data + i;
+    }
+
+    return line, column, file;
+}
+
+// For search results
+// - key = {line}:{column}-{file}
+// - display = {file}:{line}:{column}:{line text}
+search_results: Array<ListEntry> = [{key = "254:16-src/list.ol"; display = "src/list.ol:254:16:            // TODO Only render the visible part of the line aka the first x chars based on the width of the window";}]
