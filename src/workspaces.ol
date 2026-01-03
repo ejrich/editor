@@ -48,6 +48,31 @@ change_workspace(KeyCode code) {
     change_current_workspace(new_workspace);
 }
 
+cycle_workspace(int change) {
+    target_workspace := current_workspace + change;
+    if target_workspace >= number_of_workspaces {
+        target_workspace = 0;
+    }
+    else if target_workspace < 0 {
+        target_workspace = number_of_workspaces - 1;
+    }
+
+    while target_workspace != current_workspace {
+        if workspaces[target_workspace].active {
+            change_current_workspace(target_workspace);
+            return;
+        }
+
+        target_workspace += change;
+        if target_workspace >= number_of_workspaces {
+            target_workspace = 0;
+        }
+        else if target_workspace < 0 {
+            target_workspace = number_of_workspaces - 1;
+        }
+    }
+}
+
 enum OpenWorkspaceResult {
     Success;
     InvalidDirectory;
@@ -67,7 +92,7 @@ OpenWorkspaceResult open_workspace(string directory, bool replace_current) {
             return OpenWorkspaceResult.OpenBuffersInCurrent;
         }
 
-        close_workspace();
+        close_current_workspace(false);
     }
     else if !can_open_new_workspace(&new_workspace_index) {
         return OpenWorkspaceResult.MaxWorkspacesActive;
@@ -87,7 +112,7 @@ enum CloseWorkspaceResult {
     NoWorkspacesActive;
 }
 
-CloseWorkspaceResult close_workspace(bool change_to_next_active = false) {
+CloseWorkspaceResult close_current_workspace(bool change_to_next_active) {
     if !can_close_workspace() {
         return CloseWorkspaceResult.OpenBuffersInCurrent;
     }

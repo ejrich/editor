@@ -785,3 +785,19 @@ stop_command(ModCode mod) {
 close_run_buffer(ModCode mod) {
     close_run_buffer_and_stop_command();
 }
+
+// Workspace keybinds
+[keybind, no_repeat]
+previous_workspace(ModCode mod) {
+    cycle_workspace(-1);
+}
+
+[keybind, no_repeat]
+next_workspace(ModCode mod) {
+    cycle_workspace(1);
+}
+
+[keybind, no_repeat]
+close_workspace(ModCode mod) {
+    close_current_workspace(true);
+}

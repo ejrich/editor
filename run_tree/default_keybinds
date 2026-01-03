@@ -48,3 +48,6 @@ uppercase=Shift+U
 lowercase=Shift+L
 stop_command=Shift+F5
 close_run_buffer=Shift+Escape
+previous_workspace=Shift+Alt+H
+next_workspace=Shift+Alt+L
+close_workspace=Shift+Alt+W

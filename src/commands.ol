@@ -74,7 +74,7 @@ string, bool new_workspace(string path) {
 [command, wc]
 string, bool close_current_workspace() {
     // Close the current workspace and switch to the next
-    result := close_workspace(true);
+    result := close_current_workspace(true);
 
     switch result {
         case CloseWorkspaceResult.OpenBuffersInCurrent;
