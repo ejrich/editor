@@ -21,15 +21,12 @@ load_files() {
     load_directory(workspace.directory, empty_string, true);
 
     if file_entry_index > file_entries_reserved {
-        free_allocation(file_entries.data);
-        free_allocation(filtered_file_entries.data);
-
         while file_entries_reserved < file_entry_index {
             file_entries_reserved += file_entries_block_size;
         }
 
-        array_resize(&file_entries, file_entries_reserved, allocate);
-        array_resize(&filtered_file_entries, file_entries_reserved, allocate);
+        reallocate_array(&file_entries, file_entries_reserved);
+        reallocate_array(&filtered_file_entries, file_entries_reserved);
     }
 
     file_entries.length = file_entry_index;
@@ -196,6 +193,7 @@ change_file_filter(string filter) {
 
 cleanup_files() {
     free_allocation(file_entries_string_pointer);
+    file_entries_string_pointer = null;
 }
 
 open_file_to_buffer(string file) {
@@ -206,7 +204,7 @@ file_entries: Array<string>;
 filtered_file_entries: Array<ListEntry>;
 
 file_entries_reserved := 0;
-file_entries_block_size := 10; #const
+file_entries_block_size := 50; #const
 file_entry_index := 0;
 length_to_allocate := 0;
 file_entries_string_pointer: u8*;

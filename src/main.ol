@@ -67,6 +67,8 @@ main() {
         if set_current_command_buffer() {
             begin_ui_render_pass();
 
+            draw_workspaces();
+
             if !draw_list() {
                 draw_buffers();
             }

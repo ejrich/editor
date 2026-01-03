@@ -70,11 +70,7 @@ go_to_jump(bool forward, u32 jumps) {
     *current_jump_pointer = current_jump;
 }
 
-clear_jumps(Jump** window_jump_pointer = null) {
-    if window_jump_pointer == null {
-        window_jump_pointer = get_jump_pointer();
-    }
-
+clear_jumps(Jump** window_jump_pointer) {
     current_jump := *window_jump_pointer;
     if current_jump {
         clear_jumps_after(current_jump);

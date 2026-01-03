@@ -458,17 +458,17 @@ close_window(bool save) {
     switch workspace.current_window {
         case SelectedWindow.Left; {
             editor_window = &workspace.left_window;
-            other_window = &workspace.left_window;
+            other_window = &workspace.right_window;
             workspace.current_window = SelectedWindow.Right;
         }
         case SelectedWindow.Right; {
             editor_window = &workspace.right_window;
-            other_window = &workspace.right_window;
+            other_window = &workspace.left_window;
             workspace.current_window = SelectedWindow.Left;
         }
     }
 
-    clear_jumps();
+    clear_jumps(&editor_window.current_jump);
 
     buffer_window := editor_window.buffer_window;
     while buffer_window {
@@ -485,7 +485,10 @@ close_window(bool save) {
     editor_window.displayed = false;
 
     if !other_window.displayed {
-        signal_shutdown();
+        result := close_current_workspace(true, true);
+        if result == CloseWorkspaceResult.NoWorkspacesActive {
+            signal_shutdown();
+        }
     }
 }
 
@@ -3877,13 +3880,11 @@ get_buffer(int thread, JobData data) {
 change_buffer_filter(string filter) {
     workspace := get_workspace();
     if workspace.buffers.length > buffer_entries_reserved {
-        free_allocation(buffer_entries.data);
-
         while buffer_entries_reserved < workspace.buffers.length {
             buffer_entries_reserved += buffer_entries_block_size;
         }
 
-        array_resize(&buffer_entries, buffer_entries_reserved, allocate);
+        reallocate_array(&buffer_entries, buffer_entries_reserved);
     }
 
     if string_is_empty(filter) {

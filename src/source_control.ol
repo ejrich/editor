@@ -188,17 +188,13 @@ get_status_result_count(Buffer* buffer) {
 
 prepare_status_entries(int count) {
     if count > entries_reserved {
-        free_allocation(status_entries.data);
-        free_allocation(git_status_entries.data);
-        free_allocation(filtered_status_entries.data);
-
         while entries_reserved < count {
             entries_reserved += entries_block_size;
         }
 
-        array_resize(&status_entries, entries_reserved, allocate);
-        array_resize(&git_status_entries, entries_reserved, allocate);
-        array_resize(&filtered_status_entries, entries_reserved, allocate);
+        reallocate_array(&status_entries, entries_reserved);
+        reallocate_array(&git_status_entries, entries_reserved);
+        reallocate_array(&filtered_status_entries, entries_reserved);
     }
 
     status_entries.length = count;

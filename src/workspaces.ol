@@ -25,6 +25,23 @@ init_workspaces() {
     init_workspace(&workspaces[current_workspace]);
 }
 
+draw_workspaces() {
+    x := -1.0 + global_font_config.quad_advance;
+    y := 1.0 - global_font_config.top_line_offset;
+
+    each workspace, i in workspaces {
+        if workspace.active {
+            text_color := appearance.visual_font_color;
+            if i == current_workspace {
+                text_color = appearance.font_color;
+            }
+            render_text(settings.font_size, x, y, text_color, vec4(), "%: %", workspace.index, workspace.title);
+
+            x += global_font_config.quad_advance * (workspace.title.length + 4);
+        }
+    }
+}
+
 change_workspace(KeyCode code) {
     new_workspace := -1;
     switch code {
@@ -112,8 +129,8 @@ enum CloseWorkspaceResult {
     NoWorkspacesActive;
 }
 
-CloseWorkspaceResult close_current_workspace(bool change_to_next_active) {
-    if !can_close_workspace() {
+CloseWorkspaceResult close_current_workspace(bool change_to_next_active, bool force_close = false) {
+    if !can_close_workspace() && !force_close {
         return CloseWorkspaceResult.OpenBuffersInCurrent;
     }
 
@@ -126,6 +143,10 @@ CloseWorkspaceResult close_current_workspace(bool change_to_next_active) {
     }
 
     workspace := &workspaces[current_workspace];
+
+    free_allocation(workspace.directory.data);
+    workspace.directory = empty_string;
+    workspace.title = empty_string;
 
     each buffer in workspace.buffers {
         free_buffer(&buffer, false, true);
