@@ -435,6 +435,8 @@ else #if os == OS.Windows {
 
                 handle_key_event(PressState.Up, key_code, mod_code, str);
             }
+            case MessageType.WM_SYSCHAR;
+                result = 0;
             case MessageType.WM_LBUTTONDOWN;
                 mouse_button(PressState.Down, MouseButton.Left, wParam, lParam);
             case MessageType.WM_LBUTTONUP;

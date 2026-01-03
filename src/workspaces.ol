@@ -25,6 +25,29 @@ init_workspaces() {
     init_workspace(&workspaces[current_workspace]);
 }
 
+change_workspace(KeyCode code) {
+    new_workspace := -1;
+    switch code {
+        case KeyCode.One;   new_workspace = 0;
+        case KeyCode.Two;   new_workspace = 1;
+        case KeyCode.Three; new_workspace = 2;
+        case KeyCode.Four;  new_workspace = 3;
+        case KeyCode.Five;  new_workspace = 4;
+        case KeyCode.Six;   new_workspace = 5;
+        case KeyCode.Seven; new_workspace = 6;
+        case KeyCode.Eight; new_workspace = 7;
+        case KeyCode.Nine;  new_workspace = 8;
+        case KeyCode.Zero;  new_workspace = 9;
+    }
+
+    if new_workspace < 0 return;
+
+    workspace := &workspaces[new_workspace];
+    if !workspace.active return;
+
+    change_current_workspace(new_workspace);
+}
+
 enum OpenWorkspaceResult {
     Success;
     InvalidDirectory;
@@ -102,8 +125,7 @@ CloseWorkspaceResult close_workspace(bool change_to_next_active = false) {
     workspace.active = false;
 
     if change_to_next_active {
-        set_directory(workspaces[next_workspace].directory);
-        current_workspace = next_workspace;
+        change_current_workspace(next_workspace);
     }
 
     return CloseWorkspaceResult.Success;
@@ -147,6 +169,11 @@ init_workspace(Workspace* workspace) {
     }
 
     load_local_settings(workspace);
+}
+
+change_current_workspace(int index) {
+    set_directory(workspaces[index].directory);
+    current_workspace = index;
 }
 
 bool can_open_new_workspace(int* index) {

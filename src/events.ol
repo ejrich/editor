@@ -72,6 +72,10 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
                     add_repeats(code);
                     return;
                 }
+                else if mod == ModCode.Alt {
+                    change_workspace(code);
+                    return;
+                }
             }
             case KeyCode.One;
             case KeyCode.Two;
@@ -84,6 +88,10 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             case KeyCode.Nine; {
                 if mod == ModCode.None {
                     add_repeats(code);
+                    return;
+                }
+                else if mod == ModCode.Alt {
+                    change_workspace(code);
                     return;
                 }
             }
