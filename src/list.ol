@@ -146,6 +146,7 @@ struct SelectedEntry {
     buffer: Buffer*;
     can_free_buffer: bool;
     start_line: int;
+    selected_line: int;
 }
 
 #private
@@ -187,6 +188,7 @@ draw_list_entries() {
             buffer = null;
             can_free_buffer = true;
             start_line = 0;
+            selected_line = -1;
         }
         return;
     }
@@ -201,6 +203,7 @@ draw_list_entries() {
             buffer = null;
             can_free_buffer = true;
             start_line = 0;
+            selected_line = -1;
         }
 
         load_entry_data: JobData;
@@ -251,8 +254,7 @@ draw_selected_entry() {
 
     while line != null && available_lines_to_render > 0 {
         if line_index >= selected_entry.start_line {
-            // TODO Only render the visible part of the line aka the first x chars based on the width of the window
-            lines := render_line(line, 0.0, y, 1.0, available_lines_to_render);
+            lines := render_line(line, 0.0, y, 1.0, available_lines_to_render, global_font_config.max_chars_per_line, line_index == selected_entry.selected_line);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }

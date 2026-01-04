@@ -4,6 +4,7 @@ open_files_list() {
 }
 
 open_search_list() {
+    change_search_filter(empty_string);
     start_list_mode("Search", get_search_results, get_file_at_line, change_search_filter, open_file_at_line);
 }
 
@@ -232,22 +233,28 @@ get_file_at_line(int thread, JobData data) {
     search_result := entry.key;
 
     workspace := get_workspace();
+    line, column, file := parse_search_key(search_result);
+    start_line_adjust := global_font_config.max_lines_without_run_window / 2;
+
     each buffer in workspace.buffers {
-        if buffer.relative_path == search_result {
-            entry.can_free_buffer = false;
-            // TODO Set the start_line and highlighted line
-            entry.buffer = &buffer;
+        if buffer.relative_path == file {
+            if search_result == entry.key {
+                entry.buffer = &buffer;
+                entry.can_free_buffer = false;
+                entry.start_line = clamp(line - start_line_adjust, 0, buffer.line_count);
+                entry.selected_line = line;
+            }
             return;
         }
     }
 
-    line, column, file := parse_search_key(search_result);
     command := temp_string("cat ", file);
     file_buffer := run_command_and_save_to_buffer(command);
 
     if search_result == entry.key {
-        // TODO Set the start_line and highlighted line
         entry.buffer = file_buffer;
+        entry.start_line = clamp(line - start_line_adjust, 0, file_buffer.line_count);
+        entry.selected_line = line;
     }
     else {
         free_buffer(file_buffer);
@@ -255,14 +262,191 @@ get_file_at_line(int thread, JobData data) {
 }
 
 change_search_filter(string filter) {
-    // TODO Implement
+    if running_search {
+        cancel_search = true;
+        while running_search {}
+    }
+
+    search_results.length = 0;
+    each results_string in search_results_strings {
+        results_string.cursor = 0;
+    }
+
+    if !string_is_empty(filter) {
+        data: JobData;
+        data.string = filter;
+        queue_work(&low_priority_queue, search_text_in_files, data);
+    }
 }
 
 open_file_at_line(string search_result) {
     line, column, file := parse_search_key(search_result);
-    open_file_buffer(file, true);
-    // TODO Set the line
+    buffer_window := open_file_buffer(file, true);
+    buffer_window.line = line;
+    buffer_window.cursor = column;
+    adjust_start_line(buffer_window);
 }
+
+// Search results entries are stored in the following format
+// - key = {line}:{column}-{file}
+// - display = {file}:{line}:{column}:{line text}
+search_results: Array<ListEntry>;
+
+search_results_allocated := 0;
+search_results_block_size := 100; #const
+
+running_search := false;
+cancel_search := false;
+
+search_text_in_files(int thread, JobData data) {
+    running_search = true;
+    defer {
+        running_search = false;
+        cancel_search = false;
+    }
+
+    workspace := get_workspace();
+    search_directory(workspace.directory, empty_string, data.string);
+}
+
+search_directory(string path, string display_path, string filter) {
+    #if os == OS.Linux {
+        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
+        directory := open(path.data, open_flags, OpenMode.S_RWALL);
+
+        if directory < 0 {
+            return;
+        }
+
+        buffer: CArray<u8>[5600];
+        while !cancel_search {
+            bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
+
+            if bytes == 0 break;
+
+            position := 0;
+            while position < bytes {
+                dirent := cast(Dirent*, &buffer + position);
+                name := convert_c_string(&dirent.d_name);
+
+                if !array_contains(directories_to_ignore, name) {
+                    if dirent.d_type == DirentType.DT_REG {
+                        file_path := name;
+                        if !string_is_empty(display_path) {
+                            file_path = temp_string(display_path, "/", name);
+                        }
+
+                        search_file(file_path, filter);
+                    }
+                    else if dirent.d_type == DirentType.DT_DIR {
+                        sub_path := temp_string(path, "/", name);
+                        sub_display_path := name;
+                        if !string_is_empty(display_path) {
+                            sub_display_path = temp_string(display_path, "/", name);
+                        }
+                        search_directory(sub_path, sub_display_path, filter);
+                    }
+                }
+
+                position += dirent.d_reclen;
+            }
+        }
+
+        close(directory);
+    }
+    #if os == OS.Windows {
+        wildcard := "/*"; #const
+        path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
+        memory_copy(path_with_wildcard.data, path.data, path.length);
+        memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
+        path_with_wildcard[path.length + wildcard.length] = 0;
+
+        find_data: WIN32_FIND_DATAA;
+        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
+
+        if cast(s64, find_handle) == -1 {
+            return;
+        }
+
+        while !cancel_search {
+            name := convert_c_string(&find_data.cFileName);
+
+            if !array_contains(directories_to_ignore, name) {
+                if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
+                    sub_path := temp_string(path, "/", name);
+                    sub_display_path := name;
+                    if !string_is_empty(display_path) {
+                        sub_display_path = temp_string(display_path, "/", name);
+                    }
+                    search_directory(sub_path, sub_display_path, filter);
+                }
+                else {
+                    file_path := name;
+                    if !string_is_empty(display_path) {
+                        file_path = temp_string(display_path, "/", name);
+                    }
+
+                    search_file(file_path, filter);
+                }
+            }
+
+            if !FindNextFileA(find_handle, &find_data) break;
+        }
+
+        FindClose(find_handle);
+    }
+}
+
+search_file(string path, string filter) {
+    // TODO Search the file and add any matches
+    // add_search_result(path, 8, 7, "Hello world");
+}
+
+add_search_result(string file, int line, int column, string line_start) {
+    if search_results.length == search_results_allocated {
+        old_data := search_results.data;
+        old_size := search_results_allocated * size_of(ListEntry);
+
+        search_results_allocated += search_results_block_size;
+        new_data := allocate(search_results_allocated * size_of(ListEntry));
+        memory_copy(new_data, search_results.data, old_size);
+
+        search_results.data = new_data;
+        free_allocation(old_data);
+    }
+
+    search_results[search_results.length++] = {
+        key = format_string("%:%-%", allocate_for_search_result, line, column, file);
+        display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_start);
+    }
+}
+
+struct SearchResultsStrings {
+    cursor: u64;
+    pointer: u8*;
+}
+search_results_strings_size := 50000; #const
+search_results_strings: Array<SearchResultsStrings>;
+
+void* allocate_for_search_result(u64 length) {
+    each results_string in search_results_strings {
+        if results_string.cursor + length < search_results_strings_size {
+            pointer := results_string.pointer + results_string.cursor;
+            results_string.cursor += length;
+            return pointer;
+        }
+    }
+
+    pointer := allocate(search_results_strings_size);
+    results_strings: SearchResultsStrings = {
+        cursor = length;
+        pointer = pointer;
+    }
+
+    array_insert(&search_results_strings, results_strings, allocate, reallocate);
+    return pointer;
+}
+
 
 int, int, string parse_search_key(string key) {
     line, column: int;
@@ -273,6 +457,7 @@ int, int, string parse_search_key(string key) {
         i++;
     }
 
+    line--;
     i++;
 
     while key[i] != '-' {
@@ -281,7 +466,9 @@ int, int, string parse_search_key(string key) {
         i++;
     }
 
+    column--;
     i++;
+
     file: string = {
         length = key.length - i;
         data = key.data + i;
@@ -289,8 +476,3 @@ int, int, string parse_search_key(string key) {
 
     return line, column, file;
 }
-
-// For search results
-// - key = {line}:{column}-{file}
-// - display = {file}:{line}:{column}:{line text}
-search_results: Array<ListEntry> = [{key = "254:16-src/list.ol"; display = "src/list.ol:254:16:            // TODO Only render the visible part of the line aka the first x chars based on the width of the window";}]

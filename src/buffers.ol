@@ -274,7 +274,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 }
 
 // Opening buffers with files
-open_file_buffer(string path, bool allocate_path) {
+BufferWindow* open_file_buffer(string path, bool allocate_path) {
     buffer_index := -1;
     workspace := get_workspace();
 
@@ -333,16 +333,21 @@ open_file_buffer(string path, bool allocate_path) {
         buffer_index = workspace.buffers.length - 1;
     }
 
+    buffer_window: BufferWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left; {
             record_jump(workspace.left_window.buffer_window);
             workspace.left_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.left_window.buffer_window);
+            buffer_window = workspace.left_window.buffer_window;
         }
         case SelectedWindow.Right; {
             record_jump(workspace.right_window.buffer_window);
             workspace.right_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.right_window.buffer_window);
+            buffer_window = workspace.right_window.buffer_window;
         }
     }
+
+    return buffer_window;
 }
 
 switch_or_focus_buffer(SelectedWindow window) {
