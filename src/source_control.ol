@@ -39,7 +39,7 @@ source_control_status() {
         filtered_status_entries.length = 0;
 
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, load_diff, change_filter, open_status_file, change_status);
+        start_list_mode(list_title, get_status_entries, get_total_status_entries, load_diff, change_filter, open_status_file, change_status);
     }
 }
 
@@ -261,6 +261,10 @@ string, string line_to_entry(BufferLine* line, int status_index) {
 
 Array<ListEntry> get_status_entries() {
     return filtered_status_entries;
+}
+
+int get_total_status_entries() {
+    return status_entries.length;
 }
 
 load_diff(int thread, JobData data) {

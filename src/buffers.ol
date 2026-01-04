@@ -3643,7 +3643,7 @@ struct BufferLine {
 
 open_buffers_list() {
     change_buffer_filter(empty_string);
-    start_list_mode("Buffers", get_open_buffers, get_buffer, change_buffer_filter, open_buffer);
+    start_list_mode("Buffers", get_open_buffers, get_open_buffer_count, get_buffer, change_buffer_filter, open_buffer);
 }
 
 // Buffer and window functions
@@ -3866,6 +3866,11 @@ calculate_line_digits(Buffer* buffer) {
 // Buffer list functions
 Array<ListEntry> get_open_buffers() {
     return buffer_entries;
+}
+
+int get_open_buffer_count() {
+    workspace := get_workspace();
+    return workspace.buffers.length;
 }
 
 get_buffer(int thread, JobData data) {

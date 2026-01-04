@@ -1,11 +1,11 @@
 open_files_list() {
     load_files();
-    start_list_mode("Find Files", get_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files);
+    start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files);
 }
 
 open_search_list() {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_file_at_line, change_search_filter, open_file_at_line);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line);
 }
 
 #private
@@ -145,6 +145,10 @@ Array<ListEntry> get_files() {
     return filtered_file_entries;
 }
 
+int get_total_files() {
+    return file_entries.length;
+}
+
 get_file(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
     file := entry.key;
@@ -255,6 +259,10 @@ string copy_path(string file_path) {
 // Search functions
 Array<ListEntry> get_search_results() {
     return search_results;
+}
+
+int get_total_search_results() {
+    return search_results.length;
 }
 
 get_file_at_line(int thread, JobData data) {

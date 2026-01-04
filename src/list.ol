@@ -1,10 +1,11 @@
-start_list_mode(string title, ListEntries entries, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null) {
+start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null) {
     list = {
         displaying = true;
         browsing = false;
         title = title;
         selected_index = 0;
         entries = entries;
+        total = total;
         load_entry = load_entry;
         filter = filter;
         select = select;
@@ -175,9 +176,20 @@ draw_list_title() {
 draw_list_entries() {
     if list.entries == null return;
 
-    initial_y := 1.0 - global_font_config.first_line_offset - (global_font_config.max_lines_without_run_window - 1) * global_font_config.line_height;
+    initial_y := 1.0 - global_font_config.first_line_offset - global_font_config.max_lines_without_run_window * global_font_config.line_height;
 
     entries := list.entries();
+    total_entries := list.total();
+
+    x := -1.0 + global_font_config.quad_advance * 2;
+    if total_entries == 0 {
+        render_text("0 / 0", settings.font_size, x, initial_y, appearance.font_color, vec4());
+    }
+    else {
+        render_text(settings.font_size, x, initial_y, appearance.font_color, vec4(), "% / %", entries.length, total_entries);
+    }
+
+    initial_y += global_font_config.line_height;
 
     if entries.length == 0 {
         if selected_entry.can_free_buffer {
@@ -226,7 +238,6 @@ draw_list_entries() {
         start_index = 0;
     }
     max_chars_per_line := global_font_config.max_chars_per_line - 4;
-    x := -1.0 + global_font_config.quad_advance * 2;
 
     each i in entries_to_display {
         index := i + start_index;
@@ -270,6 +281,7 @@ struct ListData {
     title: string;
     selected_index: int;
     entries: ListEntries;
+    total: ListTotal;
     load_entry: Callback;
     filter: ListFilter;
     select: ListEntrySelect;
@@ -278,6 +290,7 @@ struct ListData {
 }
 
 interface Array<ListEntry> ListEntries()
+interface int ListTotal()
 interface ListFilter(string filter)
 interface ListEntrySelect(string key)
 interface ListEntryAction(string key)

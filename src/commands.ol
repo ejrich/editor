@@ -333,7 +333,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
             }
             default; {
                 set_buffer_value();
-                if (mod & ModCode.Control) != ModCode.Control && command_prompt_buffer.length + char.length < command_prompt_buffer_length {
+                if (mod & ModCode.Control) != ModCode.Control && char.length > 0 && command_prompt_buffer.length + char.length < command_prompt_buffer_length {
                     if command_prompt_buffer.length == command_prompt_buffer.cursor {
                         memory_copy(command_prompt_buffer.buffer.data + command_prompt_buffer.length, char.data, char.length);
                     }
