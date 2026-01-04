@@ -158,8 +158,7 @@ get_file(int thread, JobData data) {
         }
     }
 
-    command := temp_string("cat ", file);
-    file_buffer := run_command_and_save_to_buffer(command);
+    file_buffer := read_file_into_buffer(file);
 
     if file == entry.key {
         entry.buffer = file_buffer;
@@ -167,6 +166,36 @@ get_file(int thread, JobData data) {
     else {
         free_buffer(file_buffer);
     }
+}
+
+Buffer* read_file_into_buffer(string file_path) {
+    success, file := open_file(file_path);
+    if !success return null;
+
+    buffer := new<Buffer>();
+    buffer.read_only = true;
+    buffer.line_count = 1;
+    buffer.line_count_digits = 1;
+    buffer.lines = allocate_line();
+
+    buf: CArray<u8>[1000];
+    while true {
+        #if os == OS.Linux {
+            length := read(file.handle, &buf, buf.length);
+        }
+        #if os == OS.Windows {
+            length: int;
+            ReadFile(file.handle, &buf, buf.length, &length, null);
+        }
+
+        if length <= 0 break;
+
+        text: string = { length = length; data = &buf; }
+        add_text_to_end_of_buffer(buffer, text);
+    }
+
+    close_file(file);
+    return buffer;
 }
 
 change_file_filter(string filter) {
@@ -248,8 +277,7 @@ get_file_at_line(int thread, JobData data) {
         }
     }
 
-    command := temp_string("cat ", file);
-    file_buffer := run_command_and_save_to_buffer(command);
+    file_buffer := read_file_into_buffer(file);
 
     if search_result == entry.key {
         entry.buffer = file_buffer;
