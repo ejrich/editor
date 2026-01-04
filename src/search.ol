@@ -330,7 +330,7 @@ search_directory(string path, string display_path, string filter) {
                 name := convert_c_string(&dirent.d_name);
 
                 if !array_contains(directories_to_ignore, name) {
-                    if dirent.d_type == DirentType.DT_REG {
+                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) {
                         file_path := name;
                         if !string_is_empty(display_path) {
                             file_path = temp_string(display_path, "/", name);
@@ -380,7 +380,7 @@ search_directory(string path, string display_path, string filter) {
                     }
                     search_directory(sub_path, sub_display_path, filter);
                 }
-                else {
+                else if !ignore_file(name) {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -397,12 +397,54 @@ search_directory(string path, string display_path, string filter) {
     }
 }
 
-search_file(string path, string filter) {
-    // TODO Search the file and add any matches
-    // add_search_result(path, 8, 7, "Hello world");
+file_types_to_ignore: Array<string> = [".exe", ".pdb", ".dll", ".so"]
+
+bool ignore_file(string file) {
+    each file_type in file_types_to_ignore {
+        if ends_with(file, file_type) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
-add_search_result(string file, int line, int column, string line_start) {
+search_file(string path, string filter) {
+    found, file := read_file(path, allocate);
+    if !found return;
+
+    defer free_allocation(file.data);
+    line: string = { data = file.data; }
+    line_number := 1;
+
+    each i in file.length {
+        char := file[i];
+        if char == '\n' {
+            if line.length >= filter.length {
+                each j in line.length - filter.length + 1 {
+                    if line[j] == filter[0] {
+                        test_value: string = {
+                            length = filter.length;
+                            data = line.data + j;
+                        }
+                        if test_value == filter {
+                            line.length = clamp(line.length, 0, global_font_config.max_chars_per_line);
+                            add_search_result(path, line_number, j + 1, line);
+                            break;
+                        }
+                    }
+                }
+            }
+            line = { length = 0; data = file.data + i + 1; }
+            line_number++;
+        }
+        else if char != '\r' {
+            line.length++;
+        }
+    }
+}
+
+add_search_result(string file, int line, int column, string line_text) {
     if search_results.length == search_results_allocated {
         old_data := search_results.data;
         old_size := search_results_allocated * size_of(ListEntry);
@@ -417,7 +459,7 @@ add_search_result(string file, int line, int column, string line_start) {
 
     search_results[search_results.length++] = {
         key = format_string("%:%-%", allocate_for_search_result, line, column, file);
-        display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_start);
+        display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_text);
     }
 }
 
@@ -437,6 +479,7 @@ void* allocate_for_search_result(u64 length) {
         }
     }
 
+    assert(length < search_results_strings_size);
     pointer := allocate(search_results_strings_size);
     results_strings: SearchResultsStrings = {
         cursor = length;
