@@ -341,8 +341,41 @@ search_text_in_files(int thread, JobData data) {
         cancel_search = false;
     }
 
+
+    filter_buffer: Array<u8>[data.string.length];
+    filter: string = { data = filter_buffer.data; }
+
+    escape := false;
+    each i in data.string.length {
+        char := data.string[i];
+        if escape {
+            escaped_char: u8;
+            switch char {
+                case 'n';  escaped_char = '\n';
+                case 't';  escaped_char = '\t';
+                case '\\'; escaped_char = '\\';
+                case '/';  escaped_char = '/';
+                default; {
+                    filter[filter.length++] = '\\';
+                    escaped_char = char;
+                }
+            }
+            filter[filter.length++] = escaped_char;
+            escape = false;
+        }
+        else if char == '\\' {
+            escape = true;
+        }
+        else {
+            filter[filter.length++] = char;
+        }
+    }
+    if escape {
+        filter[filter.length++] = '\\';
+    }
+
     workspace := get_workspace();
-    search_directory(workspace.directory, empty_string, data.string);
+    search_directory(workspace.directory, empty_string, filter);
 }
 
 search_directory(string path, string display_path, string filter) {
@@ -450,32 +483,61 @@ search_file(string path, string filter) {
     if !found return;
 
     defer free_allocation(file.data);
-    line: string = { data = file.data; }
-    line_number := 1;
 
+    line_number, column := 1;
+    skip_until_next_line := false;
     each i in file.length {
         char := file[i];
-        if char == '\n' {
-            if line.length >= filter.length {
-                each j in line.length - filter.length + 1 {
-                    if line[j] == filter[0] {
-                        test_value: string = {
-                            length = filter.length;
-                            data = line.data + j;
+        if skip_until_next_line {
+            if char == '\n' {
+                line_number++;
+                column = 1;
+                skip_until_next_line = false;
+            }
+        }
+        else {
+            if char == filter[0] {
+                if file.length - i >= filter.length {
+                    match := true;
+                    filter_index := 1;
+                    file_index := i + 1;
+                    while filter_index < filter.length && file_index < file.length {
+                        test_char := file[file_index];
+                        filter_char := filter[filter_index];
+                        if test_char == '\r' {
+                            file_index++;
                         }
-                        if test_value == filter {
-                            line.length = clamp(line.length, 0, global_font_config.max_chars_per_line);
-                            add_search_result(path, line_number, j + 1, line);
+                        else if test_char != filter_char {
+                            match = false;
                             break;
                         }
+                        else {
+                            filter_index++;
+                            file_index++;
+                        }
+                    }
+
+                    if match && filter_index == filter.length {
+                        line: string = { data = file.data + i - column + 1; }
+                        while line.length < global_font_config.max_chars_per_line {
+                            if line[line.length] == '\n' {
+                                break;
+                            }
+                            line.length++;
+                        }
+                        add_search_result(path, line_number, column, line);
+                        skip_until_next_line = true;
                     }
                 }
             }
-            line = { length = 0; data = file.data + i + 1; }
-            line_number++;
-        }
-        else if char != '\r' {
-            line.length++;
+
+            if char == '\n' {
+                line_number++;
+                column = 1;
+            }
+            else {
+                column++;
+            }
         }
     }
 }
