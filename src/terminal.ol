@@ -1,6 +1,5 @@
 struct TerminalData {
     terminal_window_focused: bool;
-    terminal_window_focused: bool;
     buffer: Buffer = { read_only = true; }
     buffer_window: BufferWindow;
     process: ProcessData;
@@ -127,7 +126,7 @@ terminal_job(int index, JobData data) {
 
         if pid == 0 {
             close(stdout_pipe_files[read_pipe]);
-            dup2(pipe_files[write_pipe], stdout);
+            dup2(stdout_pipe_files[write_pipe], stdout);
 
             close(stdin_pipe_files[write_pipe]);
             dup2(stdin_pipe_files[read_pipe], stdin);
@@ -144,14 +143,14 @@ terminal_job(int index, JobData data) {
                 pid = pid;
             }
             pipes = {
-                input = stdin_pipes[write_handle];
-                output = stdout_pipes[read_handle];
+                input = stdin_pipe_files[write_handle];
+                output = stdout_pipe_files[read_handle];
             }
         }
 
         buf: CArray<u8>[1000];
         while true {
-            length := read(pipe_files[read_pipe], &buf, buf.length);
+            length := read(stdout_pipe_files[read_pipe], &buf, buf.length);
 
             if length <= 0 break;
 
