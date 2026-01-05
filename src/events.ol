@@ -66,15 +66,17 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             return;
         }
 
+        if handle_keybind_event(code, mod) return;
+
+        if send_input_to_terminal(char) return;
+
         switch code {
             case KeyCode.Zero; {
                 if mod == ModCode.None && key_command.repeats > 0 {
                     add_repeats(code);
-                    return;
                 }
                 else if mod == ModCode.Alt {
                     change_workspace(code);
-                    return;
                 }
             }
             case KeyCode.One;
@@ -88,40 +90,31 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
             case KeyCode.Nine; {
                 if mod == ModCode.None {
                     add_repeats(code);
-                    return;
                 }
                 else if mod == ModCode.Alt {
                     change_workspace(code);
-                    return;
                 }
             }
             case KeyCode.F12; {
                 #if DEVELOPER {
                     if (state & PressState.Held) != PressState.Held {
                         toggle_performance_stats(mod == ModCode.Control);
-                        return;
                     }
                 }
             }
             case KeyCode.Up; {
                 move_up(mod);
-                return;
             }
             case KeyCode.Down; {
                 move_down(mod);
-                return;
             }
             case KeyCode.Left; {
                 move_left(mod);
-                return;
             }
             case KeyCode.Right; {
                 move_right(mod);
-                return;
             }
         }
-
-        handle_keybind_event(code, mod);
     }
 }
 

@@ -4,14 +4,14 @@ draw_buffers() {
 
     workspace := get_workspace();
 
-    run_window := get_run_window(workspace);
+    bottom_window, bottom_focused := get_bottom_window(workspace);
 
     if workspace.left_window.displayed && workspace.right_window.displayed {
-        draw_divider(run_window == null);
+        draw_divider(bottom_window == null);
     }
 
     if workspace.left_window.displayed {
-        draw_buffer_window(workspace, workspace.left_window.buffer_window, -1.0, workspace.current_window == SelectedWindow.Left && !workspace.run_data.run_window_selected, !workspace.right_window.displayed, false);
+        draw_buffer_window(workspace, workspace.left_window.buffer_window, -1.0, workspace.current_window == SelectedWindow.Left && !bottom_focused, !workspace.right_window.displayed, false);
     }
 
     if workspace.right_window.displayed {
@@ -19,11 +19,11 @@ draw_buffers() {
         if !workspace.left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(workspace, workspace.right_window.buffer_window, x, workspace.current_window == SelectedWindow.Right && !workspace.run_data.run_window_selected, !workspace.left_window.displayed, false);
+        draw_buffer_window(workspace, workspace.right_window.buffer_window, x, workspace.current_window == SelectedWindow.Right && !bottom_focused, !workspace.left_window.displayed, false);
     }
 
-    if run_window {
-        draw_buffer_window(workspace, run_window, -1.0, workspace.run_data.run_window_selected, true, true);
+    if bottom_window {
+        draw_buffer_window(workspace, bottom_window, -1.0, bottom_focused, true, true);
     }
 
     draw_command();
@@ -44,8 +44,8 @@ draw_divider(bool full_height) {
     }
     else {
         divider_quad = {
-            position = { y = global_font_config.divider_y_with_run_window; }
-            height = global_font_config.divider_height_with_run_window;
+            position = { y = global_font_config.divider_y_with_bottom_window; }
+            height = global_font_config.divider_height_with_bottom_window;
         }
     }
 
@@ -64,7 +64,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 
     max_lines := determine_max_lines(window);
     if is_run_window {
-        initial_y -= global_font_config.line_height * (global_font_config.max_lines_with_run_window + 1);
+        initial_y -= global_font_config.line_height * (global_font_config.max_lines_with_bottom_window + 1);
     }
 
     info_quad: QuadInstanceData = {
@@ -346,7 +346,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
             buffer_window = workspace.right_window.buffer_window;
         }
     }
-    workspace.run_data.run_window_selected = false;
+    workspace.bottom_window_selected = false;
 
     return buffer_window;
 }
@@ -396,15 +396,15 @@ switch_to_buffer(SelectedWindow window) {
     reset_key_command();
     reset_post_movement_command();
     edit_mode = EditMode.Normal;
-    workspace.run_data.run_window_selected = false;
+    workspace.bottom_window_selected = false;
 
     workspace.current_window = window;
 }
 
-toggle_run_buffer_selection(bool selected) {
+toggle_bottom_buffer_selection(bool selected) {
     workspace := get_workspace();
-    if get_run_window(workspace) {
-        workspace.run_data.run_window_selected = selected;
+    if get_run_window(workspace) != null || get_terminal_window(workspace) != null {
+        workspace.bottom_window_selected = selected;
     }
 }
 
@@ -2319,7 +2319,7 @@ go_to_line(s32 line) {
 u32 determine_max_lines() {
     buffer_window, buffer := get_current_window_and_buffer();
     if buffer_window == null {
-        return global_font_config.max_lines_without_run_window;
+        return global_font_config.max_lines_without_bottom_window;
     }
 
     return determine_max_lines(buffer_window);
@@ -3680,12 +3680,26 @@ BufferWindow* get_current_window() {
             editor_window = &workspace.right_window;
     }
 
-    run_window := get_run_window(workspace);
-    if workspace.run_data.run_window_selected && run_window != null {
-        return run_window;
+    bottom_window, bottom_focused := get_bottom_window(workspace);
+    if bottom_focused && bottom_window != null {
+        return bottom_window;
     }
 
     return editor_window.buffer_window;
+}
+
+BufferWindow*, bool get_bottom_window(Workspace* workspace) {
+    run_window := get_run_window(workspace);
+    if run_window {
+        return run_window, workspace.bottom_window_selected;
+    }
+
+    terminal_window := get_terminal_window(workspace);
+    if terminal_window {
+        return terminal_window, workspace.bottom_window_selected;
+    }
+
+    return null, false;
 }
 
 BufferWindow*, Buffer* get_current_window_and_buffer() {
@@ -4352,13 +4366,15 @@ u32 calculate_max_chars_per_line(u32 digits) {
 u32 determine_max_lines(BufferWindow* buffer_window) {
     workspace := get_workspace();
     run_window := get_run_window(workspace);
-    if run_window == null {
-        return global_font_config.max_lines_without_run_window;
+    terminal_window := get_terminal_window(workspace);
+
+    if run_window == null && terminal_window == null {
+        return global_font_config.max_lines_without_bottom_window;
     }
 
-    if run_window == buffer_window {
-        return global_font_config.run_window_max_lines;
+    if run_window == buffer_window || terminal_window == buffer_window {
+        return global_font_config.bottom_window_max_lines;
     }
 
-    return global_font_config.max_lines_with_run_window;
+    return global_font_config.max_lines_with_bottom_window;
 }

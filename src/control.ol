@@ -540,7 +540,7 @@ move_up(ModCode mod) {
 
     post_movement_command.changed_by_line = true;
     if edit_mode == EditMode.Normal && (mod & ModCode.Control) == ModCode.Control {
-        toggle_run_buffer_selection(false);
+        toggle_bottom_buffer_selection(false);
     }
     else {
         line_changes := get_repeats();
@@ -569,7 +569,7 @@ move_down(ModCode mod) {
         join_lines(line_changes);
     }
     else if edit_mode == EditMode.Normal && (mod & ModCode.Control) == ModCode.Control {
-        toggle_run_buffer_selection(true);
+        toggle_bottom_buffer_selection(true);
     }
     else {
         post_movement_command.changed_by_line = true;

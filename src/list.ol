@@ -159,7 +159,7 @@ draw_list_title() {
         color = appearance.current_line_color;
         position = {
             x = 0.0;
-            y = initial_y - global_font_config.max_lines_without_run_window * global_font_config.line_height + global_font_config.block_y_offset;
+            y = initial_y - global_font_config.max_lines_without_bottom_window * global_font_config.line_height + global_font_config.block_y_offset;
             z = 0.2;
         }
         flags = QuadFlags.Solid;
@@ -169,14 +169,14 @@ draw_list_title() {
 
     draw_quad(&info_quad, 1);
 
-    y := initial_y - global_font_config.line_height * global_font_config.max_lines_without_run_window;
+    y := initial_y - global_font_config.line_height * global_font_config.max_lines_without_bottom_window;
     render_text(list.title, settings.font_size, 0.0, y, appearance.font_color, vec4(), TextAlignment.Center);
 }
 
 draw_list_entries() {
     if list.entries == null return;
 
-    initial_y := 1.0 - global_font_config.first_line_offset - global_font_config.max_lines_without_run_window * global_font_config.line_height;
+    initial_y := 1.0 - global_font_config.first_line_offset - global_font_config.max_lines_without_bottom_window * global_font_config.line_height;
 
     entries := list.entries();
     total_entries := list.total();
@@ -224,13 +224,13 @@ draw_list_entries() {
     }
 
     entries_to_display, start_index: int;
-    if entries.length > global_font_config.max_lines_without_run_window {
-        entries_to_display = global_font_config.max_lines_without_run_window;
-        if list.selected_index < global_font_config.max_lines_without_run_window {
+    if entries.length > global_font_config.max_lines_without_bottom_window {
+        entries_to_display = global_font_config.max_lines_without_bottom_window;
+        if list.selected_index < global_font_config.max_lines_without_bottom_window {
             start_index = 0;
         }
         else {
-            start_index = list.selected_index - global_font_config.max_lines_without_run_window + 1;
+            start_index = list.selected_index - global_font_config.max_lines_without_bottom_window + 1;
         }
     }
     else {
@@ -258,7 +258,7 @@ draw_selected_entry() {
     if selected_entry.buffer == null return;
 
     line_index := 0;
-    available_lines_to_render := global_font_config.max_lines_without_run_window;
+    available_lines_to_render := global_font_config.max_lines_without_bottom_window;
     line := selected_entry.buffer.lines;
 
     y := 1.0 - global_font_config.first_line_offset;

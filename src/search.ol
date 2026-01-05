@@ -271,7 +271,7 @@ get_file_at_line(int thread, JobData data) {
 
     workspace := get_workspace();
     line, column, file := parse_search_key(search_result);
-    start_line_adjust := global_font_config.max_lines_without_run_window / 2;
+    start_line_adjust := global_font_config.max_lines_without_bottom_window / 2;
 
     each buffer in workspace.buffers {
         if buffer.relative_path == file {

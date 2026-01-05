@@ -26,7 +26,7 @@ force_command_to_stop() {
 
 close_run_buffer_and_stop_command() {
     workspace := get_workspace();
-    workspace.run_data.run_window_selected = false;
+    workspace.bottom_window_selected = false;
     workspace.run_data.current_command.displayed = false;
     force_command_to_stop();
 }
@@ -56,7 +56,6 @@ run_command_silent(string command) {
 }
 
 struct RunData {
-    run_window_selected: bool;
     buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
     buffer_window: BufferWindow;
     current_command: CommandRunData;
@@ -211,6 +210,7 @@ bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_w
             add_to_buffer(buffer_window, buffer, text);
         }
 
+        close(pipe_files[read_pipe]);
         wait4(pid, &exit_code, 0, null);
     }
 

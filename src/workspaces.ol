@@ -7,6 +7,7 @@ struct Workspace {
     left_window: EditorWindow = { displayed = true; }
     right_window: EditorWindow;
     current_window: SelectedWindow;
+    bottom_window_selected: bool;
     run_data: RunData;
     terminal_data: TerminalData;
     local_settings: LocalSettings;
@@ -167,7 +168,7 @@ CloseWorkspaceResult close_current_workspace(bool change_to_next_active, bool fo
     }
 
     workspace.current_window = SelectedWindow.Left;
-    workspace.run_data.run_window_selected = false;
+    workspace.bottom_window_selected = false;
     workspace.run_data.current_command.displayed = false;
     workspace.active = false;
 
