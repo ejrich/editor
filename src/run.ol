@@ -26,6 +26,7 @@ force_command_to_stop() {
 
 close_run_buffer_and_stop_command() {
     workspace := get_workspace();
+    workspace.run_window_selected = false;
     workspace.run_data.current_command.displayed = false;
     force_command_to_stop();
 }

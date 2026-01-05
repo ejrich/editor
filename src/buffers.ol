@@ -346,6 +346,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
             buffer_window = workspace.right_window.buffer_window;
         }
     }
+    workspace.run_window_selected = false;
 
     return buffer_window;
 }
