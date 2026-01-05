@@ -143,8 +143,8 @@ terminal_job(int index, JobData data) {
                 pid = pid;
             }
             pipes = {
-                input = stdin_pipe_files[write_handle];
-                output = stdout_pipe_files[read_handle];
+                input = stdin_pipe_files[write_pipe];
+                output = stdout_pipe_files[read_pipe];
             }
         }
 
