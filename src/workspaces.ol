@@ -7,8 +7,8 @@ struct Workspace {
     left_window: EditorWindow = { displayed = true; }
     right_window: EditorWindow;
     current_window: SelectedWindow;
-    run_window_selected: bool;
     run_data: RunData;
+    terminal_data: TerminalData;
     local_settings: LocalSettings;
     command_keybinds: Array<CommandKeybind>;
 }
@@ -18,7 +18,8 @@ init_workspaces() {
     each workspace, i in workspaces {
         workspace = initial;
         workspace.index = (i + 1) % number_of_workspaces;
-        workspace.run_data.run_buffer_window.static_buffer = &workspace.run_data.run_buffer;
+        workspace.run_data.buffer_window.static_buffer = &workspace.run_data.buffer;
+        workspace.terminal_data.buffer_window.static_buffer = &workspace.terminal_data.buffer;
         create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
     }
 
@@ -166,7 +167,7 @@ CloseWorkspaceResult close_current_workspace(bool change_to_next_active, bool fo
     }
 
     workspace.current_window = SelectedWindow.Left;
-    workspace.run_window_selected = false;
+    workspace.run_data.run_window_selected = false;
     workspace.run_data.current_command.displayed = false;
     workspace.active = false;
 

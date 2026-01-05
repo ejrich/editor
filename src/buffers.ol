@@ -11,7 +11,7 @@ draw_buffers() {
     }
 
     if workspace.left_window.displayed {
-        draw_buffer_window(workspace, workspace.left_window.buffer_window, -1.0, workspace.current_window == SelectedWindow.Left && !workspace.run_window_selected, !workspace.right_window.displayed, false);
+        draw_buffer_window(workspace, workspace.left_window.buffer_window, -1.0, workspace.current_window == SelectedWindow.Left && !workspace.run_data.run_window_selected, !workspace.right_window.displayed, false);
     }
 
     if workspace.right_window.displayed {
@@ -19,11 +19,11 @@ draw_buffers() {
         if !workspace.left_window.displayed {
             x = -1.0;
         }
-        draw_buffer_window(workspace, workspace.right_window.buffer_window, x, workspace.current_window == SelectedWindow.Right && !workspace.run_window_selected, !workspace.left_window.displayed, false);
+        draw_buffer_window(workspace, workspace.right_window.buffer_window, x, workspace.current_window == SelectedWindow.Right && !workspace.run_data.run_window_selected, !workspace.left_window.displayed, false);
     }
 
     if run_window {
-        draw_buffer_window(workspace, run_window, -1.0, workspace.run_window_selected, true, true);
+        draw_buffer_window(workspace, run_window, -1.0, workspace.run_data.run_window_selected, true, true);
     }
 
     draw_command();
@@ -346,7 +346,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
             buffer_window = workspace.right_window.buffer_window;
         }
     }
-    workspace.run_window_selected = false;
+    workspace.run_data.run_window_selected = false;
 
     return buffer_window;
 }
@@ -396,7 +396,7 @@ switch_to_buffer(SelectedWindow window) {
     reset_key_command();
     reset_post_movement_command();
     edit_mode = EditMode.Normal;
-    workspace.run_window_selected = false;
+    workspace.run_data.run_window_selected = false;
 
     workspace.current_window = window;
 }
@@ -404,7 +404,7 @@ switch_to_buffer(SelectedWindow window) {
 toggle_run_buffer_selection(bool selected) {
     workspace := get_workspace();
     if get_run_window(workspace) {
-        workspace.run_window_selected = selected;
+        workspace.run_data.run_window_selected = selected;
     }
 }
 
@@ -3681,7 +3681,7 @@ BufferWindow* get_current_window() {
     }
 
     run_window := get_run_window(workspace);
-    if workspace.run_window_selected && run_window != null {
+    if workspace.run_data.run_window_selected && run_window != null {
         return run_window;
     }
 

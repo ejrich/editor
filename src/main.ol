@@ -15,6 +15,7 @@
 #import "search.ol"
 #import "settings.ol"
 #import "source_control.ol"
+#import "terminal.ol"
 #import "text.ol"
 #import "thread_pool.ol"
 #import "window.ol"

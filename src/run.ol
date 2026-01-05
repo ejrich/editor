@@ -26,14 +26,14 @@ force_command_to_stop() {
 
 close_run_buffer_and_stop_command() {
     workspace := get_workspace();
-    workspace.run_window_selected = false;
+    workspace.run_data.run_window_selected = false;
     workspace.run_data.current_command.displayed = false;
     force_command_to_stop();
 }
 
 BufferWindow* get_run_window(Workspace* workspace) {
     if workspace.run_data.current_command.displayed {
-        return &workspace.run_data.run_buffer_window;
+        return &workspace.run_data.buffer_window;
     }
 
     return null;
@@ -56,11 +56,24 @@ run_command_silent(string command) {
 }
 
 struct RunData {
-    run_buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
-    run_buffer_window: BufferWindow;
+    run_window_selected: bool;
+    buffer: Buffer = { read_only = true; title = get_run_buffer_title; }
+    buffer_window: BufferWindow;
     current_command: CommandRunData;
     current_process: ProcessData;
     run_mutex: Semaphore;
+}
+
+#if os == OS.Windows {
+    struct ProcessData {
+        thread: Handle*;
+        process: Handle*;
+    }
+}
+else {
+    struct ProcessData {
+        pid: int;
+    }
 }
 
 #private
@@ -90,7 +103,7 @@ run_command(int index, JobData data) {
         displayed = true;
     }
 
-    success, exit_code := execute_command(params.command, &params.workspace.run_data.run_buffer, &params.workspace.run_data.run_buffer_window, &params.workspace.run_data.current_process, &params.workspace.run_data.current_command.exited);
+    success, exit_code := execute_command(params.command, &params.workspace.run_data.buffer, &params.workspace.run_data.buffer_window, &params.workspace.run_data.current_process, &params.workspace.run_data.current_command.exited);
 
     if success {
         params.workspace.run_data.current_command.exit_code = exit_code;
@@ -205,15 +218,15 @@ bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_w
 }
 
 clear_run_buffer_window(string command, Workspace* workspace) {
-    workspace.run_data.run_buffer_window = {
+    workspace.run_data.buffer_window = {
         cursor = 0;
         line = 0;
         start_line = 0;
     }
 
-    line := workspace.run_data.run_buffer.lines;
+    line := workspace.run_data.buffer.lines;
 
-    workspace.run_data.run_buffer = {
+    workspace.run_data.buffer = {
         line_count = 1;
         line_count_digits = 1;
         lines = allocate_line();
@@ -249,18 +262,6 @@ struct CommandRunData {
     failed: bool;
     exited: bool;
     displayed: bool;
-}
-
-#if os == OS.Windows {
-    struct ProcessData {
-        thread: Handle*;
-        process: Handle*;
-    }
-}
-else {
-    struct ProcessData {
-        pid: int;
-    }
 }
 
 string get_run_buffer_title() {

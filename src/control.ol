@@ -786,6 +786,16 @@ close_run_buffer(ModCode mod) {
     close_run_buffer_and_stop_command();
 }
 
+[keybind, no_repeat]
+open_terminal(ModCode mod) {
+    start_or_select_terminal();
+}
+
+[keybind, no_repeat]
+close_terminal(ModCode mod) {
+    close_and_unselect_terminal();
+}
+
 // Workspace keybinds
 [keybind, no_repeat]
 previous_workspace(ModCode mod) {
