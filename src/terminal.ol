@@ -1,3 +1,14 @@
+// TODO Reworking the terminal
+// - Don't directly run the terminal process, I don't care about handling all of that
+// - Show the directory, handle 'cd' and track the directory in TerminalData
+// - Handle clear to reset the terminal buffer
+// - Handle up/down to get to previous commands
+// - Allow the use to type commands, then execute the commands using the appropriate shell
+//   - Make sure to to handle things like escaped chars and paths with spaces
+// - Allow for scrolling and refocus the bottom when typing a new command
+// - Handle cancelling commands with Ctrl+C
+
+
 init_terminal() {
     #if os == OS.Linux {
         shell = get_environment_variable("SHELL", allocate);
@@ -145,7 +156,7 @@ terminal_job(int index, JobData data) {
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
-            add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
+            add_to_terminal_buffer(workspace, text);
         }
 
         GetExitCodeProcess(pi.hProcess, &workspace.terminal_data.exit_code);
@@ -206,12 +217,11 @@ terminal_job(int index, JobData data) {
         buf: CArray<u8>[1000];
         while workspace.terminal_data.running {
             length := read(stdout_pipe_files[read_pipe], &buf, buf.length);
-            log("%\n", length);
 
             if length <= 0 break;
 
             text: string = { length = length; data = &buf; }
-            add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
+            add_to_terminal_buffer(workspace, text);
         }
 
         if workspace.terminal_data.running {
@@ -223,6 +233,12 @@ terminal_job(int index, JobData data) {
     }
 
     log("Terminal exited with code %\n", workspace.terminal_data.exit_code);
+}
+
+add_to_terminal_buffer(Workspace* workspace, string text) {
+    add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
+    workspace.terminal_data.buffer_window.line = workspace.terminal_data.buffer.line_count - 1;
+    adjust_start_line(&workspace.terminal_data.buffer_window);
 }
 
 clear_terminal_buffer_window(Workspace* workspace) {
@@ -248,11 +264,5 @@ clear_terminal_buffer_window(Workspace* workspace) {
 }
 
 string get_terminal_title() {
-    workspace := get_workspace();
-
-    if workspace.terminal_data.running {
-        return "Terminal Running";
-    }
-
-    return format_string("Terminal Exited with Code: %", temp_allocate, workspace.terminal_data.exit_code);
+    return "Terminal";
 }
