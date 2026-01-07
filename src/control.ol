@@ -311,6 +311,8 @@ visual_mode(ModCode mod) {
 insert(ModCode mod) {
     if change_list_cursor(false, (mod & ModCode.Shift) == ModCode.Shift) return;
 
+    if change_terminal_cursor(false, (mod & ModCode.Shift) == ModCode.Shift) return;
+
     if mod & ModCode.Shift {
         switch edit_mode {
             case EditMode.Visual;
@@ -787,13 +789,8 @@ close_run_buffer(ModCode mod) {
 }
 
 [keybind, no_repeat]
-open_terminal(ModCode mod) {
-    start_or_select_terminal();
-}
-
-[keybind, no_repeat]
-close_terminal(ModCode mod) {
-    close_and_unselect_terminal();
+toggle_terminal(ModCode mod) {
+    start_or_close_terminal();
 }
 
 // Workspace keybinds

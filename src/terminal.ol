@@ -20,6 +20,7 @@ init_terminal() {
 
 struct TerminalData {
     running: bool;
+    writing: bool;
     exit_code: int;
     buffer: Buffer = { read_only = true; title = get_terminal_title; }
     buffer_window: BufferWindow;
@@ -27,33 +28,88 @@ struct TerminalData {
     pipes: TerminalPipes;
 }
 
-start_or_select_terminal() {
+start_or_close_terminal() {
     workspace := get_workspace();
-    if workspace.terminal_data.running return;
+    if workspace.terminal_data.running {
+        #if os == OS.Windows {
+            CloseHandle(workspace.terminal_data.pipes.input);
+            CloseHandle(workspace.terminal_data.pipes.output);
+            TerminateThread(workspace.terminal_data.process.thread, 0);
+            TerminateProcess(workspace.terminal_data.process.process, 0);
+        }
+        else {
+            close(workspace.terminal_data.pipes.input);
+            close(workspace.terminal_data.pipes.output);
+            kill(workspace.terminal_data.process.pid, 0);
+        }
 
-    data: JobData;
-    data.pointer = workspace;
-    queue_work(&low_priority_queue, terminal_job, data);
-}
-
-close_and_unselect_terminal() {
-    workspace := get_workspace();
-    if !workspace.terminal_data.running return;
-
-    #if os == OS.Windows {
-        CloseHandle(workspace.terminal_data.pipes.input);
-        CloseHandle(workspace.terminal_data.pipes.output);
-        TerminateThread(workspace.terminal_data.process.thread, 0);
-        TerminateProcess(workspace.terminal_data.process.process, 0);
+        workspace.bottom_window_selected = false;
+        workspace.terminal_data = {
+            running = false;
+            writing = false;
+        }
     }
     else {
-        close(workspace.terminal_data.pipes.input);
-        close(workspace.terminal_data.pipes.output);
-        kill(workspace.terminal_data.process.pid, 0);
+        close_run_buffer_and_stop_command();
+        workspace.bottom_window_selected = true;
+
+        data: JobData;
+        data.pointer = workspace;
+        queue_work(&low_priority_queue, terminal_job, data);
+    }
+}
+
+bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string char) {
+    workspace := get_workspace();
+    if !workspace.terminal_data.running || !workspace.terminal_data.writing || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+
+    switch code {
+        case KeyCode.Escape;
+            workspace.terminal_data.writing = false;
+        case KeyCode.Backspace; {
+            // TODO Implement
+        }
+        case KeyCode.Tab; {
+            tab_array: Array<u8>[settings.tab_size];
+            each space in tab_array {
+                space = ' ';
+            }
+            tab_string: string = { length = tab_array.length; data = tab_array.data; }
+            // TODO Implement
+        }
+        case KeyCode.Enter; {
+            // TODO Implement
+        }
+        case KeyCode.Delete; {
+            // TODO Implement
+        }
+        case KeyCode.Up; {
+            // TODO Implement
+        }
+        case KeyCode.Down; {
+            // TODO Implement
+        }
+        case KeyCode.Left; {
+            // TODO Implement
+        }
+        case KeyCode.Right; {
+            // TODO Implement
+        }
+        default; {
+            // TODO Implement
+        }
     }
 
-    workspace.bottom_window_selected = false;
-    workspace.terminal_data.running = false;
+    return true;
+}
+
+bool change_terminal_cursor(bool append, bool boundary) {
+    workspace := get_workspace();
+    if !workspace.terminal_data.running || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+
+    // TODO Set the cursor
+    workspace.terminal_data.writing = true;
+    return true;
 }
 
 bool send_input_to_terminal(string char) {

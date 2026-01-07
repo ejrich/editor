@@ -61,14 +61,14 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
 
         if handle_command_press(state, code, mod, char) return;
 
+        if handle_terminal_press(state, code, mod, char) return;
+
         if handle_key_command(state, code, mod, char) {
             handle_post_movement_command();
             return;
         }
 
         if handle_keybind_event(code, mod) return;
-
-        if send_input_to_terminal(char) return;
 
         switch code {
             case KeyCode.Zero; {

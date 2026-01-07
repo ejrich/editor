@@ -259,6 +259,11 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
             mode_string = " COMMAND ";
         }
 
+        if workspace.terminal_data.writing {
+            highlight_color = appearance.insert_mode_color;
+            mode_string = " TERMINAL ";
+        }
+
         render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
         x += mode_string.length * global_font_config.quad_advance;
     }
