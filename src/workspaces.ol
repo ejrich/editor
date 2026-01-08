@@ -217,6 +217,7 @@ init_workspace(Workspace* workspace) {
     }
 
     load_local_settings(workspace);
+    clear_terminal_buffer_window(workspace);
 }
 
 change_current_workspace(int index) {

@@ -75,12 +75,14 @@ else {
     }
 }
 
-#private
-
 struct RunCommandParams {
     command: string;
     workspace: Workspace*;
 }
+
+command_exited_code := -100; #const
+
+#private
 
 run_command(int index, JobData data) {
     params: RunCommandParams* = data.pointer;
@@ -252,8 +254,6 @@ add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
         adjust_start_line(buffer_window);
     }
 }
-
-command_exited_code := -100; #const
 
 struct CommandRunData {
     command: string;

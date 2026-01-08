@@ -19,9 +19,13 @@ init_terminal() {
 }
 
 struct TerminalData {
+    displaying: bool;
     running: bool;
     writing: bool;
     exit_code: int;
+    directory: string;
+    command_line: BufferLine*;
+    command_start_index: int;
     buffer: Buffer = { read_only = true; title = get_terminal_title; }
     buffer_window: BufferWindow;
     process: ProcessData;
@@ -34,13 +38,13 @@ start_or_close_terminal() {
         #if os == OS.Windows {
             CloseHandle(workspace.terminal_data.pipes.input);
             CloseHandle(workspace.terminal_data.pipes.output);
-            TerminateThread(workspace.terminal_data.process.thread, 0);
-            TerminateProcess(workspace.terminal_data.process.process, 0);
+            TerminateThread(workspace.terminal_data.process.thread, command_exited_code);
+            TerminateProcess(workspace.terminal_data.process.process, command_exited_code);
         }
         else {
             close(workspace.terminal_data.pipes.input);
             close(workspace.terminal_data.pipes.output);
-            kill(workspace.terminal_data.process.pid, 0);
+            kill(workspace.terminal_data.process.pid, command_exited_code);
         }
 
         workspace.bottom_window_selected = false;
@@ -49,54 +53,81 @@ start_or_close_terminal() {
             writing = false;
         }
     }
+
+    if workspace.terminal_data.displaying {
+        workspace.bottom_window_selected = false;
+        workspace.terminal_data = {
+            displaying = false;
+            running = false;
+            writing = false;
+        }
+    }
     else {
         close_run_buffer_and_stop_command();
-        workspace.bottom_window_selected = true;
 
-        data: JobData;
-        data.pointer = workspace;
-        queue_work(&low_priority_queue, terminal_job, data);
+        workspace.bottom_window_selected = true;
+        workspace.terminal_data = {
+            displaying = true;
+            running = false;
+            writing = true;
+        }
     }
 }
 
 bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string char) {
     workspace := get_workspace();
-    if !workspace.terminal_data.running || !workspace.terminal_data.writing || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+    if !workspace.terminal_data.displaying || !workspace.terminal_data.writing || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
 
-    switch code {
-        case KeyCode.Escape;
+    // Pipe input to running commands or the command buffer
+    if workspace.terminal_data.running {
+        if code == KeyCode.Escape {
             workspace.terminal_data.writing = false;
-        case KeyCode.Backspace; {
-            // TODO Implement
         }
-        case KeyCode.Tab; {
-            tab_array: Array<u8>[settings.tab_size];
-            each space in tab_array {
-                space = ' ';
+        else {
+            #if os == OS.Windows {
+                WriteFile(workspace.terminal_data.pipes.input, char.data, char.length, null, null);
             }
-            tab_string: string = { length = tab_array.length; data = tab_array.data; }
-            // TODO Implement
+            #if os == OS.Linux {
+                write(workspace.terminal_data.pipes.input, char.data, char.length);
+            }
         }
-        case KeyCode.Enter; {
-            // TODO Implement
-        }
-        case KeyCode.Delete; {
-            // TODO Implement
-        }
-        case KeyCode.Up; {
-            // TODO Implement
-        }
-        case KeyCode.Down; {
-            // TODO Implement
-        }
-        case KeyCode.Left; {
-            // TODO Implement
-        }
-        case KeyCode.Right; {
-            // TODO Implement
-        }
-        default; {
-            // TODO Implement
+    }
+    else {
+        switch code {
+            case KeyCode.Escape;
+                workspace.terminal_data.writing = false;
+            case KeyCode.Backspace; {
+                // TODO Implement
+            }
+            case KeyCode.Tab; {
+                tab_array: Array<u8>[settings.tab_size];
+                each space in tab_array {
+                    space = ' ';
+                }
+                tab_string: string = { length = tab_array.length; data = tab_array.data; }
+                // TODO Implement
+            }
+            case KeyCode.Enter; {
+                // TODO Implement submit the command
+            }
+            case KeyCode.Delete; {
+                // TODO Implement
+            }
+            case KeyCode.Up; {
+                // TODO Implement
+            }
+            case KeyCode.Down; {
+                // TODO Implement
+            }
+            case KeyCode.Left; {
+                // TODO Implement
+            }
+            case KeyCode.Right; {
+                // TODO Implement
+            }
+            default; {
+                // TODO Implement
+            }
         }
     }
 
@@ -105,33 +136,54 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
 
 bool change_terminal_cursor(bool append, bool boundary) {
     workspace := get_workspace();
-    if !workspace.terminal_data.running || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+    if !workspace.terminal_data.displaying || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
 
     // TODO Set the cursor
     workspace.terminal_data.writing = true;
     return true;
 }
 
-bool send_input_to_terminal(string char) {
-    workspace := get_workspace();
-    if !workspace.terminal_data.running || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
-
-    #if os == OS.Windows {
-        WriteFile(workspace.terminal_data.pipes.input, char.data, char.length, null, null);
-    }
-    #if os == OS.Linux {
-        write(workspace.terminal_data.pipes.input, char.data, char.length);
-    }
-
-    return true;
-}
-
 BufferWindow* get_terminal_window(Workspace* workspace) {
-    if workspace.terminal_data.running {
+    if workspace.terminal_data.displaying {
         return &workspace.terminal_data.buffer_window;
     }
 
     return null;
+}
+
+clear_terminal_buffer_window(Workspace* workspace) {
+    workspace.terminal_data.buffer_window = {
+        cursor = 0;
+        line = 0;
+        start_line = 0;
+    }
+
+    if workspace.terminal_data.buffer.line_count == 0 {
+        workspace.terminal_data.buffer = {
+            line_count = 1;
+            line_count_digits = 1;
+            lines = allocate_line();
+        }
+    }
+    else if workspace.terminal_data.buffer.line_count == 1 {
+        free_child_lines(workspace.terminal_data.buffer.lines.child);
+        workspace.terminal_data.buffer.lines.length = 0;
+    }
+    else {
+        line := workspace.terminal_data.buffer.lines;
+
+        workspace.terminal_data.buffer = {
+            line_count = 1;
+            line_count_digits = 1;
+            lines = allocate_line();
+        }
+
+        while line {
+            next := line.next;
+            free_line_and_children(line);
+            line = next;
+        }
+    }
 }
 
 #private
@@ -152,12 +204,11 @@ else {
     shell: string;
 }
 
-terminal_job(int index, JobData data) {
+execute_terminal_command(int index, JobData data) {
     log("Starting terminal\n");
     workspace: Workspace* = data.pointer;
-    defer workspace.terminal_data.running = false;
 
-    clear_terminal_buffer_window(workspace);
+    defer workspace.terminal_data.running = false;
 
     #if os == OS.Windows {
         sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
@@ -180,7 +231,10 @@ terminal_job(int index, JobData data) {
         }
         pi: PROCESS_INFORMATION;
 
-        if !CreateProcessA(null, "powershell -NoLogo", null, null, true, 0x8000000, null, null, &si, &pi) {
+        command := get_command(workspace);
+        ps_command := temp_string("powershell -NoLogo ", command);
+        // TODO Set the directory for the process
+        if !CreateProcessA(null, ps_command, null, null, true, 0x8000000, null, null, &si, &pi) {
             log("Failed to start terminal\n");
             CloseHandle(stdout_read_handle);
             CloseHandle(stdout_write_handle);
@@ -249,9 +303,14 @@ terminal_job(int index, JobData data) {
             close(stdin_pipe_files[write_pipe]);
             dup2(stdin_pipe_files[read_pipe], stdin);
 
-            exec_args: Array<u8*>[2];
-            exec_args[0] = shell.data;
-            exec_args[1] = null;
+            command := get_command(workspace);
+
+            exec_args: Array<u8*>[5];
+            exec_args[0] = "sh".data;
+            exec_args[1] = "-c".data;
+            exec_args[2] = "--".data;
+            exec_args[3] = command.data;
+            exec_args[4] = null;
             execve(shell.data, exec_args.data, __environment_variables_pointer);
             exit(-1);
         }
@@ -288,35 +347,49 @@ terminal_job(int index, JobData data) {
         wait4(pid, &workspace.terminal_data.exit_code, 0, null);
     }
 
-    log("Terminal exited with code %\n", workspace.terminal_data.exit_code);
+    log("Terminal command exited with code %\n", workspace.terminal_data.exit_code);
+}
+
+string get_command(Workspace* workspace) #inline {
+    if workspace.terminal_data.command_line == null return empty_string;
+
+    command_buffer: Array<u8>[workspace.terminal_data.command_line.length - workspace.terminal_data.command_start_index];
+
+    if workspace.terminal_data.command_line.length < line_buffer_length {
+        memory_copy(command_buffer.data, workspace.terminal_data.command_line.data.data + workspace.terminal_data.command_start_index, command_buffer.length);
+    }
+    else {
+        i := 0;
+        if workspace.terminal_data.command_start_index < line_buffer_length {
+            copy_length := line_buffer_length - workspace.terminal_data.command_start_index;
+            memory_copy(command_buffer.data, workspace.terminal_data.command_line.data.data + workspace.terminal_data.command_start_index, copy_length);
+            i += copy_length;
+        }
+
+        line_start_index := workspace.terminal_data.command_start_index;
+        child := workspace.terminal_data.command_line.child;
+        while child {
+            if line_start_index >= line_buffer_length {
+                line_start_index -= line_buffer_length;
+            }
+            else {
+                copy_length := child.length - line_start_index;
+                memory_copy(command_buffer.data + i, child.data.data + line_start_index, copy_length);
+                line_start_index = 0;
+                i += copy_length;
+            }
+            child = child.next;
+        }
+    }
+
+    command: string = { length = command_buffer.length; data = command_buffer.data; }
+    return command;
 }
 
 add_to_terminal_buffer(Workspace* workspace, string text) {
     add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
     workspace.terminal_data.buffer_window.line = workspace.terminal_data.buffer.line_count - 1;
     adjust_start_line(&workspace.terminal_data.buffer_window);
-}
-
-clear_terminal_buffer_window(Workspace* workspace) {
-    workspace.terminal_data.buffer_window = {
-        cursor = 0;
-        line = 0;
-        start_line = 0;
-    }
-
-    line := workspace.terminal_data.buffer.lines;
-
-    workspace.terminal_data.buffer = {
-        line_count = 1;
-        line_count_digits = 1;
-        lines = allocate_line();
-    }
-
-    while line {
-        next := line.next;
-        free_line_and_children(line);
-        line = next;
-    }
 }
 
 string get_terminal_title() {
