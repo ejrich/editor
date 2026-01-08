@@ -218,6 +218,7 @@ init_workspace(Workspace* workspace) {
 
     load_local_settings(workspace);
     clear_terminal_buffer_window(workspace);
+    workspace.terminal_data.directory = workspace.directory;
 }
 
 change_current_workspace(int index) {

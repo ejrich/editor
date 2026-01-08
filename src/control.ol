@@ -335,6 +335,8 @@ insert(ModCode mod) {
 append(ModCode mod) {
     if change_list_cursor(true, (mod & ModCode.Shift) == ModCode.Shift) return;
 
+    if change_terminal_cursor(true, (mod & ModCode.Shift) == ModCode.Shift) return;
+
     if mod & ModCode.Shift {
         switch edit_mode {
             case EditMode.Visual;

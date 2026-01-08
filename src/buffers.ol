@@ -144,7 +144,13 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
         if line_number > start_line {
             cursor, visual_start, visual_end := -1;
 
-            if line_number == cursor_line ||
+            if window == get_terminal_window(workspace) &&
+                !workspace.terminal_data.running &&
+                workspace.terminal_data.writing &&
+                line_number == workspace.terminal_data.command_line_index + 1 {
+                cursor = workspace.terminal_data.command_write_cursor;
+            }
+            else if line_number == cursor_line ||
                 (edit_mode == EditMode.BlockInsert &&
                 line_number >= (block_insert_data.start_line + 1) &&
                 line_number <= (block_insert_data.end_line + 1)) {
