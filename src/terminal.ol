@@ -149,6 +149,11 @@ bool change_terminal_cursor(bool append, bool boundary) {
     workspace := get_workspace();
     if !workspace.terminal_data.displaying || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
 
+    if workspace.terminal_data.running {
+        workspace.terminal_data.writing = true;
+        return true;
+    }
+
     if boundary || workspace.terminal_data.command_line_index != workspace.terminal_data.buffer_window.line {
         if append {
             workspace.terminal_data.command_write_cursor = workspace.terminal_data.command_line.length;
@@ -283,8 +288,6 @@ handle_command(Workspace* workspace) {
         }
     }
 
-    log("Command '%', arg0 '%'\n", command, arg0);
-
     add_new_line(null, &workspace.terminal_data.buffer, workspace.terminal_data.command_line, false, false);
     calculate_line_digits(&workspace.terminal_data.buffer);
     workspace.terminal_data.buffer_window = {
@@ -293,8 +296,15 @@ handle_command(Workspace* workspace) {
     }
     adjust_start_line(&workspace.terminal_data.buffer_window);
 
-    // TODO Handle default commands or submit the command to run
-    if true {
+    if arg0 == "cd" {
+        // TODO Implement
+        set_command_line(workspace);
+    }
+    else if arg0 == "clear" || arg0 == "cls" {
+        clear_terminal_buffer_window(workspace);
+        set_command_line(workspace);
+    }
+    else {
         data: JobData;
         data.pointer = workspace;
         queue_work(&low_priority_queue, execute_terminal_command, data);

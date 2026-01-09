@@ -196,6 +196,12 @@ handle_inputs() {
                         resize_window(event.xconfigure.width, event.xconfigure.height);
                     }
                 }
+                case XEventType.EnterNotify; {
+                    XGrabKeyboard(window.handle, window.window, 1, 1, 1, 0);
+                }
+                case XEventType.LeaveNotify; {
+                    XUngrabKeyboard(window.handle, 0);
+                }
                 case XEventType.FocusIn; {
                     selection_owner := XGetSelectionOwner(window.handle, CLIPBOARD);
                     if selection_owner != window.window {
