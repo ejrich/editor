@@ -4320,7 +4320,7 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
     rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
     while current_line != null && line_number != window.line {
         current_line = current_line.next;
-        rendered_lines += calculate_rendered_lines(buffer.line_count_digits, current_line.length);
+        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
         line_number++;
     }
 
@@ -4329,7 +4329,7 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
             while current_line.next != null && rendered_lines <= scroll_offset {
                 window.line++;
                 current_line = current_line.next;
-                rendered_lines += calculate_rendered_lines(max_chars, starting_line.length);
+                rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
             }
         }
         return;

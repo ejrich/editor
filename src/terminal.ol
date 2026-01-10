@@ -1,13 +1,7 @@
 // TODO Reworking the terminal
-// - Don't directly run the terminal process, I don't care about handling all of that
-// - Show the directory, handle 'cd' and track the directory in TerminalData
-// - Handle clear to reset the terminal buffer
 // - Handle up/down to get to previous commands
 // - Allow the use to type commands, then execute the commands using the appropriate shell
 //   - Make sure to to handle things like escaped chars and paths with spaces
-// - Allow for scrolling and refocus the bottom when typing a new command
-// - Handle cancelling commands with Ctrl+C
-
 
 init_terminal() {
     #if os == OS.Linux {
@@ -36,25 +30,7 @@ struct TerminalData {
 
 start_or_close_terminal() {
     workspace := get_workspace();
-    if workspace.terminal_data.running {
-        #if os == OS.Windows {
-            CloseHandle(workspace.terminal_data.pipes.input);
-            CloseHandle(workspace.terminal_data.pipes.output);
-            TerminateThread(workspace.terminal_data.process.thread, command_exited_code);
-            TerminateProcess(workspace.terminal_data.process.process, command_exited_code);
-        }
-        else {
-            close(workspace.terminal_data.pipes.input);
-            close(workspace.terminal_data.pipes.output);
-            kill(workspace.terminal_data.process.pid, command_exited_code);
-        }
-
-        workspace.bottom_window_selected = false;
-        workspace.terminal_data = {
-            running = false;
-            writing = false;
-        }
-    }
+    stop_running_terminal_command(workspace);
 
     if workspace.terminal_data.displaying {
         workspace.bottom_window_selected = false;
@@ -87,6 +63,9 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
     if workspace.terminal_data.running {
         if code == KeyCode.Escape {
             workspace.terminal_data.writing = false;
+        }
+        else if code == KeyCode.C && mod == ModCode.Control {
+            stop_running_terminal_command(workspace);
         }
         else {
             #if os == OS.Windows {
@@ -246,6 +225,20 @@ else {
     shell: string;
 }
 
+stop_running_terminal_command(Workspace* workspace) {
+    if workspace.terminal_data.running {
+        #if os == OS.Windows {
+            TerminateThread(workspace.terminal_data.process.thread, command_exited_code);
+            TerminateProcess(workspace.terminal_data.process.process, command_exited_code);
+        }
+        else {
+            kill(workspace.terminal_data.process.pid, command_exited_code);
+        }
+
+        workspace.terminal_data.running = false;
+    }
+}
+
 set_command_line(Workspace* workspace) {
     last_line := get_buffer_line(&workspace.terminal_data.buffer, workspace.terminal_data.buffer.line_count - 1);
     if last_line.length > 0 {
@@ -270,6 +263,7 @@ set_command_line(Workspace* workspace) {
             cursor = line_start.length;
         }
     }
+    adjust_start_line(&workspace.terminal_data.buffer_window);
 }
 
 handle_command(Workspace* workspace) {
@@ -357,11 +351,11 @@ handle_command(Workspace* workspace) {
                 change_terminal_directory(workspace, home_directory);
             }
             else {
+                set_directory(workspace.terminal_data.directory);
                 valid := is_directory(arg1);
                 if valid {
                     set_directory(arg1);
                     new_directory := get_working_directory();
-                    set_directory(workspace.directory);
                     change_terminal_directory(workspace, new_directory);
                 }
                 else {
@@ -369,6 +363,7 @@ handle_command(Workspace* workspace) {
                     add_to_terminal_buffer(workspace, arg1);
                     add_to_terminal_buffer(workspace, "' is not a valid directory");
                 }
+                set_directory(workspace.directory);
             }
         }
         set_command_line(workspace);
