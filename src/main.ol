@@ -289,14 +289,14 @@ string get_working_directory() {
     directory: string;
     #if os == OS.Windows {
         directory.length = GetCurrentDirectoryA(0, null);
-        directory.data = allocate(directory.length);
+        directory.data = allocate(directory.length + 1);
         directory.length = GetCurrentDirectoryA(directory.length, directory.data);
     }
     #if os == OS.Linux {
         buffer: CArray<u8>[1000];
         getcwd(&buffer, buffer.length);
         directory = convert_c_string(&buffer);
-        allocate_strings(&directory);
+        allocate_strings(true, &directory);
     }
 
     return directory;

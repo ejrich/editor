@@ -130,9 +130,11 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
             }
             case KeyCode.Left; {
                 workspace.terminal_data.command_write_cursor = clamp(workspace.terminal_data.command_write_cursor - 1, workspace.terminal_data.command_start_index, workspace.terminal_data.command_line.length);
+                workspace.terminal_data.buffer_window.cursor = workspace.terminal_data.command_write_cursor;
             }
             case KeyCode.Right; {
                 workspace.terminal_data.command_write_cursor = clamp(workspace.terminal_data.command_write_cursor + 1, workspace.terminal_data.command_start_index, workspace.terminal_data.command_line.length);
+                workspace.terminal_data.buffer_window.cursor = workspace.terminal_data.command_write_cursor;
             }
             default; {
                 add_text_to_line(workspace.terminal_data.command_line, char, workspace.terminal_data.command_write_cursor);
@@ -263,29 +265,70 @@ set_command_line(Workspace* workspace) {
         command_line_index = workspace.terminal_data.buffer.line_count - 1;
         command_start_index = line_start.length;
         command_write_cursor = line_start.length;
+        buffer_window = {
+            line = workspace.terminal_data.buffer.line_count - 1;
+            cursor = line_start.length;
+        }
     }
 }
 
 handle_command(Workspace* workspace) {
     command := get_command(workspace);
 
-    arg0: string;
-    found_first_char := false;
+    arg_string_buffer: Array<u8>[command.length];
+    args: Array<string>[command.length];
+    args.length = 0;
+
+    arg_count := 0;
+    whitespace := true;
+    in_quote := false;
+    escaping := false;
+    escape_enabled := os != OS.Windows; #const
+    arg: string = { data = arg_string_buffer.data; }
     each i in command.length {
         char := command[i];
-        if !found_first_char {
+        if whitespace {
             if char != ' ' {
-                found_first_char = true;
-                arg0.length = 1;
-                arg0.data = command.data + i;
+                arg_count++;
+
+                whitespace = false;
+                if char == '"' {
+                    in_quote = true;
+                }
+
+                arg[arg.length++] = char;
             }
         }
-        else if char != ' ' {
-            arg0.length++;
+        else if escape_enabled && escaping {
+            switch char {
+                case 'n';  char = '\n';
+                case 't';  char = '\t';
+                case '\\'; char = '\\';
+            }
+            arg[arg.length++] = char;
+            escaping = false;
+        }
+        else if escape_enabled && char == '\\' {
+            escaping = true;
+        }
+        else if in_quote {
+            if char == '"' {
+                in_quote = false;
+            }
+        }
+        else if char == ' ' {
+            whitespace = true;
+            args[args.length++] = arg;
+            arg.data = arg_string_buffer.data + arg.length;
+            arg.length = 0;
         }
         else {
-            break;
+            arg[arg.length++] = char;
         }
+    }
+
+    if !whitespace {
+        args[args.length++] = arg;
     }
 
     add_new_line(null, &workspace.terminal_data.buffer, workspace.terminal_data.command_line, false, false);
@@ -296,8 +339,38 @@ handle_command(Workspace* workspace) {
     }
     adjust_start_line(&workspace.terminal_data.buffer_window);
 
+    if args.length == 0 {
+        set_command_line(workspace);
+        return;
+    }
+
+    arg0 := args[0];
     if arg0 == "cd" {
-        // TODO Implement
+        if args.length == 1 {
+            home_directory := get_environment_variable(home_environment_variable, allocate);
+            change_terminal_directory(workspace, home_directory);
+        }
+        else if args.length == 2 {
+            arg1 := args[1];
+            if arg1 == "~" {
+                home_directory := get_environment_variable(home_environment_variable, allocate);
+                change_terminal_directory(workspace, home_directory);
+            }
+            else {
+                valid := is_directory(arg1);
+                if valid {
+                    set_directory(arg1);
+                    new_directory := get_working_directory();
+                    set_directory(workspace.directory);
+                    change_terminal_directory(workspace, new_directory);
+                }
+                else {
+                    add_to_terminal_buffer(workspace, "'");
+                    add_to_terminal_buffer(workspace, arg1);
+                    add_to_terminal_buffer(workspace, "' is not a valid directory");
+                }
+            }
+        }
         set_command_line(workspace);
     }
     else if arg0 == "clear" || arg0 == "cls" {
@@ -309,6 +382,13 @@ handle_command(Workspace* workspace) {
         data.pointer = workspace;
         queue_work(&low_priority_queue, execute_terminal_command, data);
     }
+}
+
+change_terminal_directory(Workspace* workspace, string new_directory) {
+    if workspace.terminal_data.directory.data != workspace.directory.data {
+        free_allocation(workspace.terminal_data.directory.data);
+    }
+    workspace.terminal_data.directory = new_directory;
 }
 
 execute_terminal_command(int index, JobData data) {
@@ -343,8 +423,7 @@ execute_terminal_command(int index, JobData data) {
 
         command := get_command(workspace);
         ps_command := temp_string("powershell -NoLogo ", command);
-        // TODO Set the directory for the process
-        if !CreateProcessA(null, ps_command, null, null, true, 0x8000000, null, null, &si, &pi) {
+        if !CreateProcessA(null, ps_command, null, null, true, 0x8000000, null, workspace.terminal_data.directory, &si, &pi) {
             log("Failed to start terminal\n");
             CloseHandle(stdout_read_handle);
             CloseHandle(stdout_write_handle);
@@ -413,8 +492,8 @@ execute_terminal_command(int index, JobData data) {
             close(stdin_pipe_files[write_pipe]);
             dup2(stdin_pipe_files[read_pipe], stdin);
 
-            // TODO Set the directory for the process
             command := get_command(workspace);
+            chdir(workspace.terminal_data.directory.data);
 
             exec_args: Array<u8*>[4];
             exec_args[0] = shell.data;
