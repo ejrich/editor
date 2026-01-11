@@ -67,6 +67,7 @@ struct RunData {
     struct ProcessData {
         thread: Handle*;
         process: Handle*;
+        job_object: Handle*;
     }
 }
 else {
@@ -136,7 +137,7 @@ bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_w
         }
         pi: PROCESS_INFORMATION;
 
-        if !CreateProcessA(null, command, null, null, true, 0x8, null, null, &si, &pi) {
+        if !CreateProcessA(null, command, null, null, true, ProcessCreationFlags.DETACHED_PROCESS, null, null, &si, &pi) {
             CloseHandle(read_handle);
             CloseHandle(write_handle);
             return false, 0;

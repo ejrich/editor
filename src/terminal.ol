@@ -232,8 +232,7 @@ else {
 stop_running_terminal_command(Workspace* workspace) {
     if workspace.terminal_data.running {
         #if os == OS.Windows {
-            TerminateThread(workspace.terminal_data.process.thread, command_exited_code);
-            TerminateProcess(workspace.terminal_data.process.process, command_exited_code);
+            TerminateJobObject(workspace.terminal_data.process.job_object, 0);
         }
         else {
             kill(workspace.terminal_data.process.pid, command_exited_code);
@@ -442,8 +441,8 @@ execute_terminal_command(int index, JobData data) {
 
         command := get_command(workspace);
         ps_command := temp_string("powershell -NoLogo ", command);
-        // TODO Figure out how to cancel the command
-        if !CreateProcessA(null, ps_command, null, null, true, 0x8000000, null, workspace.terminal_data.directory, &si, &pi) {
+        flags := ProcessCreationFlags.CREATE_SUSPENDED | ProcessCreationFlags.CREATE_NO_WINDOW;
+        if !CreateProcessA(null, ps_command, null, null, true, flags, null, workspace.terminal_data.directory, &si, &pi) {
             log("Failed to start terminal\n");
             CloseHandle(stdout_read_handle);
             CloseHandle(stdout_write_handle);
@@ -451,6 +450,10 @@ execute_terminal_command(int index, JobData data) {
             CloseHandle(stdin_write_handle);
             return;
         }
+
+        job_object := CreateJobObjectA(null, null);
+        AssignProcessToJobObject(job_object, pi.hProcess);
+        ResumeThread(pi.hThread);
 
         CloseHandle(stdin_read_handle);
         CloseHandle(stdout_write_handle);
@@ -460,6 +463,7 @@ execute_terminal_command(int index, JobData data) {
             process = {
                 thread = pi.hThread;
                 process = pi.hProcess;
+                job_object = job_object;
             }
             pipes = {
                 input = stdin_write_handle;
@@ -480,6 +484,7 @@ execute_terminal_command(int index, JobData data) {
 
         GetExitCodeProcess(pi.hProcess, &workspace.terminal_data.exit_code);
 
+        CloseHandle(job_object);
         CloseHandle(pi.hThread);
         CloseHandle(pi.hProcess);
         CloseHandle(stdout_read_handle);
