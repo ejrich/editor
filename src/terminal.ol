@@ -1,8 +1,3 @@
-// TODO Reworking the terminal
-// - Handle up/down to get to previous commands
-// - Allow the use to type commands, then execute the commands using the appropriate shell
-//   - Make sure to to handle things like escaped chars and paths with spaces
-
 init_terminal() {
     #if os == OS.Linux {
         shell = get_environment_variable("SHELL", allocate);
@@ -26,6 +21,8 @@ struct TerminalData {
     buffer_window: BufferWindow;
     process: ProcessData;
     pipes: TerminalPipes;
+    command_history: Array<string>;
+    selected_history_index: int;
 }
 
 start_or_close_terminal() {
@@ -52,6 +49,7 @@ start_or_close_terminal() {
                 cursor = workspace.terminal_data.command_write_cursor;
             }
         }
+        adjust_start_line(&workspace.terminal_data.buffer_window);
     }
 }
 
@@ -86,11 +84,6 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                 }
             }
             case KeyCode.Tab; {
-                tab_array: Array<u8>[settings.tab_size];
-                each space in tab_array {
-                    space = ' ';
-                }
-                tab_string: string = { length = tab_array.length; data = tab_array.data; }
                 // TODO Implement
             }
             case KeyCode.Enter; {
@@ -102,10 +95,16 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                 }
             }
             case KeyCode.Up; {
-                // TODO Implement
+                if workspace.terminal_data.selected_history_index > 0 {
+                    workspace.terminal_data.selected_history_index--;
+                    set_command_from_history(workspace);
+                }
             }
             case KeyCode.Down; {
-                // TODO Implement
+                if workspace.terminal_data.selected_history_index < workspace.terminal_data.command_history.length {
+                    workspace.terminal_data.selected_history_index++;
+                    set_command_from_history(workspace);
+                }
             }
             case KeyCode.Left; {
                 workspace.terminal_data.command_write_cursor = clamp(workspace.terminal_data.command_write_cursor - 1, workspace.terminal_data.command_start_index, workspace.terminal_data.command_line.length);
@@ -116,9 +115,14 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                 workspace.terminal_data.buffer_window.cursor = workspace.terminal_data.command_write_cursor;
             }
             default; {
-                add_text_to_line(workspace.terminal_data.command_line, char, workspace.terminal_data.command_write_cursor);
-                workspace.terminal_data.command_write_cursor += char.length;
-                workspace.terminal_data.buffer_window.cursor += char.length;
+                if code == KeyCode.C && mod == ModCode.Control {
+                    set_command_line(workspace);
+                }
+                else {
+                    add_text_to_line(workspace.terminal_data.command_line, char, workspace.terminal_data.command_write_cursor);
+                    workspace.terminal_data.command_write_cursor += char.length;
+                    workspace.terminal_data.buffer_window.cursor += char.length;
+                }
             }
         }
     }
@@ -239,6 +243,22 @@ stop_running_terminal_command(Workspace* workspace) {
     }
 }
 
+set_command_from_history(Workspace* workspace) {
+    delete_from_line(workspace.terminal_data.command_line, workspace.terminal_data.command_start_index, workspace.terminal_data.command_line.length, false);
+
+    if workspace.terminal_data.selected_history_index < workspace.terminal_data.command_history.length {
+        command := workspace.terminal_data.command_history[workspace.terminal_data.selected_history_index];
+        add_text_to_line(workspace.terminal_data.command_line, command, workspace.terminal_data.command_start_index);
+    }
+
+    workspace.terminal_data = {
+        command_write_cursor = workspace.terminal_data.command_line.length;
+        buffer_window = {
+            cursor = workspace.terminal_data.command_line.length;
+        }
+    }
+}
+
 set_command_line(Workspace* workspace) {
     last_line := get_buffer_line(&workspace.terminal_data.buffer, workspace.terminal_data.buffer.line_count - 1);
     if last_line.length > 0 {
@@ -262,6 +282,7 @@ set_command_line(Workspace* workspace) {
             line = workspace.terminal_data.buffer.line_count - 1;
             cursor = line_start.length;
         }
+        selected_history_index = workspace.terminal_data.command_history.length;
     }
     adjust_start_line(&workspace.terminal_data.buffer_window);
 }
@@ -337,6 +358,9 @@ handle_command(Workspace* workspace) {
         set_command_line(workspace);
         return;
     }
+
+    allocate_strings(&command);
+    array_insert(&workspace.terminal_data.command_history, command, allocate, reallocate);
 
     arg0 := args[0];
     if arg0 == "cd" {
@@ -418,6 +442,7 @@ execute_terminal_command(int index, JobData data) {
 
         command := get_command(workspace);
         ps_command := temp_string("powershell -NoLogo ", command);
+        // TODO Figure out how to cancel the command
         if !CreateProcessA(null, ps_command, null, null, true, 0x8000000, null, workspace.terminal_data.directory, &si, &pi) {
             log("Failed to start terminal\n");
             CloseHandle(stdout_read_handle);
