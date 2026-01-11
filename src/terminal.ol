@@ -237,8 +237,6 @@ stop_running_terminal_command(Workspace* workspace) {
         else {
             kill(workspace.terminal_data.process.pid, command_exited_code);
         }
-
-        workspace.terminal_data.running = false;
     }
 }
 
