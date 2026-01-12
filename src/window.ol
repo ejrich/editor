@@ -113,11 +113,12 @@ close_window() {
 
 
 // Poll new events from the window and dispatch the necessary event handlers
-handle_inputs() {
+bool handle_inputs() {
     #if os == OS.Linux {
         next_key_is_held := false;
         event: XEvent;
 
+        // TODO If no pending return false and don't rerender
         while XPending(window.handle) {
             XNextEvent(window.handle, &event);
 
@@ -270,16 +271,20 @@ handle_inputs() {
     else #if os == OS.Windows {
         message: MSG;
 
+        // TODO Dispatch a user message from whatever async code
+        WaitMessage();
         while PeekMessageA(&message, null, 0, 0, RemoveMsg.PM_REMOVE) {
             if message.message == MessageType.WM_QUIT {
                 signal_shutdown();
-                return;
+                return false;
             }
 
             TranslateMessage(&message);
             DispatchMessageA(&message);
         }
     }
+
+    return true;
 }
 
 float, float get_cursor_position() {

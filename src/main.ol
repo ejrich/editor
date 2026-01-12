@@ -48,7 +48,7 @@ main() {
 
         reset_temp_buffer();
 
-        handle_inputs();
+        should_render := handle_inputs();
 
         time_accumulated += time_step;
         frames_accumulated++;
@@ -65,7 +65,7 @@ main() {
         }
 
         // Render buffers
-        if set_current_command_buffer() {
+        if should_render && set_current_command_buffer() {
             begin_ui_render_pass();
 
             draw_workspaces();
