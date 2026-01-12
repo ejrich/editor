@@ -720,7 +720,7 @@ recreate_swap_chain() {
     if !graphics_initialized return;
     wait_for_graphics_idle();
 
-    destroy_swap_chain(true);
+    destroy_swap_chain();
     create_swap_chain();
 }
 
@@ -1965,7 +1965,6 @@ create_swap_chain() {
         compositeAlpha = composite_alpha;
         presentMode = present_mode;
         clipped = VK_TRUE;
-        oldSwapchain = swap_chain;
     }
 
     if graphics_queue_family == present_queue_family {
@@ -1978,15 +1977,11 @@ create_swap_chain() {
         swapchain_create_info.pQueueFamilyIndices = &queue_family_indices;
     }
 
-    old_swap_chain := swap_chain;
-
     result := vkCreateSwapchainKHR(device, &swapchain_create_info, &allocator, &swap_chain);
     if result != VkResult.VK_SUCCESS {
         log("Unable to create swap chain %\n", result);
         exit_program(1);
     }
-
-    vkDestroySwapchainKHR(device, old_swap_chain, &allocator);
 
     // Create swap chain images and image views
     vkGetSwapchainImagesKHR(device, swap_chain, &image_count, null);
@@ -2418,7 +2413,7 @@ transition_image_layout(VkImage* image, VkFormat format, VkImageLayout old_layou
     end_single_time_commands(command_buffer, command_pool, submit_to_graphics_queue, index);
 }
 
-destroy_swap_chain(bool keep_old = false) {
+destroy_swap_chain() {
     vkDestroyImageView(device, color_image_view, &allocator);
     vkDestroyImage(device, color_image, &allocator);
     vkFreeMemory(device, color_image_memory, &allocator);
@@ -2437,8 +2432,7 @@ destroy_swap_chain(bool keep_old = false) {
 
     vkDestroyRenderPass(device, ui_render_pass, &allocator);
 
-    if !keep_old
-        vkDestroySwapchainKHR(device, swap_chain, &allocator);
+    vkDestroySwapchainKHR(device, swap_chain, &allocator);
 }
 
 enum PhysicalDeviceQueueFlags {
