@@ -183,10 +183,10 @@ draw_list_entries() {
 
     x := -1.0 + global_font_config.quad_advance * 2;
     if total_entries == 0 {
-        render_text("0 / 0", settings.font_size, x, initial_y, appearance.font_color, vec4());
+        render_text("0 / 0 Results", settings.font_size, x, initial_y, appearance.font_color, vec4());
     }
     else {
-        render_text(settings.font_size, x, initial_y, appearance.font_color, vec4(), "% / %", entries.length, total_entries);
+        render_text(settings.font_size, x, initial_y, appearance.font_color, vec4(), "% / % Results", entries.length, total_entries);
     }
 
     initial_y += global_font_config.line_height;

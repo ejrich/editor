@@ -558,6 +558,8 @@ load_font_texture_job(int index, JobData data) {
     texture.texture = create_texture(image_buffer, texture_width, texture_height, 1, index, 1);
     texture.descriptor_set = create_quad_descriptor_set(texture.texture);
     texture.loaded = true;
+
+    trigger_window_update();
 }
 
 adjust_texture_to_window(FontTexture* texture) {

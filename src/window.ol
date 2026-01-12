@@ -37,6 +37,7 @@ init_display() {
         UTF8_STRING = XInternAtom(window.handle, "UTF8_STRING", 0);
         CLIPBOARD = XInternAtom(window.handle, "CLIPBOARD", 0);
         XSEL_DATA = XInternAtom(window.handle, "XSEL_DATA", 0);
+        xfd = XConnectionNumber(window.handle);
     }
     else #if os == OS.Windows {
         SetProcessDPIAware();
@@ -113,12 +114,28 @@ close_window() {
 
 
 // Poll new events from the window and dispatch the necessary event handlers
-bool handle_inputs() {
+handle_inputs() {
     #if os == OS.Linux {
         next_key_is_held := false;
         event: XEvent;
 
-        // TODO If no pending return false and don't rerender
+        if settings.reactive_render && XPending(window.handle) == 0 {
+            fd_set: Fd_Set;
+            each i in fd_set.__fds_bits.length {
+                fd_set.__fds_bits[i] = 0;
+            }
+
+            u64_bits := 64; #const
+            index := xfd / u64_bits;
+            bit: u64 = cast(u64, 1) << (xfd % u64_bits);
+            fd_set.__fds_bits[index] |= bit;
+
+            timeout: Timeval = {
+                tv_sec = 10;
+            }
+            select(xfd + 1, &fd_set, null, null, &timeout);
+        }
+
         while XPending(window.handle) {
             XNextEvent(window.handle, &event);
 
@@ -271,20 +288,36 @@ bool handle_inputs() {
     else #if os == OS.Windows {
         message: MSG;
 
-        // TODO Dispatch a user message from whatever async code
-        WaitMessage();
+        if settings.reactive_render {
+            WaitMessage();
+        }
+
         while PeekMessageA(&message, null, 0, 0, RemoveMsg.PM_REMOVE) {
             if message.message == MessageType.WM_QUIT {
                 signal_shutdown();
-                return false;
+                return;
             }
 
             TranslateMessage(&message);
             DispatchMessageA(&message);
         }
     }
+}
 
-    return true;
+trigger_window_update() {
+    #if os == OS.Linux {
+        event: XClientMessageEvent = {
+            type = XEventType.ClientMessage;
+            send_event = 1;
+            display = window.handle;
+            window = window.window;
+            format = 32;
+        }
+        XSendEvent(window.handle, window.window, 0, 0, cast(XEvent*, &event));
+    }
+    #if os == OS.Windows {
+        SendNotifyMessageA(window.handle, MessageType.WM_USER, 0, 0);
+    }
 }
 
 float, float get_cursor_position() {
@@ -309,6 +342,7 @@ float, float get_cursor_position() {
     UTF8_STRING: s64;
     CLIPBOARD: s64;
     XSEL_DATA: s64;
+    xfd: u64;
 }
 
 #private

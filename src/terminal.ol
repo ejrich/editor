@@ -235,7 +235,7 @@ stop_running_terminal_command(Workspace* workspace) {
             TerminateJobObject(workspace.terminal_data.process.job_object, 0);
         }
         else {
-            kill(workspace.terminal_data.process.pid, command_exited_code);
+            kill(workspace.terminal_data.process.pid, KillSignal.SIGKILL);
         }
     }
 }
@@ -414,6 +414,7 @@ execute_terminal_command(int index, JobData data) {
     defer {
         workspace.terminal_data.running = false;
         set_command_line(workspace);
+        trigger_window_update();
     }
 
     #if os == OS.Windows {
@@ -606,6 +607,7 @@ add_to_terminal_buffer(Workspace* workspace, string text) {
     add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
     workspace.terminal_data.buffer_window.line = workspace.terminal_data.buffer.line_count - 1;
     adjust_start_line(&workspace.terminal_data.buffer_window);
+    trigger_window_update();
 }
 
 string get_terminal_title() {

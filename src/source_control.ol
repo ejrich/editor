@@ -152,6 +152,7 @@ load_status(int index, JobData data) {
     }
 
     apply_status_filter();
+    trigger_window_update();
 }
 
 status_entries: Array<ListEntry>;
@@ -295,6 +296,8 @@ load_diff(int thread, JobData data) {
     else {
         free_buffer(diff_buffer);
     }
+
+    trigger_window_update();
 }
 
 change_filter(string filter) {

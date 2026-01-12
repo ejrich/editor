@@ -153,6 +153,8 @@ get_file(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
     file := entry.key;
 
+    defer trigger_window_update();
+
     workspace := get_workspace();
     each buffer in workspace.buffers {
         if buffer.relative_path == file {
@@ -273,6 +275,8 @@ get_file_at_line(int thread, JobData data) {
     line, column, file := parse_search_key(search_result);
     start_line_adjust := global_font_config.max_lines_without_bottom_window / 2;
 
+    defer trigger_window_update();
+
     each buffer in workspace.buffers {
         if buffer.relative_path == file {
             if search_result == entry.key {
@@ -341,7 +345,6 @@ search_text_in_files(int thread, JobData data) {
         cancel_search = false;
     }
 
-
     filter_buffer: Array<u8>[data.string.length];
     filter: string = { data = filter_buffer.data; }
 
@@ -379,6 +382,8 @@ search_text_in_files(int thread, JobData data) {
 }
 
 search_directory(string path, string display_path, string filter) {
+    defer trigger_window_update();
+
     #if os == OS.Linux {
         open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
         directory := open(path.data, open_flags, OpenMode.S_RWALL);

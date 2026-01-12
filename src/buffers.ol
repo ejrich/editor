@@ -3913,6 +3913,8 @@ get_buffer(int thread, JobData data) {
             break;
         }
     }
+
+    trigger_window_update();
 }
 
 change_buffer_filter(string filter) {

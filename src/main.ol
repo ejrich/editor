@@ -34,6 +34,8 @@ main() {
         open_files_list();
     }
 
+    trigger_window_update();
+
     frequency := cast(float, get_performance_frequency());
     start := get_performance_counter();
     frame, frames_accumulated := 0;
@@ -48,7 +50,7 @@ main() {
 
         reset_temp_buffer();
 
-        should_render := handle_inputs();
+        handle_inputs();
 
         time_accumulated += time_step;
         frames_accumulated++;
@@ -65,7 +67,7 @@ main() {
         }
 
         // Render buffers
-        if should_render && set_current_command_buffer() {
+        if set_current_command_buffer() {
             begin_ui_render_pass();
 
             draw_workspaces();

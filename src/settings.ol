@@ -26,6 +26,7 @@ struct Settings {
     insert_mode_color: u32;
     [color]
     visual_mode_color: u32;
+    reactive_render: bool;
 }
 
 #run {
@@ -468,6 +469,7 @@ get_default_settings() {
         normal_mode_color = 0xA89984;
         insert_mode_color = 0x83A598;
         visual_mode_color = 0xFE8019;
+        reactive_render = true;
     }
 
     settings = default_settings;

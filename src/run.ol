@@ -17,7 +17,7 @@ force_command_to_stop() {
             TerminateProcess(workspace.run_data.current_process.process, command_exited_code);
         }
         else {
-            kill(workspace.run_data.current_process.pid, command_exited_code);
+            kill(workspace.run_data.current_process.pid, KillSignal.SIGKILL);
         }
 
         workspace.run_data.current_command.exited = true;
@@ -116,6 +116,7 @@ run_command(int index, JobData data) {
 
     params.workspace.run_data.current_command.running = false;
     log("Exit code: %\n", params.workspace.run_data.current_command.exit_code);
+    trigger_window_update();
 }
 
 bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_window = null, ProcessData* process_data = null, bool* exited = null) {
@@ -254,6 +255,8 @@ add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
         buffer_window.line = buffer.line_count - 1;
         adjust_start_line(buffer_window);
     }
+
+    trigger_window_update();
 }
 
 struct CommandRunData {

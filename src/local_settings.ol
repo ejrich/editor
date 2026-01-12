@@ -123,7 +123,7 @@ load_local_settings(Workspace* workspace) {
     switch workspace.local_settings.source_control {
         case SourceControl.Perforce; {
             if string_is_empty(workspace.local_settings.perforce_client_name) {
-                computer_name := get_environment_variable(computer_name_variable, temp_allocate);
+                computer_name := get_computer_name();
                 each i in computer_name.length {
                     char := computer_name[i];
                     if char >= 'A' && char <= 'Z' {
@@ -158,6 +158,28 @@ get_default_local_settings(LocalSettings* local_settings) {
     }
 
     *local_settings = default_local_settings;
+}
+
+string get_computer_name() {
+    result: string;
+    #if os == OS.Windows {
+        computer_name_variable := "computername"; #const
+        result = get_environment_variable(computer_name_variable, temp_allocate);
+    }
+    else {
+        found, hostname := read_file("/etc/hostname", temp_allocate);
+        if found {
+            result = hostname;
+            each i in result.length {
+                if result[i] == '\n' || result[i] == ' ' {
+                    result.length = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    return result;
 }
 
 #if os == OS.Windows {
