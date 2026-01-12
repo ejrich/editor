@@ -181,10 +181,3 @@ string get_computer_name() {
 
     return result;
 }
-
-#if os == OS.Windows {
-    computer_name_variable := "computername"; #const
-}
-else {
-    computer_name_variable := "HOSTNAME"; #const
-}
