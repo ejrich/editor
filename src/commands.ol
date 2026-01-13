@@ -96,23 +96,25 @@ string, bool reload_configurations() {
 }
 
 [command, hex]
-toggle_hex_view() {
+string, bool toggle_hex_view() {
     workspace := get_workspace();
 
-    window: BufferWindow*;
+    buffer_window: BufferWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left;
-            window = &workspace.left_window.buffer_window;
+            buffer_window = workspace.left_window.buffer_window;
         case SelectedWindow.Right;
-            window = &workspace.right_window.buffer_window;
+            buffer_window = workspace.right_window.buffer_window;
     }
 
-    window.hex_view = !window.hex_view;
-    if window.hex_view {
-        window.start_line = 0;
-        window.line = 0;
-        window.cursor = 0;
+    buffer_window.hex_view = !buffer_window.hex_view;
+    if buffer_window.hex_view {
+        buffer_window.start_line = 0;
+        buffer_window.line = 0;
+        buffer_window.cursor = 0;
     }
+
+    return empty_string, false;
 }
 
 start_command_mode() {
