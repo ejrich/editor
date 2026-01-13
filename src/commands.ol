@@ -95,6 +95,26 @@ string, bool reload_configurations() {
     return "Settings reloaded", false;
 }
 
+[command, hex]
+toggle_hex_view() {
+    workspace := get_workspace();
+
+    window: BufferWindow*;
+    switch workspace.current_window {
+        case SelectedWindow.Left;
+            window = &workspace.left_window.buffer_window;
+        case SelectedWindow.Right;
+            window = &workspace.right_window.buffer_window;
+    }
+
+    window.hex_view = !window.hex_view;
+    if window.hex_view {
+        window.start_line = 0;
+        window.line = 0;
+        window.cursor = 0;
+    }
+}
+
 start_command_mode() {
     clear_buffer(CommandMode.Command);
 }

@@ -3666,6 +3666,7 @@ struct BufferWindow {
     line: u32;
     start_line: u32;
     buffer_index := -1;
+    hex_view: bool;
     previous: BufferWindow*;
     next: BufferWindow*;
     static_buffer: Buffer*;
