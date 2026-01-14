@@ -131,35 +131,15 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 
             if line.length {
                 each i in clamp(line.length, 0, line_buffer_length) {
-                    if byte_column == bytes_per_line {
-                        draw_byte_line(bytes, byte_line, byte_column, x, y);
-                        available_lines_to_render--;
-                        y -= global_font_config.line_height;
-                        byte_column = 0;
-
-                        if available_lines_to_render == 0
-                            break;
-                    }
-
-                    byte_line[byte_column++] = line.data.data[i];
-                    bytes++;
+                    if !add_byte_to_line(line.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render)
+                        break;
                 }
 
                 child := line.child;
                 while child != null && available_lines_to_render > 0 {
                     each i in child.length {
-                        if byte_column == bytes_per_line {
-                            draw_byte_line(bytes, byte_line, byte_column, x, y);
-                            available_lines_to_render--;
-                            y -= global_font_config.line_height;
-                            byte_column = 0;
-
-                            if available_lines_to_render == 0
-                                break;
-                        }
-
-                        byte_line[byte_column++] = child.data.data[i];
-                        bytes++;
+                        if !add_byte_to_line(child.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render)
+                            break;
                     }
 
                     child = child.next;
@@ -167,6 +147,9 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
             }
 
             line = line.next;
+            if line {
+                add_byte_to_line('\n', &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render);
+            }
         }
 
         if available_lines_to_render > 0 && byte_column > 0 {
@@ -343,6 +326,23 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     render_text(title, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
 
     render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
+}
+
+bool add_byte_to_line(u8 byte, int* bytes, Array<u8> byte_line, int* byte_column, float x, float* y, u32* available_lines_to_render) {
+    if *byte_column == byte_line.length {
+        draw_byte_line(*bytes, byte_line, *byte_column, x, *y);
+        *available_lines_to_render = *available_lines_to_render - 1;
+        *y = *y - global_font_config.line_height;
+        *byte_column = 0;
+
+        if *available_lines_to_render == 0
+            return false;
+    }
+
+    byte_line[*byte_column] = byte;
+    *byte_column = *byte_column + 1;
+    *bytes = *bytes + 1;
+    return true;
 }
 
 draw_byte_line(int total_bytes, Array<u8> byte_line, int bytes_in_line, float x, float y) {
