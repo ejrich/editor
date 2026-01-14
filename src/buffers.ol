@@ -113,123 +113,179 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
         draw_quad(&line_background_quad, 1);
     }
 
-    start_line := clamp(window.start_line, 0, buffer.line_count - 1);
-    cursor_line := clamp(window.line, 0, buffer.line_count - 1) + 1;
-    digits := buffer.line_count_digits;
-
-    visual_start_line, visual_end_line := -1;
-    if selected {
-        switch edit_mode {
-            case EditMode.Visual;
-            case EditMode.VisualLine;
-            case EditMode.VisualBlock; {
-                visual_start_line = visual_mode_data.line + 1;
-                visual_end_line = cursor_line;
-                if cursor_line <= visual_mode_data.line {
-                    visual_start_line = cursor_line;
-                    visual_end_line = visual_mode_data.line + 1;
-                }
-            }
-        }
-    }
-
-    // Render the file text
     line := buffer.lines;
     line_number: u32 = 1;
     line_cursor: u32;
+    cursor_line: u32;
     available_lines_to_render := max_lines;
     y := initial_y;
 
-    while line != null && available_lines_to_render > 0 {
-        if line_number > start_line {
-            cursor, visual_start, visual_end := -1;
+    if window.hex_view {
+        bytes_per_line := 16; #const
+        byte_line: Array<u8>[bytes_per_line];
 
-            if window == get_terminal_window(workspace) &&
-                !workspace.terminal_data.running &&
-                workspace.terminal_data.writing &&
-                line_number == workspace.terminal_data.command_line_index + 1 {
-                cursor = workspace.terminal_data.command_write_cursor;
-            }
-            else if line_number == cursor_line ||
-                (edit_mode == EditMode.BlockInsert &&
-                line_number >= (block_insert_data.start_line + 1) &&
-                line_number <= (block_insert_data.end_line + 1)) {
-                cursor = window.cursor;
+        bytes := 0;
+        byte_column := 0;
+        while line != null && available_lines_to_render > 0 {
+            // TODO Handle start line
 
-                if line.length == 0 {
-                    if edit_mode == EditMode.BlockInsert && cursor > 0 {
-                        cursor = -1;
+            if line.length {
+                each i in clamp(line.length, 0, line_buffer_length) {
+                    if byte_column == bytes_per_line {
+                        draw_byte_line(bytes, byte_line, byte_column, x, y);
+                        available_lines_to_render--;
+                        y -= global_font_config.line_height;
+                        byte_column = 0;
+
+                        if available_lines_to_render == 0
+                            break;
                     }
-                    else {
-                        cursor = 0;
-                    }
-                }
-                else if cursor >= line.length {
-                    if edit_mode == EditMode.BlockInsert {
-                        cursor = -1;
-                    }
-                    else if edit_mode != EditMode.Normal {
-                        cursor = line.length;
-                    }
-                    else {
-                        cursor = line.length - 1;
-                    }
+
+                    byte_line[byte_column++] = line.data.data[i];
+                    bytes++;
                 }
 
-                line_cursor = cursor;
+                child := line.child;
+                while child != null && available_lines_to_render > 0 {
+                    each i in child.length {
+                        if byte_column == bytes_per_line {
+                            draw_byte_line(bytes, byte_line, byte_column, x, y);
+                            available_lines_to_render--;
+                            y -= global_font_config.line_height;
+                            byte_column = 0;
+
+                            if available_lines_to_render == 0
+                                break;
+                        }
+
+                        byte_line[byte_column++] = child.data.data[i];
+                        bytes++;
+                    }
+
+                    child = child.next;
+                }
             }
 
-            if line_number >= visual_start_line && line_number <= visual_end_line {
-                visual_start = 0;
-                visual_end = line.length - 1;
-                switch edit_mode {
-                    case EditMode.Visual; {
-                        if visual_start_line == visual_end_line {
-                            if cursor > visual_mode_data.cursor {
-                                visual_start = visual_mode_data.cursor;
-                                visual_end = cursor;
-                            }
-                            else {
-                                visual_start = cursor;
-                                visual_end = visual_mode_data.cursor;
-                            }
-                        }
-                        else if line_number == visual_start_line {
-                            if cursor == -1 {
-                                visual_start = visual_mode_data.cursor;
-                            }
-                            else {
-                                visual_start = cursor;
-                            }
-                        }
-                        else if line_number == visual_end_line {
-                            if cursor == -1 {
-                                visual_end = visual_mode_data.cursor;
-                            }
-                            else {
-                                visual_end = cursor;
-                            }
-                        }
+            line = line.next;
+        }
+
+        if available_lines_to_render > 0 && byte_column > 0 {
+            draw_byte_line(bytes, byte_line, byte_column, x, y);
+        }
+    }
+    else {
+        start_line := clamp(window.start_line, 0, buffer.line_count - 1);
+        cursor_line = clamp(window.line, 0, buffer.line_count - 1) + 1;
+        digits := buffer.line_count_digits;
+
+        visual_start_line, visual_end_line := -1;
+        if selected {
+            switch edit_mode {
+                case EditMode.Visual;
+                case EditMode.VisualLine;
+                case EditMode.VisualBlock; {
+                    visual_start_line = visual_mode_data.line + 1;
+                    visual_end_line = cursor_line;
+                    if cursor_line <= visual_mode_data.line {
+                        visual_start_line = cursor_line;
+                        visual_end_line = visual_mode_data.line + 1;
                     }
-                    case EditMode.VisualBlock; {
-                        if window.cursor > visual_mode_data.cursor {
-                            visual_start = visual_mode_data.cursor;
-                            visual_end = window.cursor;
+                }
+            }
+        }
+
+        // Render the file text
+        while line != null && available_lines_to_render > 0 {
+            if line_number > start_line {
+                cursor, visual_start, visual_end := -1;
+
+                if window == get_terminal_window(workspace) &&
+                    !workspace.terminal_data.running &&
+                    workspace.terminal_data.writing &&
+                    line_number == workspace.terminal_data.command_line_index + 1 {
+                    cursor = workspace.terminal_data.command_write_cursor;
+                }
+                else if line_number == cursor_line ||
+                    (edit_mode == EditMode.BlockInsert &&
+                    line_number >= (block_insert_data.start_line + 1) &&
+                    line_number <= (block_insert_data.end_line + 1)) {
+                    cursor = window.cursor;
+
+                    if line.length == 0 {
+                        if edit_mode == EditMode.BlockInsert && cursor > 0 {
+                            cursor = -1;
                         }
                         else {
-                            visual_start = window.cursor;
-                            visual_end = visual_mode_data.cursor;
+                            cursor = 0;
+                        }
+                    }
+                    else if cursor >= line.length {
+                        if edit_mode == EditMode.BlockInsert {
+                            cursor = -1;
+                        }
+                        else if edit_mode != EditMode.Normal {
+                            cursor = line.length;
+                        }
+                        else {
+                            cursor = line.length - 1;
+                        }
+                    }
+
+                    line_cursor = cursor;
+                }
+
+                if line_number >= visual_start_line && line_number <= visual_end_line {
+                    visual_start = 0;
+                    visual_end = line.length - 1;
+                    switch edit_mode {
+                        case EditMode.Visual; {
+                            if visual_start_line == visual_end_line {
+                                if cursor > visual_mode_data.cursor {
+                                    visual_start = visual_mode_data.cursor;
+                                    visual_end = cursor;
+                                }
+                                else {
+                                    visual_start = cursor;
+                                    visual_end = visual_mode_data.cursor;
+                                }
+                            }
+                            else if line_number == visual_start_line {
+                                if cursor == -1 {
+                                    visual_start = visual_mode_data.cursor;
+                                }
+                                else {
+                                    visual_start = cursor;
+                                }
+                            }
+                            else if line_number == visual_end_line {
+                                if cursor == -1 {
+                                    visual_end = visual_mode_data.cursor;
+                                }
+                                else {
+                                    visual_end = cursor;
+                                }
+                            }
+                        }
+                        case EditMode.VisualBlock; {
+                            if window.cursor > visual_mode_data.cursor {
+                                visual_start = visual_mode_data.cursor;
+                                visual_end = window.cursor;
+                            }
+                            else {
+                                visual_start = window.cursor;
+                                visual_end = visual_mode_data.cursor;
+                            }
                         }
                     }
                 }
-            }
 
-            lines := render_line(line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
-            y -= global_font_config.line_height * lines;
-            available_lines_to_render -= lines;
+                lines := render_line(line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
+                y -= global_font_config.line_height * lines;
+                available_lines_to_render -= lines;
+            }
+            line = line.next;
+            line_number++;
         }
-        line = line.next;
-        line_number++;
     }
 
     // Render the file information
@@ -270,6 +326,11 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
             mode_string = " TERMINAL ";
         }
 
+        if window.hex_view {
+            highlight_color = appearance.normal_mode_color;
+            mode_string = " HEX ";
+        }
+
         render_text(mode_string, settings.font_size, x, y, appearance.font_color, highlight_color);
         x += mode_string.length * global_font_config.quad_advance;
     }
@@ -282,6 +343,36 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     render_text(title, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
 
     render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
+}
+
+draw_byte_line(int total_bytes, Array<u8> byte_line, int bytes_in_line, float x, float y) {
+    byte_string_buffer: Array<u8>[2];
+    byte_string: string = { length = 2; data = byte_string_buffer.data; }
+
+    start_byte := total_bytes - bytes_in_line;
+    render_text(settings.font_size, x, y, appearance.font_color, vec4(), "0x%:", int_format(start_byte, 16, 8));
+    x += global_font_config.quad_advance * 12;
+
+    each i in bytes_in_line {
+        byte := byte_line[i];
+        byte_string[0] = to_hex_char((byte & 0xF0) >> 4);
+        byte_string[1] = to_hex_char(byte & 0x0F);
+
+        render_text(byte_string, settings.font_size, x, y, appearance.font_color, vec4());
+        x += global_font_config.quad_advance * 3;
+
+        if byte < ' ' || byte > '~' {
+            byte_line[i] = '.';
+        }
+    }
+
+    line_string: string = { length = bytes_in_line; data = byte_line.data; }
+    render_text(line_string, settings.font_size, x, y, appearance.font_color, vec4());
+}
+
+u8 to_hex_char(u8 value) {
+    if value < 10 return value + '0';
+    return value + '7';
 }
 
 // Opening buffers with files

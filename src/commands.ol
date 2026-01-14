@@ -97,6 +97,7 @@ string, bool reload_configurations() {
 
 [command, hex]
 string, bool toggle_hex_view() {
+    edit_mode = EditMode.Normal;
     workspace := get_workspace();
 
     buffer_window: BufferWindow*;
