@@ -1038,7 +1038,7 @@ u32 copy_line_into_buffer(u8* buffer, BufferLine* line, u32 index, u32 start = 0
 
 paste_by_cursor(bool before, u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1048,7 +1048,7 @@ paste_by_cursor(bool before, u32 paste_count) {
 
 paste_over_selected(u32 paste_count) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1260,7 +1260,7 @@ BufferLine* paste_lines(BufferWindow* buffer_window, Buffer* buffer, BufferLine*
 // Insert mode functions
 start_insert_mode(bool allow_eol, s32 change = 0) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1286,7 +1286,7 @@ start_insert_mode(bool allow_eol, s32 change = 0) {
 
 end_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1323,7 +1323,7 @@ add_text_to_end_of_buffer(Buffer* buffer, string value) {
 
 add_text_to_line(string text) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1472,7 +1472,7 @@ block_insert_data: BlockInsertData;
 
 init_block_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1483,7 +1483,7 @@ init_block_insert_mode() {
 
 start_block_insert_mode() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1500,7 +1500,7 @@ start_block_insert_mode() {
 
 add_text_to_block(string text) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1522,7 +1522,7 @@ add_text_to_block(string text) {
 
 delete_from_cursor_block(bool back) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1572,7 +1572,7 @@ delete_from_cursor_block(bool back) {
 // Deletions
 delete_lines(bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1608,7 +1608,7 @@ delete_lines(bool delete_all, bool record = false, bool inserting = false) {
 
 delete_lines(u32 line_1, u32 line_2, bool delete_all, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1681,7 +1681,7 @@ delete_lines_in_range(Buffer* buffer, BufferLine* line, u32 count, bool delete_a
 
 delete_selected(bool copy = true, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1755,7 +1755,7 @@ delete_selected(bool copy = true, bool record = false, bool inserting = false) {
 
 delete_selected(u32 line_1, u32 cursor_1, u32 line_2, u32 cursor_2, bool delete_end_cursor, bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1842,7 +1842,7 @@ delete_selected(BufferWindow* buffer_window, Buffer* buffer, u32 line_1, u32 cur
 
 clear_remaining_line(bool record = false, bool inserting = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1873,7 +1873,7 @@ clear_remaining_line(bool record = false, bool inserting = false) {
 
 delete_from_cursor(bool back) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -1918,7 +1918,7 @@ delete_from_cursor(bool back) {
 
 delete_cursor(bool back, u32 cursor_changes) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -2024,7 +2024,7 @@ u32 delete_from_line(BufferLine* line, u32 start, u32 end, bool delete_end_curso
 
 join_lines(u32 lines) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -2062,7 +2062,7 @@ join_lines(u32 lines) {
 
 add_new_line(bool above, bool split = false, bool opening = false) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -2155,7 +2155,7 @@ BufferLine* add_new_line(Buffer* buffer, BufferLine* line, u32 cursor) {
 
 change_indentation(bool indent, u32 indentations) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -2212,7 +2212,7 @@ change_indentation(bool indent, u32 indentations) {
 
 replace_characters(u8 char) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -2319,7 +2319,7 @@ enum ScrollTo {
 
 scroll_to_position(ScrollTo scroll_position) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer_window.hex_view {
         return;
     }
 
@@ -2367,7 +2367,9 @@ go_to_line(s32 line) {
         return;
     }
 
-    record_jump(buffer_window);
+    if !buffer_window.hex_view {
+        record_jump(buffer_window);
+    }
 
     if line < 0 {
         buffer_window.line = clamp(buffer.line_count + line, 0, buffer.line_count - 1);
@@ -2376,7 +2378,12 @@ go_to_line(s32 line) {
         buffer_window.line = clamp(line - 1, 0, buffer.line_count - 1);
     }
 
-    adjust_start_line(buffer_window);
+    if buffer_window.hex_view {
+        adjust_start_byte(buffer_window, buffer);
+    }
+    else {
+        adjust_start_line(buffer_window);
+    }
 }
 
 u32 determine_max_lines() {
@@ -2400,7 +2407,7 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
     if buffer_window.hex_view {
         line := get_buffer_line(buffer, buffer_window.line);
         byte_changes := line_changes * bytes_per_line;
-        move_hex_view_cursor(buffer_window, line, up, byte_changes);
+        move_hex_view_cursor(buffer_window, buffer, line, up, byte_changes);
         return;
     }
 
@@ -2490,7 +2497,7 @@ move_cursor(bool left, u32 cursor_changes) {
     line := get_buffer_line(buffer, buffer_window.line);
 
     if buffer_window.hex_view {
-        move_hex_view_cursor(buffer_window, line, left, cursor_changes);
+        move_hex_view_cursor(buffer_window, buffer, line, left, cursor_changes);
         return;
     }
 
@@ -2537,6 +2544,11 @@ move_to_start_of_word(bool forward, bool full_word) {
 
     line := get_buffer_line(buffer, buffer_window.line);
     if line == null {
+        return;
+    }
+
+    if buffer_window.hex_view {
+        move_hex_view_cursor(buffer_window, buffer, line, !forward, 1);
         return;
     }
 
@@ -2672,6 +2684,11 @@ move_to_end_of_word(bool full_word) {
         return;
     }
 
+    if buffer_window.hex_view {
+        move_hex_view_cursor(buffer_window, buffer, line, false, 1);
+        return;
+    }
+
     char: u8;
     is_whitespace, is_last := false;
     cursor: u32;
@@ -2729,7 +2746,7 @@ move_to_line_boundary(bool end, bool soft_boundary, bool with_wrap) {
     }
 
     line := get_buffer_line(buffer, buffer_window.line);
-    if line == null {
+    if line == null || buffer_window.hex_view {
         return;
     }
 
@@ -2787,7 +2804,7 @@ move_block(bool forward, bool paragraph) {
     }
 
     line := get_buffer_line(buffer, buffer_window.line);
-    if line == null {
+    if line == null || buffer_window.hex_view {
         return;
     }
 
@@ -2869,7 +2886,7 @@ move_block(bool forward, bool paragraph) {
 
 move_to_syntax_match() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer_window.hex_view {
         return;
     }
 
@@ -3021,7 +3038,7 @@ find_character_in_line(bool forward, bool before, string char) {
     if char.length != 1 return;
 
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null {
+    if buffer_window == null || buffer == null || buffer_window.hex_view {
         return;
     }
 
@@ -3221,7 +3238,7 @@ bool begin_replace_value_in_buffer(string value, string new_value) {
     if value.length == 0 return false;
 
     find_and_replace_data.buffer_window, find_and_replace_data.buffer = get_current_window_and_buffer();
-    if find_and_replace_data.buffer_window == null || find_and_replace_data.buffer == null || find_and_replace_data.buffer.read_only {
+    if find_and_replace_data.buffer_window == null || find_and_replace_data.buffer == null || find_and_replace_data.buffer.read_only || find_and_replace_data.buffer_window.hex_view {
         return false;
     }
 
@@ -3465,7 +3482,7 @@ replace_value_in_buffer() {
 // Formatting specific functions
 change_selected_line_commenting() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -3577,7 +3594,7 @@ string get_comment_string(string path) {
 
 toggle_casing(bool upper) {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
         return;
     }
 
@@ -4029,7 +4046,7 @@ scratch_window: BufferWindow;
 // Hex view functions
 bytes_per_line := 16; #const
 
-move_hex_view_cursor(BufferWindow* buffer_window, BufferLine* line, bool left, int byte_changes) {
+move_hex_view_cursor(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, bool left, int byte_changes) {
     buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length);
 
     if left {
@@ -4069,7 +4086,45 @@ move_hex_view_cursor(BufferWindow* buffer_window, BufferLine* line, bool left, i
         }
     }
 
-    // TODO Adjust the start byte
+    adjust_start_byte(buffer_window, buffer);
+}
+
+adjust_start_byte(BufferWindow* buffer_window, Buffer* buffer) {
+    max_lines, _ := determine_max_lines_and_scroll_offset(buffer_window);
+    max_bytes := max_lines * bytes_per_line;
+
+    current_byte, current_line: u32;
+
+    line := buffer.lines;
+    while line != null {
+        if current_line == buffer_window.line {
+            if buffer_window.cursor > line.length {
+                buffer_window.cursor = line.length;
+                if line.next == null {
+                    buffer_window.cursor--;
+                }
+            }
+            current_byte += buffer_window.cursor;
+            break;
+        }
+        else {
+            current_byte += line.length + 1;
+        }
+
+        current_line++;
+        line = line.next;
+    }
+
+    if buffer_window.start_byte > current_byte {
+        while buffer_window.start_byte > current_byte {
+            buffer_window.start_byte -= bytes_per_line;
+        }
+    }
+    else if buffer_window.start_byte + max_bytes <= current_byte {
+        while buffer_window.start_byte + max_bytes <= current_byte {
+            buffer_window.start_byte += bytes_per_line;
+        }
+    }
 }
 
 bool add_byte_to_line(u8 byte, int* bytes, Array<u8> byte_line, int* byte_column, float x, float* y, u32* available_lines_to_render, u32 start_byte, bool cursor, int* cursor_column) {
@@ -4484,7 +4539,7 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
         window.line = clamp(window.line, 0, buffer.line_count - 1);
         line := get_buffer_line(buffer, window.line);
         byte_changes := line_changes * bytes_per_line;
-        move_hex_view_cursor(window, line, up, byte_changes);
+        move_hex_view_cursor(window, buffer, line, up, byte_changes);
         return;
     }
 
@@ -4497,7 +4552,7 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
     if window.hex_view {
         line := get_buffer_line(buffer, window.line);
         byte_changes := line_changes * bytes_per_line;
-        move_hex_view_cursor(window, line, up, byte_changes);
+        move_hex_view_cursor(window, buffer, line, up, byte_changes);
         return;
     }
 

@@ -295,6 +295,10 @@ visual_mode(ModCode mod) {
             visual_mode_data.line, visual_mode_data.cursor = get_current_position();
             buffer_window := get_current_window();
             if buffer_window {
+                if buffer_window.hex_view {
+                    return;
+                }
+
                 buffer_window.line = visual_mode_data.line;
                 buffer_window.cursor = visual_mode_data.cursor;
             }
