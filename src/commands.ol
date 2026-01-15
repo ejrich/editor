@@ -113,6 +113,10 @@ string, bool toggle_hex_view() {
         buffer_window.start_line = 0;
         buffer_window.line = 0;
         buffer_window.cursor = 0;
+        buffer_window.start_byte = 0;
+    }
+    else {
+        adjust_start_line(buffer_window);
     }
 
     return empty_string, false;

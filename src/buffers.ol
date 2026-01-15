@@ -116,49 +116,56 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     line := buffer.lines;
     line_number: u32 = 1;
     line_cursor: u32;
-    cursor_line: u32;
+    cursor_line: u32 = clamp(window.line, 0, buffer.line_count - 1) + 1;
     available_lines_to_render := max_lines;
     y := initial_y;
 
     if window.hex_view {
-        bytes_per_line := 16; #const
         byte_line: Array<u8>[bytes_per_line];
 
         bytes := 0;
         byte_column := 0;
+        cursor_column := -1;
         while line != null && available_lines_to_render > 0 {
-            // TODO Handle start line
+            line_has_cursor := false;
+            if line_number == cursor_line {
+                line_has_cursor = true;
+                line_cursor = clamp(window.cursor, 0, line.length);
+            }
 
             if line.length {
                 each i in clamp(line.length, 0, line_buffer_length) {
-                    if !add_byte_to_line(line.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render)
+                    if !add_byte_to_line(line.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render, window.start_byte, line_has_cursor && i == line_cursor, &cursor_column)
                         break;
                 }
 
                 child := line.child;
+                start := line_buffer_length;
                 while child != null && available_lines_to_render > 0 {
                     each i in child.length {
-                        if !add_byte_to_line(child.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render)
+                        if !add_byte_to_line(child.data.data[i], &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render, window.start_byte, line_has_cursor && i + start == line_cursor, &cursor_column)
                             break;
                     }
 
                     child = child.next;
+                    start += line_buffer_length;
                 }
             }
 
-            line = line.next;
-            if line {
-                add_byte_to_line('\n', &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render);
+            if line.next {
+                add_byte_to_line('\n', &bytes, byte_line, &byte_column, x, &y, &available_lines_to_render, window.start_byte, line_has_cursor && line_cursor == line.length, &cursor_column);
             }
+
+            line = line.next;
+            line_number++;
         }
 
         if available_lines_to_render > 0 && byte_column > 0 {
-            draw_byte_line(bytes, byte_line, byte_column, x, y);
+            draw_byte_line(bytes, byte_line, byte_column, cursor_column, x, y);
         }
     }
     else {
         start_line := clamp(window.start_line, 0, buffer.line_count - 1);
-        cursor_line = clamp(window.line, 0, buffer.line_count - 1) + 1;
         digits := buffer.line_count_digits;
 
         visual_start_line, visual_end_line := -1;
@@ -326,53 +333,6 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     render_text(title, settings.font_size, x + global_font_config.quad_advance, y, appearance.font_color, vec4());
 
     render_text(settings.font_size, line_max_x, y, appearance.font_color, highlight_color, " %/% % ", TextAlignment.Right, cursor_line, buffer.line_count, line_cursor + 1);
-}
-
-bool add_byte_to_line(u8 byte, int* bytes, Array<u8> byte_line, int* byte_column, float x, float* y, u32* available_lines_to_render) {
-    if *byte_column == byte_line.length {
-        draw_byte_line(*bytes, byte_line, *byte_column, x, *y);
-        *available_lines_to_render = *available_lines_to_render - 1;
-        *y = *y - global_font_config.line_height;
-        *byte_column = 0;
-
-        if *available_lines_to_render == 0
-            return false;
-    }
-
-    byte_line[*byte_column] = byte;
-    *byte_column = *byte_column + 1;
-    *bytes = *bytes + 1;
-    return true;
-}
-
-draw_byte_line(int total_bytes, Array<u8> byte_line, int bytes_in_line, float x, float y) {
-    byte_string_buffer: Array<u8>[2];
-    byte_string: string = { length = 2; data = byte_string_buffer.data; }
-
-    start_byte := total_bytes - bytes_in_line;
-    render_text(settings.font_size, x, y, appearance.font_color, vec4(), "0x%:", int_format(start_byte, 16, 8));
-    x += global_font_config.quad_advance * 12;
-
-    each i in bytes_in_line {
-        byte := byte_line[i];
-        byte_string[0] = to_hex_char((byte & 0xF0) >> 4);
-        byte_string[1] = to_hex_char(byte & 0x0F);
-
-        render_text(byte_string, settings.font_size, x, y, appearance.font_color, vec4());
-        x += global_font_config.quad_advance * 3;
-
-        if byte < ' ' || byte > '~' {
-            byte_line[i] = '.';
-        }
-    }
-
-    line_string: string = { length = bytes_in_line; data = byte_line.data; }
-    render_text(line_string, settings.font_size, x, y, appearance.font_color, vec4());
-}
-
-u8 to_hex_char(u8 value) {
-    if value < 10 return value + '0';
-    return value + '7';
 }
 
 // Opening buffers with files
@@ -3758,6 +3718,7 @@ struct BufferWindow {
     start_line: u32;
     buffer_index := -1;
     hex_view: bool;
+    start_byte: u32;
     previous: BufferWindow*;
     next: BufferWindow*;
     static_buffer: Buffer*;
@@ -4051,6 +4012,78 @@ buffer_entries_block_size := 10; #const
 
 scratch_window: BufferWindow;
 
+// Hex view functions
+bytes_per_line := 16; #const
+
+bool add_byte_to_line(u8 byte, int* bytes, Array<u8> byte_line, int* byte_column, float x, float* y, u32* available_lines_to_render, u32 start_byte, bool cursor, int* cursor_column) {
+    if *bytes < start_byte {
+        *bytes = *bytes + 1;
+        return true;
+    }
+
+    if *available_lines_to_render == 0
+        return false;
+
+    if *byte_column == byte_line.length {
+        draw_byte_line(*bytes, byte_line, *byte_column, *cursor_column, x, *y);
+        *available_lines_to_render = *available_lines_to_render - 1;
+        *y = *y - global_font_config.line_height;
+        *byte_column = 0;
+        *cursor_column = -1;
+
+        if *available_lines_to_render == 0
+            return false;
+    }
+
+    if cursor {
+        *cursor_column = *byte_column;
+    }
+
+    byte_line[*byte_column] = byte;
+    *byte_column = *byte_column + 1;
+    *bytes = *bytes + 1;
+    return true;
+}
+
+draw_byte_line(int total_bytes, Array<u8> byte_line, int bytes_in_line, int cursor, float x, float y) {
+    byte_string_buffer: Array<u8>[2];
+    byte_string: string = { length = 2; data = byte_string_buffer.data; }
+
+    start_byte := total_bytes - bytes_in_line;
+    render_text(settings.font_size, x, y, appearance.font_color, vec4(), "0x%:", int_format(start_byte, 16, 8));
+    x += global_font_config.quad_advance * 12;
+    x_end := x + global_font_config.quad_advance * 3 * bytes_per_line;
+
+    each i in bytes_in_line {
+        byte := byte_line[i];
+        byte_string[0] = to_hex_char((byte & 0xF0) >> 4);
+        byte_string[1] = to_hex_char(byte & 0x0F);
+
+        ascii_string: string = { length = 1; data = &byte; }
+        if byte < ' ' || byte > '~' {
+            byte = '.';
+        }
+
+        if i == cursor {
+            render_text(byte_string, settings.font_size, x, y, appearance.cursor_font_color, appearance.cursor_color);
+            render_text(ascii_string, settings.font_size, x_end, y, appearance.cursor_font_color, appearance.cursor_color);
+        }
+        else {
+            render_text(byte_string, settings.font_size, x, y, appearance.font_color, vec4());
+            render_text(ascii_string, settings.font_size, x_end, y, appearance.font_color, vec4());
+        }
+
+        x += global_font_config.quad_advance * 3;
+        x_end += global_font_config.quad_advance;
+    }
+}
+
+u8 to_hex_char(u8 value) {
+    if value < 10 return value + '0';
+    return value + '7';
+}
+
+// BufferWindow and Buffer support functions
 BufferWindow* open_or_create_buffer_window(int buffer_index, BufferWindow* stack_top) {
     if stack_top != null && stack_top.buffer_index == buffer_index
         return stack_top;
