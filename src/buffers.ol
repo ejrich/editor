@@ -2397,6 +2397,13 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
+    if buffer_window.hex_view {
+        line := get_buffer_line(buffer, buffer_window.line);
+        byte_changes := line_changes * bytes_per_line;
+        move_hex_view_cursor(buffer_window, line, up, byte_changes);
+        return;
+    }
+
     if with_wrap {
         max_chars := calculate_max_chars_per_line(buffer_window, buffer.line_count_digits);
         line := get_buffer_line(buffer, buffer_window.line);
@@ -2479,8 +2486,15 @@ move_cursor(bool left, u32 cursor_changes) {
         return;
     }
 
+    buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
-    if line == null || line.length == 0 {
+
+    if buffer_window.hex_view {
+        move_hex_view_cursor(buffer_window, line, left, cursor_changes);
+        return;
+    }
+
+    if line.length == 0 {
         return;
     }
 
@@ -4015,6 +4029,49 @@ scratch_window: BufferWindow;
 // Hex view functions
 bytes_per_line := 16; #const
 
+move_hex_view_cursor(BufferWindow* buffer_window, BufferLine* line, bool left, int byte_changes) {
+    buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length);
+
+    if left {
+        while line != null && byte_changes > 0 {
+            if buffer_window.cursor - byte_changes >= 0 {
+                buffer_window.cursor -= byte_changes;
+                byte_changes = 0;
+            }
+            else if line.previous {
+                byte_changes -= buffer_window.cursor + 1;
+                buffer_window.cursor = line.previous.length;
+                buffer_window.line--;
+            }
+            else {
+                byte_changes = 0;
+            }
+
+            line = line.previous;
+        }
+    }
+    else {
+        while line != null && byte_changes > 0 {
+            if buffer_window.cursor + byte_changes <= line.length {
+                buffer_window.cursor += byte_changes;
+                byte_changes = 0;
+            }
+            else if line.next {
+                byte_changes -= line.length - buffer_window.cursor + 1;
+                buffer_window.cursor = 0;
+                buffer_window.line++;
+            }
+            else {
+                byte_changes = 0;
+            }
+
+            line = line.next;
+        }
+    }
+
+    // TODO Adjust the start byte
+}
+
 bool add_byte_to_line(u8 byte, int* bytes, Array<u8> byte_line, int* byte_column, float x, float* y, u32* available_lines_to_render, u32 start_byte, bool cursor, int* cursor_column) {
     if *bytes < start_byte {
         *bytes = *bytes + 1;
@@ -4422,12 +4479,27 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
         return;
     }
 
+    buffer := &workspace.buffers[window.buffer_index];
+    if window.hex_view {
+        window.line = clamp(window.line, 0, buffer.line_count - 1);
+        line := get_buffer_line(buffer, window.line);
+        byte_changes := line_changes * bytes_per_line;
+        move_hex_view_cursor(window, line, up, byte_changes);
+        return;
+    }
+
     if up window.start_line -= line_changes;
     else  window.start_line += line_changes;
 
-    buffer := workspace.buffers[window.buffer_index];
     window.start_line = clamp(window.start_line, 0, buffer.line_count - 1);
     window.line = clamp(window.line, window.start_line, buffer.line_count - 1);
+
+    if window.hex_view {
+        line := get_buffer_line(buffer, window.line);
+        byte_changes := line_changes * bytes_per_line;
+        move_hex_view_cursor(window, line, up, byte_changes);
+        return;
+    }
 
     max_lines, scroll_offset := determine_max_lines_and_scroll_offset(window);
     if scroll_offset > max_lines {
