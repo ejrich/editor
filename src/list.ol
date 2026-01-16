@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null) {
+start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null, string initial_value = empty_string) {
     list = {
         displaying = true;
         browsing = false;
@@ -12,7 +12,7 @@ start_list_mode(string title, ListEntries entries, ListTotal total, Callback loa
         action = action;
         cleanup = cleanup;
     }
-    start_list_command_mode();
+    start_list_command_mode(initial_value);
 }
 
 filter_list(string filter) {

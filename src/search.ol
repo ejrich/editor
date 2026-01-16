@@ -3,9 +3,9 @@ open_files_list() {
     start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files);
 }
 
-open_search_list() {
+open_search_list(string initial_search = empty_string) {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, initial_value = initial_search);
 }
 
 #private

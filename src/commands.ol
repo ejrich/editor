@@ -134,8 +134,8 @@ start_replace_mode() {
     clear_buffer(CommandMode.FindAndReplace);
 }
 
-start_list_command_mode() {
-    clear_buffer(CommandMode.List);
+start_list_command_mode(string initial_value) {
+    clear_buffer(CommandMode.List, initial_value);
 }
 
 start_commit_mode() {
@@ -657,7 +657,7 @@ struct CommandPromptBuffer {
 
 command_prompt_buffer: CommandPromptBuffer;
 
-clear_buffer(CommandMode mode) {
+clear_buffer(CommandMode mode, string new_value = empty_string) {
     current_command_mode = mode;
     command_index = -1;
     search_index = -1;
@@ -677,6 +677,17 @@ clear_buffer(CommandMode mode) {
                 memory_copy(command_prompt_buffer.buffer.data, selection.data, selection.length);
                 command_prompt_buffer = { length = selection.length; cursor = selection.length; }
             }
+        }
+    }
+
+    if new_value.length {
+        memory_copy(command_prompt_buffer.buffer.data, new_value.data, new_value.length);
+        command_prompt_buffer.length += new_value.length;
+        command_prompt_buffer.cursor += new_value.length;
+
+        if mode == CommandMode.List {
+            buffer_string, _ := get_buffer_string();
+            filter_list(buffer_string);
         }
     }
 }

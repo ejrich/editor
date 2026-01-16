@@ -814,3 +814,8 @@ next_workspace(ModCode mod) {
 close_workspace(ModCode mod) {
     close_current_workspace(true);
 }
+
+[keybind, no_repeat]
+search_for_value(ModCode mod) {
+    search_for_value_in_buffer();
+}

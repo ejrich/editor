@@ -3742,6 +3742,53 @@ open_buffers_list() {
     start_list_mode("Buffers", get_open_buffers, get_open_buffer_count, get_buffer, change_buffer_filter, open_buffer);
 }
 
+search_for_value_in_buffer() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer_window == null || buffer == null {
+        return;
+    }
+
+    line := get_buffer_line(buffer, buffer_window.line);
+    if line == null || line.length == 0 {
+        return;
+    }
+
+    cursor := clamp(buffer_window.cursor, 0, line.length - 1);
+    cursor_char := get_char(line, cursor);
+    if cursor_char == ' ' {
+        return;
+    }
+
+    start_index := cursor;
+    while start_index > 0 {
+        if get_char(line, start_index - 1) == ' ' {
+            break;
+        }
+
+        start_index--;
+    }
+
+    end_index := cursor;
+    while end_index < line.length - 1 {
+        if get_char(line, end_index + 1) == ' ' {
+            break;
+        }
+
+        end_index++;
+    }
+
+    length := end_index - start_index + 1;
+    search_buffer: Array<u8>[length];
+    search: string = { length = length; data = search_buffer.data; }
+
+    index := 0;
+    each i in start_index..end_index {
+        search[index++] = get_char(line, i);
+    }
+
+    open_search_list(search);
+}
+
 // Buffer and window functions
 struct BufferWindow {
     cursor: u32;

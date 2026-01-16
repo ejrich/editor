@@ -52,3 +52,4 @@ toggle_terminal=Tick
 previous_workspace=Shift+Alt+H
 next_workspace=Shift+Alt+L
 close_workspace=Shift+Alt+W
+search_for_value=F12
