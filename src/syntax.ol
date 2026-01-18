@@ -14,7 +14,6 @@ Syntax* get_syntax_for_file(string file_path) {
 
         each syntax in syntax_configurations {
             if syntax.extension == extension {
-                log("%\n", syntax);
                 return &syntax;
             }
         }
@@ -26,10 +25,11 @@ Syntax* get_syntax_for_file(string file_path) {
 struct Syntax {
     extension: string;
     keywords: Array<SyntaxKeyword>;
+    max_keyword_length: u32;
     single_line_comment: string;
     multi_line_comment_start: string;
     multi_line_comment_end: string;
-    string_start_end: string;
+    string_start_end: u8;
     multi_line_string_start_end: string;
 }
 
@@ -46,7 +46,6 @@ syntax_configurations: Array<Syntax> = [
     {
         extension = "ol";
         keywords = [
-            // TODO Fix the compiler to generate these values
             { value = "return";    level = 0; },
             { value = "true";      level = 0; },
             { value = "false";     level = 0; },
@@ -70,11 +69,31 @@ syntax_configurations: Array<Syntax> = [
             { value = "case";      level = 0; },
             { value = "default";   level = 0; },
             { value = "defer";     level = 0; },
+            { value = "void";      level = 0; },
+            { value = "bool";      level = 0; },
+            { value = "s8";        level = 0; },
+            { value = "u8";        level = 0; },
+            { value = "s16";       level = 0; },
+            { value = "u16";       level = 0; },
+            { value = "int";       level = 0; },
+            { value = "s32";       level = 0; },
+            { value = "u32";       level = 0; },
+            { value = "s64";       level = 0; },
+            { value = "u64";       level = 0; },
+            { value = "float";     level = 0; },
+            { value = "float64";   level = 0; },
+            { value = "Type";      level = 0; },
+            { value = "string";    level = 0; },
+            { value = "Array";     level = 0; },
+            { value = "CArray";    level = 0; },
+            { value = "Params";    level = 0; },
+            { value = "Any";       level = 0; },
         ]
+        max_keyword_length = 9;
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = "\"";
+        string_start_end = '\"';
         multi_line_string_start_end = "\"\"\"";
     },
     {
@@ -113,10 +132,11 @@ syntax_configurations: Array<Syntax> = [
             { value = "volatile"; level = 0; },
             { value = "while";    level = 0; },
         ]
+        max_keyword_length = 8;
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = "\"";
+        string_start_end = '\"';
     },
     {
         extension = "cs";
@@ -199,9 +219,10 @@ syntax_configurations: Array<Syntax> = [
             { value = "volatile";   level = 0; },
             { value = "while";      level = 0; },
         ]
+        max_keyword_length = 10;
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = "\"";
+        string_start_end = '\"';
     }
 ]

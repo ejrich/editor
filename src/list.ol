@@ -263,9 +263,12 @@ draw_selected_entry() {
 
     y := 1.0 - global_font_config.first_line_offset;
 
+    render_line_state: RenderLineState = {
+        syntax = selected_entry.buffer.syntax;
+    }
     while line != null && available_lines_to_render > 0 {
         if line_index >= selected_entry.start_line {
-            lines := render_line(line, 0.0, y, 1.0, available_lines_to_render, global_font_config.max_chars_per_line, line_index == selected_entry.selected_line);
+            lines := render_line(&render_line_state, line, 0.0, y, 1.0, available_lines_to_render, global_font_config.max_chars_per_line, line_index == selected_entry.selected_line);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }

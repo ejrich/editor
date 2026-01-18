@@ -185,6 +185,9 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
         }
 
         // Render the file text
+        render_line_state: RenderLineState = {
+            syntax = buffer.syntax;
+        }
         while line != null && available_lines_to_render > 0 {
             if line_number > start_line {
                 cursor, visual_start, visual_end := -1;
@@ -269,7 +272,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                     }
                 }
 
-                lines := render_line(line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
+                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
                 y -= global_font_config.line_height * lines;
                 available_lines_to_render -= lines;
             }
