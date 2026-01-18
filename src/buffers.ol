@@ -355,6 +355,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
         buffer: Buffer = {
             path_allocated = allocate_path;
             relative_path = path;
+            syntax = get_syntax_for_file(path);
         }
 
         found, file := read_file(path, temp_allocate);
@@ -3482,7 +3483,7 @@ replace_value_in_buffer() {
 // Formatting specific functions
 change_selected_line_commenting() {
     buffer_window, buffer := get_current_window_and_buffer();
-    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view {
+    if buffer_window == null || buffer == null || buffer.read_only || buffer_window.hex_view || buffer.syntax == null || string_is_empty(buffer.syntax.single_line_comment) {
         return;
     }
 
@@ -3499,8 +3500,10 @@ change_selected_line_commenting() {
         }
     }
 
+    begin_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+
     starting_line := get_buffer_line(buffer, start_line);
-    comment_string := get_comment_string(buffer.relative_path);
+    comment_string := buffer.syntax.single_line_comment;
 
     // Determine whether to comment or uncomment the lines
     all_lines_commented := true;
@@ -3572,24 +3575,9 @@ change_selected_line_commenting() {
         }
     }
 
+    record_change(buffer, start_line, end_line, buffer_window.cursor, buffer_window.line);
+
     edit_mode = EditMode.Normal;
-}
-
-string get_comment_string(string path) {
-    extension: string;
-    each i in path.length {
-         if path[i] == '.' {
-             extension = {
-                 length = path.length - i - 1;
-                 data = path.data + i + 1;
-             }
-         }
-         else if path[i] == '/' {
-             extension.length = 0;
-         }
-    }
-
-    return "//";
 }
 
 toggle_casing(bool upper) {
@@ -3685,6 +3673,7 @@ struct Buffer {
     lines: BufferLine*;
     last_change: Change*;
     next_change: Change*;
+    syntax: Syntax*;
 }
 
 interface string GetBufferTitle()

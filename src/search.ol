@@ -183,6 +183,7 @@ Buffer* read_file_into_buffer(string file_path) {
     buffer.line_count = 1;
     buffer.line_count_digits = 1;
     buffer.lines = allocate_line();
+    buffer.syntax = get_syntax_for_file(file_path);
 
     buf: CArray<u8>[1000];
     while true {
