@@ -113,6 +113,96 @@ struct RenderLineState {
     current_word_cursor: u32;
     in_string: bool;
     in_multi_line_string: bool;
+    in_single_line_comment: bool;
+    in_multi_line_comment: bool;
+}
+
+RenderLineState init_render_line_state(Buffer* buffer) #inline {
+    state: RenderLineState = {
+        syntax = buffer.syntax;
+    }
+
+    if state.syntax {
+        current_word_buffer: Array<u8>[state.syntax.max_keyword_length];
+        state.current_word_buffer = current_word_buffer;
+    }
+
+    return state;
+}
+
+evaluate_line_without_rendering(RenderLineState* state, BufferLine* line) {
+    if state.syntax == null return;
+
+    single_line_comment_length := state.syntax.single_line_comment.length;
+    multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
+    multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
+    multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
+
+    max_length := max(single_line_comment_length, multi_line_comment_start_length, multi_line_comment_end_length, multi_line_string_boundary_length);
+
+    if max_length {
+        escaping := false;
+        i := 0;
+
+        while i < line.length {
+            char := get_char(line, i);
+            if is_whitespace(char) {
+                escaping = false;
+            }
+            else if state.in_multi_line_string {
+                if char == '\\' {
+                    escaping = !escaping;
+                }
+                else {
+                    if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                        state.in_multi_line_string = false;
+                        i += multi_line_string_boundary_length - 1;
+                    }
+                    escaping = false;
+                }
+            }
+            else if state.in_string {
+                if char == '\\' {
+                    escaping = !escaping;
+                }
+                else {
+                    if !escaping && char == state.syntax.string_boundary {
+                        state.in_string = false;
+                    }
+
+                    escaping = false;
+                }
+            }
+            else {
+                if state.in_multi_line_comment {
+                    if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                        state.in_multi_line_comment = false;
+                        i += multi_line_comment_end_length - 1;
+                    }
+                }
+                else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                    break;
+                }
+                else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                    state.in_multi_line_comment = true;
+                    i += multi_line_comment_start_length - 1;
+                }
+                else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                    state.in_multi_line_string = true;
+                    i += multi_line_string_boundary_length - 1;
+                }
+                else if char == state.syntax.string_boundary {
+                    state.in_string = true;
+                }
+
+                escaping = false;
+            }
+
+            i++;
+        }
+    }
+
+    reset_render_line_state(state);
 }
 
 u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end) {
@@ -300,6 +390,8 @@ u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_text
         }
     }
 
+    reset_render_line_state(state);
+
     return line_count;
 }
 
@@ -364,6 +456,28 @@ u32, float, float render_line_with_cursor(RenderLineState* state, FontTexture* f
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
     return line_count, x, y;
+}
+
+bool match_value_in_line(BufferLine* line, u8 char, string value, int i) {
+    matched := false;
+    if char == value[0] && i + value.length <= line.length {
+        matched = true;
+        each j in 1..value.length - 1 {
+            next_char := get_char(line, i + j);
+            if next_char != value[j] {
+                matched = false;
+                break;
+            }
+        }
+    }
+
+    return matched;
+}
+
+reset_render_line_state(RenderLineState* state) {
+    state.current_word_cursor = 0;
+    state.in_string = false;
+    state.in_single_line_comment = false;
 }
 
 

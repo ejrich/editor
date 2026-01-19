@@ -29,8 +29,8 @@ struct Syntax {
     single_line_comment: string;
     multi_line_comment_start: string;
     multi_line_comment_end: string;
-    string_start_end: u8;
-    multi_line_string_start_end: string;
+    string_boundary: u8;
+    multi_line_string_boundary: string;
 }
 
 struct SyntaxKeyword {
@@ -93,8 +93,8 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = '\"';
-        multi_line_string_start_end = "\"\"\"";
+        string_boundary = '\"';
+        multi_line_string_boundary = "\"\"\"";
     },
     {
         extension = "c";
@@ -136,7 +136,7 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = '\"';
+        string_boundary = '\"';
     },
     {
         extension = "cs";
@@ -223,6 +223,6 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
-        string_start_end = '\"';
+        string_boundary = '\"';
     }
 ]

@@ -245,6 +245,17 @@ float clamp(float value, float min, float max) {
     return value;
 }
 
+u32 max(Params<int> values) {
+    max: u32;
+    each value in values {
+        if value > max {
+            max = value;
+        }
+    }
+
+    return max;
+}
+
 string get_program_directory() {
     if program_directory.length == 0 {
         path_length := 4096; #const

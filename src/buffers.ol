@@ -185,9 +185,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
         }
 
         // Render the file text
-        render_line_state: RenderLineState = {
-            syntax = buffer.syntax;
-        }
+        render_line_state := init_render_line_state(&buffer);
         while line != null && available_lines_to_render > 0 {
             if line_number > start_line {
                 cursor, visual_start, visual_end := -1;
@@ -276,6 +274,10 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                 y -= global_font_config.line_height * lines;
                 available_lines_to_render -= lines;
             }
+            else {
+                evaluate_line_without_rendering(&render_line_state, line);
+            }
+
             line = line.next;
             line_number++;
         }
@@ -4012,6 +4014,17 @@ calculate_line_digits(Buffer* buffer) {
     buffer.line_count_digits = digit_count;
 }
 
+bool is_whitespace(u8 char) {
+    switch char {
+        case ' ';
+        case '\t';
+        case '\r';
+            return true;
+    }
+
+    return false;
+}
+
 #private
 
 // Buffer list functions
@@ -4334,17 +4347,6 @@ bool trim_line(BufferLine* line) {
 
     line.length = actual_length;
     return actual_length == 0;
-}
-
-bool is_whitespace(u8 char) {
-    switch char {
-        case ' ';
-        case '\t';
-        case '\r';
-            return true;
-    }
-
-    return false;
 }
 
 bool is_text_character(u8 char) {
