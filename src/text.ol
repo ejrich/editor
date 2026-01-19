@@ -286,8 +286,7 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    state: RenderLineState;
-    render_line_with_cursor(&state, font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
+    render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
 
@@ -376,32 +375,34 @@ u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_text
     line_count: u32;
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
-    line_count, x, y = render_line_with_cursor(state, font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+    if state.syntax {
+        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+    }
+    else {
+        line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
 
-    if line.child {
-        child := line.child;
-        index := text.length;
-        while child {
-            text = { length = child.length; data = child.data.data; }
-            line_count, x, y = render_line_with_cursor(state, font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars);
+        if line.child {
+            child := line.child;
+            index := text.length;
+            while child {
+                text = { length = child.length; data = child.data.data; }
+                line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars);
 
-            index += child.length;
-            child = child.next;
+                index += child.length;
+                child = child.next;
+            }
         }
     }
-
-    reset_render_line_state(state);
 
     return line_count;
 }
 
-u32, float, float render_line_with_cursor(RenderLineState* state, FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>[text.length];
     length := 0;
 
-    // TODO Use render line state
     each i in text.length {
         if max_line_chars != -1 && index >= max_line_chars {
             break;
@@ -454,6 +455,151 @@ u32, float, float render_line_with_cursor(RenderLineState* state, FontTexture* f
     // Issue the draw call(s) for the characters
     if length > 0
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+
+    return line_count, x, y;
+}
+
+u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
+    // Create the glyphs for the text string
+    glyphs := font_texture.glyphs;
+    quad_data: Array<QuadInstanceData>[line.length];
+    length := 0;
+    escaping := false;
+    word_start := 0;
+    in_whitespace := true;
+
+    single_line_comment_length := state.syntax.single_line_comment.length;
+    multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
+    multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
+    multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
+
+    each i in line.length {
+        if max_line_chars != -1 && i >= max_line_chars {
+            break;
+        }
+
+        if x + font_texture.quad_advance > max_x {
+            if line_count >= lines_available
+                break;
+
+            x = x_start;
+            y -= font_texture.line_height;
+            line_count++;
+        }
+
+        char := get_char(line, i);
+        glyph := glyphs[char];
+
+        // Set the color of the text
+        font_color := appearance.font_color;
+        drawing_cursor := false;
+        if i == cursor && render_cursor {
+            font_color = appearance.cursor_font_color;
+            draw_cursor(x, y, appearance.cursor_color);
+            drawing_cursor = true;
+        }
+        else if i >= visual_start && i <= visual_end {
+            font_color = appearance.visual_font_color;
+            draw_cursor(x, y, appearance.font_color);
+            drawing_cursor = true;
+        }
+        else if state.in_single_line_comment || state.in_multi_line_comment {
+            font_color = appearance.comment_color;
+        }
+        else if state.in_string || state.in_multi_line_string {
+            font_color = appearance.string_color;
+        }
+
+        // Handle state
+        if is_whitespace(char) {
+            escaping = false;
+        }
+        else if state.in_multi_line_string {
+            if char == '\\' {
+                escaping = !escaping;
+            }
+            else {
+                if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                    state.in_multi_line_string = false;
+                }
+                escaping = false;
+            }
+        }
+        else if state.in_string {
+            if char == '\\' {
+                escaping = !escaping;
+            }
+            else {
+                if !escaping && char == state.syntax.string_boundary {
+                    state.in_string = false;
+                }
+
+                escaping = false;
+            }
+        }
+        else if !state.in_single_line_comment {
+            if state.in_multi_line_comment {
+                if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                    state.in_multi_line_comment = false;
+                }
+            }
+            else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                state.in_single_line_comment = true;
+                if !drawing_cursor {
+                    font_color = appearance.comment_color;
+                }
+            }
+            else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                state.in_multi_line_comment = true;
+                if !drawing_cursor {
+                    font_color = appearance.comment_color;
+                }
+            }
+            else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                state.in_multi_line_string = true;
+                if !drawing_cursor {
+                    font_color = appearance.string_color;
+                }
+            }
+            else if char == state.syntax.string_boundary {
+                state.in_string = true;
+                if !drawing_cursor {
+                    font_color = appearance.string_color;
+                }
+            }
+
+            escaping = false;
+
+            // TODO Handle keywords
+        }
+
+        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+            x_pos := x + glyph.quad_adjust.x;
+            y_pos := y - glyph.quad_adjust.y;
+
+            quad_data[length++] = {
+                color = font_color;
+                position = { x = x_pos; y = y_pos; z = 0.0; }
+                flags = QuadFlags.SingleChannel;
+                width = glyph.quad_dimensions.x;
+                height = glyph.quad_dimensions.y;
+                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                top_right_texture_coord = glyph.top_right_texture_coord;
+            }
+        }
+
+        x += font_texture.quad_advance;
+    }
+
+    if cursor == line.length && render_cursor {
+        draw_cursor(x, y, appearance.cursor_color);
+    }
+
+    // Issue the draw call(s) for the characters
+    if length > 0
+        draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+
+    reset_render_line_state(state);
 
     return line_count, x, y;
 }
