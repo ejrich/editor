@@ -463,10 +463,8 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>[line.length];
-    length := 0;
+    length, reset_state_after, skip := 0;
     escaping := false;
-    word_start := 0;
-    in_whitespace := true;
 
     single_line_comment_length := state.syntax.single_line_comment.length;
     multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
@@ -511,66 +509,95 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
         }
 
         // Handle state
-        if is_whitespace(char) {
-            escaping = false;
-        }
-        else if state.in_multi_line_string {
-            if char == '\\' {
-                escaping = !escaping;
+        if reset_state_after > 0 {
+            reset_state_after--;
+            if reset_state_after == 0 {
+                state.in_multi_line_string = false;
+                state.in_multi_line_comment = false;
             }
-            else {
-                if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                    state.in_multi_line_string = false;
-                }
+        }
+        else if skip {
+            skip--;
+        }
+        else {
+            if is_whitespace(char) {
+                check_for_keyword(state, quad_data, length);
                 escaping = false;
             }
-        }
-        else if state.in_string {
-            if char == '\\' {
-                escaping = !escaping;
+            else if state.in_multi_line_string {
+                if char == '\\' {
+                    escaping = !escaping;
+                }
+                else {
+                    if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                        reset_state_after = multi_line_string_boundary_length - 1;
+                    }
+                    escaping = false;
+                }
             }
-            else {
-                if !escaping && char == state.syntax.string_boundary {
-                    state.in_string = false;
+            else if state.in_string {
+                if char == '\\' {
+                    escaping = !escaping;
+                }
+                else {
+                    if !escaping && char == state.syntax.string_boundary {
+                        state.in_string = false;
+                    }
+
+                    escaping = false;
+                }
+            }
+            else if !state.in_single_line_comment {
+                if state.in_multi_line_comment {
+                    if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                        reset_state_after = multi_line_comment_end_length - 1;
+                    }
+                }
+                else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                    check_for_keyword(state, quad_data, length);
+                    state.in_single_line_comment = true;
+                    if !drawing_cursor {
+                        font_color = appearance.comment_color;
+                    }
+                }
+                else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                    check_for_keyword(state, quad_data, length);
+                    state.in_multi_line_comment = true;
+                    skip = multi_line_comment_start_length - 1;
+                    if !drawing_cursor {
+                        font_color = appearance.comment_color;
+                    }
+                }
+                else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                    check_for_keyword(state, quad_data, length);
+                    state.in_multi_line_string = true;
+                    skip = multi_line_string_boundary_length - 1;
+                    if !drawing_cursor {
+                        font_color = appearance.string_color;
+                    }
+                }
+                else if char == state.syntax.string_boundary {
+                    check_for_keyword(state, quad_data, length);
+                    state.in_string = true;
+                    if !drawing_cursor {
+                        font_color = appearance.string_color;
+                    }
+
+                }
+                else if is_text_character(char) {
+                    if state.current_word_cursor < state.current_word_buffer.length {
+                        state.current_word_buffer[state.current_word_cursor] = char;
+                    }
+                    state.current_word_cursor++;
+                }
+                else {
+                    check_for_keyword(state, quad_data, length);
                 }
 
                 escaping = false;
-            }
-        }
-        else if !state.in_single_line_comment {
-            if state.in_multi_line_comment {
-                if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
-                    state.in_multi_line_comment = false;
-                }
-            }
-            else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
-                state.in_single_line_comment = true;
-                if !drawing_cursor {
-                    font_color = appearance.comment_color;
-                }
-            }
-            else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
-                state.in_multi_line_comment = true;
-                if !drawing_cursor {
-                    font_color = appearance.comment_color;
-                }
-            }
-            else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                state.in_multi_line_string = true;
-                if !drawing_cursor {
-                    font_color = appearance.string_color;
-                }
-            }
-            else if char == state.syntax.string_boundary {
-                state.in_string = true;
-                if !drawing_cursor {
-                    font_color = appearance.string_color;
-                }
-            }
 
-            escaping = false;
-
-            // TODO Handle keywords
+                // TODO Handle keywords
+            }
         }
 
         if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
@@ -591,6 +618,8 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
         x += font_texture.quad_advance;
     }
 
+    check_for_keyword(state, quad_data, length);
+
     if cursor == line.length && render_cursor {
         draw_cursor(x, y, appearance.cursor_color);
     }
@@ -602,6 +631,36 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     reset_render_line_state(state);
 
     return line_count, x, y;
+}
+
+bool is_text_character(u8 char) {
+    if char >= '0' && char <= '9' return true;
+    if char >= 'A' && char <= 'Z' return true;
+    if char >= 'a' && char <= 'z' return true;
+    if char == '_' return true;
+
+    return false;
+}
+
+check_for_keyword(RenderLineState* state, Array<QuadInstanceData> quad_data, int length) {
+    if state.current_word_cursor > 0 {
+        if state.current_word_cursor <= state.syntax.max_keyword_length {
+            current_word: string = {
+                length = state.current_word_cursor;
+                data = state.current_word_buffer.data;
+            }
+            each keyword in state.syntax.keywords {
+                if keyword.value == current_word {
+                    color := appearance.keyword_colors[cast(u8, keyword.color)];
+                    each j in 1..keyword.value.length {
+                        quad_data[length - j].color = color;
+                    }
+                    break;
+                }
+            }
+        }
+        state.current_word_cursor = 0;
+    }
 }
 
 bool match_value_in_line(BufferLine* line, u8 char, string value, int i) {

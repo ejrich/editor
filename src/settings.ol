@@ -31,11 +31,19 @@ struct Settings {
     [color]
     comment_color: u32;
     [color]
-    keyword_0_color: u32;
+    keyword_red_color: u32;
     [color]
-    keyword_1_color: u32;
+    keyword_green_color: u32;
     [color]
-    keyword_2_color: u32;
+    keyword_yellow_color: u32;
+    [color]
+    keyword_blue_color: u32;
+    [color]
+    keyword_purple_color: u32;
+    [color]
+    keyword_aqua_color: u32;
+    [color]
+    keyword_orange_color: u32;
     reactive_render: bool;
 }
 
@@ -72,7 +80,7 @@ struct AppearanceSettings {
     visual_mode_color: Vector4;
     string_color: Vector4;
     comment_color: Vector4;
-    keyword_colors: Array<Vector4>[keyword_levels];
+    keyword_colors: Array<Vector4>[keyword_colors];
 }
 
 appearance: AppearanceSettings;
@@ -151,9 +159,13 @@ load_settings_file() {
         string_color = convert_to_color(settings.string_color);
         comment_color = convert_to_color(settings.comment_color);
         keyword_colors = [
-            convert_to_color(settings.keyword_0_color),
-            convert_to_color(settings.keyword_1_color),
-            convert_to_color(settings.keyword_2_color)
+            convert_to_color(settings.keyword_red_color),
+            convert_to_color(settings.keyword_green_color),
+            convert_to_color(settings.keyword_yellow_color),
+            convert_to_color(settings.keyword_blue_color),
+            convert_to_color(settings.keyword_purple_color),
+            convert_to_color(settings.keyword_aqua_color),
+            convert_to_color(settings.keyword_orange_color)
         ]
     }
 }
@@ -491,9 +503,13 @@ get_default_settings() {
         visual_mode_color = 0xFE8019;
         string_color = 0x8EC07C;
         comment_color = 0x928374;
-        keyword_0_color = 0xFFFFFF;
-        keyword_1_color = 0xFFFFFF;
-        keyword_2_color = 0xFFFFFF;
+        keyword_red_color = 0xFFFFFF;
+        keyword_green_color = 0xFFFFFF;
+        keyword_yellow_color = 0xFFFFFF;
+        keyword_blue_color = 0xFFFFFF;
+        keyword_purple_color = 0xFFFFFF;
+        keyword_aqua_color = 0xFFFFFF;
+        keyword_orange_color = 0xFFFFFF;
         reactive_render = true;
     }
 
