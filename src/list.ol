@@ -98,6 +98,19 @@ select_list_entry() {
             displaying = false;
             browsing = false;
         }
+
+        if selected_entry.can_free_buffer {
+            free_buffer(selected_entry.buffer);
+        }
+
+        selected_entry = {
+            key = empty_string;
+            buffer = null;
+            can_free_buffer = true;
+            start_line = 0;
+            selected_line = -1;
+        }
+
         exit_command_mode();
     }
 }

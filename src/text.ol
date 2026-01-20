@@ -463,8 +463,8 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>[line.length];
-    length, reset_state_after, skip := 0;
-    escaping := false;
+    length, reset_state_after, skip, quads_to_draw := 0;
+    escaping, max_quads_exceeded := false;
 
     single_line_comment_length := state.syntax.single_line_comment.length;
     multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
@@ -472,11 +472,12 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
 
     each i in line.length {
-        if max_line_chars != -1 && i >= max_line_chars {
-            break;
+        if max_line_chars != -1 && i >= max_line_chars && !max_quads_exceeded {
+            quads_to_draw = length;
+            max_quads_exceeded = true;
         }
 
-        if x + font_texture.quad_advance > max_x {
+        if !max_quads_exceeded && x + font_texture.quad_advance > max_x {
             if line_count >= lines_available
                 break;
 
@@ -625,8 +626,12 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     }
 
     // Issue the draw call(s) for the characters
-    if length > 0
+    if length > 0 {
+        if max_quads_exceeded {
+            length = quads_to_draw;
+        }
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+    }
 
     reset_render_line_state(state);
 
