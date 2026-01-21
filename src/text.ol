@@ -596,8 +596,6 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 }
 
                 escaping = false;
-
-                // TODO Handle keywords
             }
         }
 

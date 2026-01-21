@@ -102,7 +102,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
             }
             position = {
                 x = x + global_font_config.quad_advance * buffer.line_count_digits / 2.0;
-                y = initial_y + global_font_config.first_line_offset - global_font_config.line_height * max_lines / 2.0;
+                y = initial_y + global_font_config.first_line_offset - global_font_config.line_height * max_lines / 2.0 - global_font_config.line_height;
                 z = 0.4;
             }
             flags = QuadFlags.Solid;
