@@ -428,19 +428,21 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
         }
 
         char := text[i];
-        glyph := glyphs[char];
-        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
-            x_pos := x + glyph.quad_adjust.x;
-            y_pos := y - glyph.quad_adjust.y;
+        if char < glyphs.length {
+            glyph := glyphs[char];
+            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+                x_pos := x + glyph.quad_adjust.x;
+                y_pos := y - glyph.quad_adjust.y;
 
-            quad_data[length++] = {
-                color = font_color;
-                position = { x = x_pos; y = y_pos; z = 0.0; }
-                flags = QuadFlags.SingleChannel;
-                width = glyph.quad_dimensions.x;
-                height = glyph.quad_dimensions.y;
-                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
-                top_right_texture_coord = glyph.top_right_texture_coord;
+                quad_data[length++] = {
+                    color = font_color;
+                    position = { x = x_pos; y = y_pos; z = 0.0; }
+                    flags = QuadFlags.SingleChannel;
+                    width = glyph.quad_dimensions.x;
+                    height = glyph.quad_dimensions.y;
+                    bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                    top_right_texture_coord = glyph.top_right_texture_coord;
+                }
             }
         }
 
@@ -487,130 +489,132 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
         }
 
         char := get_char(line, i);
-        glyph := glyphs[char];
+        if char < glyphs.length {
+            glyph := glyphs[char];
 
-        // Set the color of the text
-        font_color := appearance.font_color;
-        drawing_cursor := false;
-        if i == cursor && render_cursor {
-            font_color = appearance.cursor_font_color;
-            draw_cursor(x, y, appearance.cursor_color);
-            drawing_cursor = true;
-        }
-        else if i >= visual_start && i <= visual_end {
-            font_color = appearance.visual_font_color;
-            draw_cursor(x, y, appearance.font_color);
-            drawing_cursor = true;
-        }
-        else if state.in_single_line_comment || state.in_multi_line_comment {
-            font_color = appearance.comment_color;
-        }
-        else if state.in_string || state.in_multi_line_string {
-            font_color = appearance.string_color;
-        }
+            // Set the color of the text
+            font_color := appearance.font_color;
+            drawing_cursor := false;
+            if i == cursor && render_cursor {
+                font_color = appearance.cursor_font_color;
+                draw_cursor(x, y, appearance.cursor_color);
+                drawing_cursor = true;
+            }
+            else if i >= visual_start && i <= visual_end {
+                font_color = appearance.visual_font_color;
+                draw_cursor(x, y, appearance.font_color);
+                drawing_cursor = true;
+            }
+            else if state.in_single_line_comment || state.in_multi_line_comment {
+                font_color = appearance.comment_color;
+            }
+            else if state.in_string || state.in_multi_line_string {
+                font_color = appearance.string_color;
+            }
 
-        // Handle state
-        if reset_state_after > 0 {
-            reset_state_after--;
-            if reset_state_after == 0 {
-                state.in_multi_line_string = false;
-                state.in_multi_line_comment = false;
-            }
-        }
-        else if skip {
-            skip--;
-        }
-        else {
-            if is_whitespace(char) {
-                check_for_keyword(state, quad_data, length);
-                escaping = false;
-            }
-            else if state.in_multi_line_string {
-                if char == '\\' {
-                    escaping = !escaping;
+            // Handle state
+            if reset_state_after > 0 {
+                reset_state_after--;
+                if reset_state_after == 0 {
+                    state.in_multi_line_string = false;
+                    state.in_multi_line_comment = false;
                 }
-                else {
-                    if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                        reset_state_after = multi_line_string_boundary_length - 1;
+            }
+            else if skip {
+                skip--;
+            }
+            else {
+                if is_whitespace(char) {
+                    check_for_keyword(state, quad_data, length);
+                    escaping = false;
+                }
+                else if state.in_multi_line_string {
+                    if char == '\\' {
+                        escaping = !escaping;
                     }
+                    else {
+                        if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                            reset_state_after = multi_line_string_boundary_length - 1;
+                        }
+                        escaping = false;
+                    }
+                }
+                else if state.in_string {
+                    if char == '\\' {
+                        escaping = !escaping;
+                    }
+                    else {
+                        if !escaping && char == state.syntax.string_boundary {
+                            state.in_string = false;
+                        }
+
+                        escaping = false;
+                    }
+                }
+                else if !state.in_single_line_comment {
+                    if state.in_multi_line_comment {
+                        if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                            reset_state_after = multi_line_comment_end_length - 1;
+                        }
+                    }
+                    else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                        check_for_keyword(state, quad_data, length);
+                        state.in_single_line_comment = true;
+                        if !drawing_cursor {
+                            font_color = appearance.comment_color;
+                        }
+                    }
+                    else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                        check_for_keyword(state, quad_data, length);
+                        state.in_multi_line_comment = true;
+                        skip = multi_line_comment_start_length - 1;
+                        if !drawing_cursor {
+                            font_color = appearance.comment_color;
+                        }
+                    }
+                    else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                        check_for_keyword(state, quad_data, length);
+                        state.in_multi_line_string = true;
+                        skip = multi_line_string_boundary_length - 1;
+                        if !drawing_cursor {
+                            font_color = appearance.string_color;
+                        }
+                    }
+                    else if char == state.syntax.string_boundary {
+                        check_for_keyword(state, quad_data, length);
+                        state.in_string = true;
+                        if !drawing_cursor {
+                            font_color = appearance.string_color;
+                        }
+
+                    }
+                    else if is_text_character(char) {
+                        if state.current_word_cursor < state.current_word_buffer.length {
+                            state.current_word_buffer[state.current_word_cursor] = char;
+                        }
+                        state.current_word_cursor++;
+                    }
+                    else {
+                        check_for_keyword(state, quad_data, length);
+                    }
+
                     escaping = false;
                 }
             }
-            else if state.in_string {
-                if char == '\\' {
-                    escaping = !escaping;
-                }
-                else {
-                    if !escaping && char == state.syntax.string_boundary {
-                        state.in_string = false;
-                    }
 
-                    escaping = false;
-                }
-            }
-            else if !state.in_single_line_comment {
-                if state.in_multi_line_comment {
-                    if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
-                        reset_state_after = multi_line_comment_end_length - 1;
-                    }
-                }
-                else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
-                    check_for_keyword(state, quad_data, length);
-                    state.in_single_line_comment = true;
-                    if !drawing_cursor {
-                        font_color = appearance.comment_color;
-                    }
-                }
-                else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
-                    check_for_keyword(state, quad_data, length);
-                    state.in_multi_line_comment = true;
-                    skip = multi_line_comment_start_length - 1;
-                    if !drawing_cursor {
-                        font_color = appearance.comment_color;
-                    }
-                }
-                else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                    check_for_keyword(state, quad_data, length);
-                    state.in_multi_line_string = true;
-                    skip = multi_line_string_boundary_length - 1;
-                    if !drawing_cursor {
-                        font_color = appearance.string_color;
-                    }
-                }
-                else if char == state.syntax.string_boundary {
-                    check_for_keyword(state, quad_data, length);
-                    state.in_string = true;
-                    if !drawing_cursor {
-                        font_color = appearance.string_color;
-                    }
+            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+                x_pos := x + glyph.quad_adjust.x;
+                y_pos := y - glyph.quad_adjust.y;
 
+                quad_data[length++] = {
+                    color = font_color;
+                    position = { x = x_pos; y = y_pos; z = 0.0; }
+                    flags = QuadFlags.SingleChannel;
+                    width = glyph.quad_dimensions.x;
+                    height = glyph.quad_dimensions.y;
+                    bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                    top_right_texture_coord = glyph.top_right_texture_coord;
                 }
-                else if is_text_character(char) {
-                    if state.current_word_cursor < state.current_word_buffer.length {
-                        state.current_word_buffer[state.current_word_cursor] = char;
-                    }
-                    state.current_word_cursor++;
-                }
-                else {
-                    check_for_keyword(state, quad_data, length);
-                }
-
-                escaping = false;
-            }
-        }
-
-        if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
-            x_pos := x + glyph.quad_adjust.x;
-            y_pos := y - glyph.quad_adjust.y;
-
-            quad_data[length++] = {
-                color = font_color;
-                position = { x = x_pos; y = y_pos; z = 0.0; }
-                flags = QuadFlags.SingleChannel;
-                width = glyph.quad_dimensions.x;
-                height = glyph.quad_dimensions.y;
-                bottom_left_texture_coord = glyph.bottom_left_texture_coord;
-                top_right_texture_coord = glyph.top_right_texture_coord;
             }
         }
 
