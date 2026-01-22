@@ -33,19 +33,19 @@ struct Settings {
     [color]
     comment_color: u32;
     [color]
-    keyword_red_color: u32;
+    syntax_red_color: u32;
     [color]
-    keyword_green_color: u32;
+    syntax_green_color: u32;
     [color]
-    keyword_yellow_color: u32;
+    syntax_yellow_color: u32;
     [color]
-    keyword_blue_color: u32;
+    syntax_blue_color: u32;
     [color]
-    keyword_purple_color: u32;
+    syntax_purple_color: u32;
     [color]
-    keyword_aqua_color: u32;
+    syntax_aqua_color: u32;
     [color]
-    keyword_orange_color: u32;
+    syntax_orange_color: u32;
     reactive_render: bool;
 }
 
@@ -83,7 +83,7 @@ struct AppearanceSettings {
     string_color: Vector4;
     char_color: Vector4;
     comment_color: Vector4;
-    keyword_colors: Array<Vector4>[keyword_colors];
+    syntax_colors: Array<Vector4>[syntax_colors];
 }
 
 appearance: AppearanceSettings;
@@ -162,14 +162,14 @@ load_settings_file() {
         string_color = convert_to_color(settings.string_color);
         char_color = convert_to_color(settings.char_color);
         comment_color = convert_to_color(settings.comment_color);
-        keyword_colors = [
-            convert_to_color(settings.keyword_red_color),
-            convert_to_color(settings.keyword_green_color),
-            convert_to_color(settings.keyword_yellow_color),
-            convert_to_color(settings.keyword_blue_color),
-            convert_to_color(settings.keyword_purple_color),
-            convert_to_color(settings.keyword_aqua_color),
-            convert_to_color(settings.keyword_orange_color)
+        syntax_colors = [
+            convert_to_color(settings.syntax_red_color),
+            convert_to_color(settings.syntax_green_color),
+            convert_to_color(settings.syntax_yellow_color),
+            convert_to_color(settings.syntax_blue_color),
+            convert_to_color(settings.syntax_purple_color),
+            convert_to_color(settings.syntax_aqua_color),
+            convert_to_color(settings.syntax_orange_color)
         ]
     }
 }
@@ -508,13 +508,13 @@ get_default_settings() {
         string_color = 0x8EC07C;
         char_color = 0xD3869B;
         comment_color = 0x928374;
-        keyword_red_color = 0xFFFFFF;
-        keyword_green_color = 0xFFFFFF;
-        keyword_yellow_color = 0xFFFFFF;
-        keyword_blue_color = 0xFFFFFF;
-        keyword_purple_color = 0xFFFFFF;
-        keyword_aqua_color = 0xFFFFFF;
-        keyword_orange_color = 0xFFFFFF;
+        syntax_red_color = 0xFFFFFF;
+        syntax_green_color = 0xFFFFFF;
+        syntax_yellow_color = 0xFFFFFF;
+        syntax_blue_color = 0xFFFFFF;
+        syntax_purple_color = 0xFFFFFF;
+        syntax_aqua_color = 0xFFFFFF;
+        syntax_orange_color = 0xFFFFFF;
         reactive_render = true;
     }
 

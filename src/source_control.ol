@@ -289,6 +289,7 @@ load_diff(int thread, JobData data) {
     }
 
     diff_buffer := run_command_and_save_to_buffer(command);
+    diff_buffer.syntax = get_syntax_for_extension("diff");
 
     if file == entry.key {
         entry.buffer = diff_buffer;

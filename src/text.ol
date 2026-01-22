@@ -474,6 +474,18 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
     multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
 
+    line_color_set: = false;
+    line_color: Vector4;
+
+    if line.length > 0 && state.syntax.line_color_modifiers.length > 0 {
+        each modifier in state.syntax.line_color_modifiers {
+            if match_value_in_line(line, line.data.data[0], modifier.start, 0) {
+                line_color_set = true;
+                line_color = appearance.syntax_colors[cast(u8, modifier.color)];
+            }
+        }
+    }
+
     each i in line.length {
         if max_line_chars != -1 && i >= max_line_chars && !max_quads_exceeded {
             quads_to_draw = length;
@@ -506,6 +518,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 draw_cursor(x, y, appearance.font_color);
                 drawing_cursor = true;
             }
+            else if line_color_set {
+                font_color = line_color;
+            }
             else if state.in_single_line_comment || state.in_multi_line_comment {
                 font_color = appearance.comment_color;
             }
@@ -527,7 +542,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             else if skip {
                 skip--;
             }
-            else {
+            else if !line_color_set {
                 if is_whitespace(char) {
                     check_for_keyword(state, quad_data, length);
                     escaping = false;
@@ -682,7 +697,7 @@ check_for_keyword(RenderLineState* state, Array<QuadInstanceData> quad_data, int
             }
             each keyword in state.syntax.keywords {
                 if keyword.value == current_word {
-                    color := appearance.keyword_colors[cast(u8, keyword.color)];
+                    color := appearance.syntax_colors[cast(u8, keyword.color)];
                     each j in 1..keyword.value.length {
                         quad_data[length - j].color = color;
                     }
