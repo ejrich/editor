@@ -33,8 +33,6 @@ Syntax* get_syntax_for_extension(string extension) {
 struct Syntax {
     extension: string;
     line_color_modifiers: Array<LineColorModifier>;
-    use_default_line_color: bool;
-    default_line_color: SyntaxColor;
     keywords: Array<SyntaxKeyword>;
     max_keyword_length: u32;
     single_line_comment: string;
