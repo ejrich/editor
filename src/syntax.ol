@@ -29,6 +29,7 @@ struct Syntax {
     single_line_comment: string;
     multi_line_comment_start: string;
     multi_line_comment_end: string;
+    char_boundary: u8;
     string_boundary: u8;
     multi_line_string_boundary: string;
 }
@@ -103,6 +104,7 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
+        char_boundary = '\'';
         string_boundary = '\"';
         multi_line_string_boundary = "\"\"\"";
     },
@@ -148,6 +150,7 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
+        char_boundary = '\'';
         string_boundary = '\"';
     },
     {
@@ -235,6 +238,7 @@ syntax_configurations: Array<Syntax> = [
         single_line_comment = "//";
         multi_line_comment_start = "/*";
         multi_line_comment_end = "*/";
+        char_boundary = '\'';
         string_boundary = '\"';
     }
 ]

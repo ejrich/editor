@@ -111,6 +111,7 @@ struct RenderLineState {
     syntax: Syntax*;
     current_word_buffer: Array<u8>;
     current_word_cursor: u32;
+    in_char: bool;
     in_string: bool;
     in_multi_line_string: bool;
     in_single_line_comment: bool;
@@ -511,6 +512,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             else if state.in_string || state.in_multi_line_string {
                 font_color = appearance.string_color;
             }
+            else if state.in_char {
+                font_color = appearance.char_color;
+            }
 
             // Handle state
             if reset_state_after > 0 {
@@ -551,6 +555,18 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                         escaping = false;
                     }
                 }
+                else if state.in_char {
+                    if char == '\\' {
+                        escaping = !escaping;
+                    }
+                    else {
+                        if !escaping && char == state.syntax.char_boundary {
+                            state.in_char = false;
+                        }
+
+                        escaping = false;
+                    }
+                }
                 else if !state.in_single_line_comment {
                     if state.in_multi_line_comment {
                         if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
@@ -580,11 +596,19 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             font_color = appearance.string_color;
                         }
                     }
-                    else if char == state.syntax.string_boundary {
+                    else if state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
                         check_for_keyword(state, quad_data, length);
                         state.in_string = true;
                         if !drawing_cursor {
                             font_color = appearance.string_color;
+                        }
+
+                    }
+                    else if state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
+                        check_for_keyword(state, quad_data, length);
+                        state.in_char = true;
+                        if !drawing_cursor {
+                            font_color = appearance.char_color;
                         }
 
                     }
@@ -688,6 +712,7 @@ bool match_value_in_line(BufferLine* line, u8 char, string value, int i) {
 
 reset_render_line_state(RenderLineState* state) {
     state.current_word_cursor = 0;
+    state.in_char = false;
     state.in_string = false;
     state.in_single_line_comment = false;
 }

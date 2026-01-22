@@ -29,6 +29,8 @@ struct Settings {
     [color]
     string_color: u32;
     [color]
+    char_color: u32;
+    [color]
     comment_color: u32;
     [color]
     keyword_red_color: u32;
@@ -79,6 +81,7 @@ struct AppearanceSettings {
     insert_mode_color: Vector4;
     visual_mode_color: Vector4;
     string_color: Vector4;
+    char_color: Vector4;
     comment_color: Vector4;
     keyword_colors: Array<Vector4>[keyword_colors];
 }
@@ -157,6 +160,7 @@ load_settings_file() {
         insert_mode_color = convert_to_color(settings.insert_mode_color);
         visual_mode_color = convert_to_color(settings.visual_mode_color);
         string_color = convert_to_color(settings.string_color);
+        char_color = convert_to_color(settings.char_color);
         comment_color = convert_to_color(settings.comment_color);
         keyword_colors = [
             convert_to_color(settings.keyword_red_color),
@@ -502,6 +506,7 @@ get_default_settings() {
         insert_mode_color = 0x83A598;
         visual_mode_color = 0xFE8019;
         string_color = 0x8EC07C;
+        char_color = 0xD3869B;
         comment_color = 0x928374;
         keyword_red_color = 0xFFFFFF;
         keyword_green_color = 0xFFFFFF;
