@@ -198,7 +198,7 @@ Buffer* read_file_into_buffer(string file_path) {
         if length <= 0 break;
 
         text: string = { length = length; data = &buf; }
-        add_text_to_end_of_buffer(buffer, text);
+        add_text_to_end_of_buffer(buffer, text, false);
     }
 
     close_file(file);

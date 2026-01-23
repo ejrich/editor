@@ -1299,12 +1299,13 @@ end_insert_mode() {
     record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
-add_text_to_end_of_buffer(Buffer* buffer, string value) {
+add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
     text: string = { data = value.data; }
 
     each i in value.length {
         char := value[i];
+        // TODO Handle escape codes
         if char == '\n' {
             if text.length {
                 add_text_to_line(line, text, line.length);
@@ -3679,6 +3680,7 @@ struct Buffer {
     last_change: Change*;
     next_change: Change*;
     syntax: Syntax*;
+    escape_codes: EscapeCode*;
 }
 
 interface string GetBufferTitle()
@@ -3729,6 +3731,15 @@ struct BufferLine {
     next: BufferLine*;
     parent: BufferLine*;
     child: BufferLine*;
+}
+
+struct EscapeCode {
+    line: u32;
+    column: u32;
+    reset: bool;
+    foreground_color: Vector4;
+    background_color: Vector4;
+    next: EscapeCode*;
 }
 
 open_buffers_list() {

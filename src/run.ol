@@ -229,17 +229,25 @@ clear_run_buffer_window(string command, Workspace* workspace) {
     }
 
     line := workspace.run_data.buffer.lines;
+    escape_code := workspace.terminal_data.buffer.escape_codes;
 
     workspace.run_data.buffer = {
         line_count = 1;
         line_count_digits = 1;
         lines = allocate_line();
+        escape_codes = null;
     }
 
     while line {
         next := line.next;
         free_line_and_children(line);
         line = next;
+    }
+
+    while escape_code {
+        next := escape_code.next;
+        free_allocation(escape_code);
+        escape_code = next;
     }
 }
 
@@ -249,7 +257,7 @@ add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
         change_line = buffer_window.line == buffer.line_count - 1;
     }
 
-    add_text_to_end_of_buffer(buffer, text);
+    add_text_to_end_of_buffer(buffer, text, true);
 
     if change_line {
         buffer_window.line = buffer.line_count - 1;

@@ -109,6 +109,8 @@ render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 back
 
 struct RenderLineState {
     syntax: Syntax*;
+    next_escape_code: EscapeCode*;
+    current_escape_code: EscapeCode*;
     current_word_buffer: Array<u8>;
     current_word_cursor: u32;
     in_char: bool;
@@ -121,6 +123,7 @@ struct RenderLineState {
 RenderLineState init_render_line_state(Buffer* buffer) #inline {
     state: RenderLineState = {
         syntax = buffer.syntax;
+        next_escape_code = buffer.escape_codes;
     }
 
     if state.syntax {

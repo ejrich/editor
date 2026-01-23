@@ -209,6 +209,15 @@ clear_terminal_buffer_window(Workspace* workspace) {
             line = next;
         }
     }
+
+    escape_code := workspace.terminal_data.buffer.escape_codes;
+    while escape_code {
+        next := escape_code.next;
+        free_allocation(escape_code);
+        escape_code = next;
+    }
+
+    workspace.terminal_data.buffer.escape_codes = null;
 }
 
 #private
@@ -604,7 +613,7 @@ string get_command(Workspace* workspace) #inline {
 }
 
 add_to_terminal_buffer(Workspace* workspace, string text) {
-    add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text);
+    add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text, true);
     workspace.terminal_data.buffer_window.line = workspace.terminal_data.buffer.line_count - 1;
     adjust_start_line(&workspace.terminal_data.buffer_window);
     trigger_window_update();
