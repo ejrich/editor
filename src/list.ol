@@ -270,7 +270,7 @@ draw_list_entries() {
 draw_selected_entry() {
     if selected_entry.buffer == null return;
 
-    line_index := 0;
+    line_number: u32 = 1;
     available_lines_to_render := global_font_config.max_lines_without_bottom_window;
     line := selected_entry.buffer.lines;
 
@@ -278,17 +278,17 @@ draw_selected_entry() {
 
     render_line_state := init_render_line_state(selected_entry.buffer);
     while line != null && available_lines_to_render > 0 {
-        if line_index >= selected_entry.start_line {
-            lines := render_line(&render_line_state, line, 0.0, y, 1.0, available_lines_to_render, global_font_config.max_chars_per_line, line_index == selected_entry.selected_line);
+        if line_number > selected_entry.start_line {
+            lines := render_line(&render_line_state, line, 0.0, y, 1.0, line_number, available_lines_to_render, global_font_config.max_chars_per_line, selected_entry.selected_line);
             y -= global_font_config.line_height * lines;
             available_lines_to_render -= lines;
         }
         else {
-            evaluate_line_without_rendering(&render_line_state, line);
+            evaluate_line_without_rendering(&render_line_state, line, line_number);
         }
 
         line = line.next;
-        line_index++;
+        line_number++;
     }
 }
 

@@ -134,75 +134,80 @@ RenderLineState init_render_line_state(Buffer* buffer) #inline {
     return state;
 }
 
-evaluate_line_without_rendering(RenderLineState* state, BufferLine* line) {
-    if state.syntax == null return;
+evaluate_line_without_rendering(RenderLineState* state, BufferLine* line, u32 line_number) {
+    if state.syntax {
+        single_line_comment_length := state.syntax.single_line_comment.length;
+        multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
+        multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
+        multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
 
-    single_line_comment_length := state.syntax.single_line_comment.length;
-    multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
-    multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
-    multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
+        max_length := max(single_line_comment_length, multi_line_comment_start_length, multi_line_comment_end_length, multi_line_string_boundary_length);
 
-    max_length := max(single_line_comment_length, multi_line_comment_start_length, multi_line_comment_end_length, multi_line_string_boundary_length);
+        if max_length {
+            escaping := false;
+            i := 0;
 
-    if max_length {
-        escaping := false;
-        i := 0;
+            while i < line.length {
+                char := get_char(line, i);
+                if is_whitespace(char) {
+                    escaping = false;
+                }
+                else if state.in_multi_line_string {
+                    if char == '\\' {
+                        escaping = !escaping;
+                    }
+                    else {
+                        if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                            state.in_multi_line_string = false;
+                            i += multi_line_string_boundary_length - 1;
+                        }
+                        escaping = false;
+                    }
+                }
+                else if state.in_string {
+                    if char == '\\' {
+                        escaping = !escaping;
+                    }
+                    else {
+                        if !escaping && char == state.syntax.string_boundary {
+                            state.in_string = false;
+                        }
 
-        while i < line.length {
-            char := get_char(line, i);
-            if is_whitespace(char) {
-                escaping = false;
-            }
-            else if state.in_multi_line_string {
-                if char == '\\' {
-                    escaping = !escaping;
+                        escaping = false;
+                    }
                 }
                 else {
-                    if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                        state.in_multi_line_string = false;
+                    if state.in_multi_line_comment {
+                        if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                            state.in_multi_line_comment = false;
+                            i += multi_line_comment_end_length - 1;
+                        }
+                    }
+                    else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                        break;
+                    }
+                    else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                        state.in_multi_line_comment = true;
+                        i += multi_line_comment_start_length - 1;
+                    }
+                    else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                        state.in_multi_line_string = true;
                         i += multi_line_string_boundary_length - 1;
                     }
-                    escaping = false;
-                }
-            }
-            else if state.in_string {
-                if char == '\\' {
-                    escaping = !escaping;
-                }
-                else {
-                    if !escaping && char == state.syntax.string_boundary {
-                        state.in_string = false;
+                    else if char == state.syntax.string_boundary {
+                        state.in_string = true;
                     }
 
                     escaping = false;
                 }
-            }
-            else {
-                if state.in_multi_line_comment {
-                    if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
-                        state.in_multi_line_comment = false;
-                        i += multi_line_comment_end_length - 1;
-                    }
-                }
-                else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
-                    break;
-                }
-                else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
-                    state.in_multi_line_comment = true;
-                    i += multi_line_comment_start_length - 1;
-                }
-                else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                    state.in_multi_line_string = true;
-                    i += multi_line_string_boundary_length - 1;
-                }
-                else if char == state.syntax.string_boundary {
-                    state.in_string = true;
-                }
 
-                escaping = false;
+                i++;
             }
-
-            i++;
+        }
+    }
+    else if state.next_escape_code {
+        while state.next_escape_code != null && state.next_escape_code.line == line_number {
+            change_current_escape_code(state);
         }
     }
 
@@ -260,21 +265,21 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line(state, line, font_texture, x_start, x, y, max_x, lines_available, cursor, render_cursor, visual_start, visual_end);
+    return render_line(state, line, font_texture, x_start, x, y, max_x, line_number, lines_available, cursor, render_cursor, visual_start, visual_end);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, float max_x, u32 lines_available, int max_line_chars, bool selected) {
+u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, float max_x, u32 line_number, u32 lines_available, int max_line_chars, int selected_line) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
 
     visual_start, visual_end := -1;
-    if selected {
+    if line_number - 1 == selected_line {
         visual_start = 0;
         visual_end = line.length;
     }
 
-    return render_line(state, line, font_texture, x, x, y, max_x, lines_available, 0, false, visual_start, visual_end, max_line_chars);
+    return render_line(state, line, font_texture, x, x, y, max_x, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
 }
 
 draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1) {
@@ -375,12 +380,12 @@ draw_line_background(FontTexture* font_texture, float x, float y, float max_x, u
     draw_quad(&current_line_quad, 1);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
+u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 line_number, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
     line_count: u32;
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
-    if state.syntax {
-        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+    if state.syntax != null || state.next_escape_code != null || state.current_escape_code != null {
+        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, x_start, x, y, line_number, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
     }
     else {
         line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
@@ -465,31 +470,38 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     return line_count, x, y;
 }
 
-u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>[line.length];
     length, reset_state_after, skip, quads_to_draw := 0;
     escaping, max_quads_exceeded := false;
 
-    single_line_comment_length := state.syntax.single_line_comment.length;
-    multi_line_comment_start_length := state.syntax.multi_line_comment_start.length;
-    multi_line_comment_end_length := state.syntax.multi_line_comment_end.length;
-    multi_line_string_boundary_length := state.syntax.multi_line_string_boundary.length;
-
+    single_line_comment_length, multi_line_comment_start_length, multi_line_comment_end_length, multi_line_string_boundary_length := 0;
     line_color_set: = false;
     line_color: Vector4;
 
-    if line.length > 0 && state.syntax.line_color_modifiers.length > 0 {
-        each modifier in state.syntax.line_color_modifiers {
-            if match_value_in_line(line, line.data.data[0], modifier.start, 0) {
-                line_color_set = true;
-                line_color = appearance.syntax_colors[cast(u8, modifier.color)];
+    if state.syntax {
+        single_line_comment_length = state.syntax.single_line_comment.length;
+        multi_line_comment_start_length = state.syntax.multi_line_comment_start.length;
+        multi_line_comment_end_length = state.syntax.multi_line_comment_end.length;
+        multi_line_string_boundary_length = state.syntax.multi_line_string_boundary.length;
+
+        if line.length > 0 && state.syntax.line_color_modifiers.length > 0 {
+            each modifier in state.syntax.line_color_modifiers {
+                if match_value_in_line(line, line.data.data[0], modifier.start, 0) {
+                    line_color_set = true;
+                    line_color = appearance.syntax_colors[cast(u8, modifier.color)];
+                }
             }
         }
     }
 
     each i in line.length {
+        if state.next_escape_code != null && state.next_escape_code.line == line_number && state.next_escape_code.column == i {
+            change_current_escape_code(state);
+        }
+
         if max_line_chars != -1 && i >= max_line_chars && !max_quads_exceeded {
             quads_to_draw = length;
             max_quads_exceeded = true;
@@ -520,6 +532,12 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 font_color = appearance.visual_font_color;
                 draw_cursor(x, y, appearance.font_color);
                 drawing_cursor = true;
+            }
+            else if state.current_escape_code {
+                font_color = state.current_escape_code.foreground_color;
+                if state.current_escape_code.background_color.w {
+                    draw_cursor(x, y, appearance.font_color);
+                }
             }
             else if line_color_set {
                 font_color = line_color;
@@ -614,7 +632,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             font_color = appearance.string_color;
                         }
                     }
-                    else if state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
+                    else if state.syntax != null && state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
                         check_for_keyword(state, quad_data, length);
                         state.in_string = true;
                         if !drawing_cursor {
@@ -622,7 +640,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                         }
 
                     }
-                    else if state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
+                    else if state.syntax != null && state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
                         check_for_keyword(state, quad_data, length);
                         state.in_char = true;
                         if !drawing_cursor {
@@ -735,6 +753,15 @@ reset_render_line_state(RenderLineState* state) {
     state.in_single_line_comment = false;
 }
 
+change_current_escape_code(RenderLineState* state) {
+    state.current_escape_code = state.next_escape_code;
+    if state.current_escape_code {
+        if state.current_escape_code.reset {
+            state.current_escape_code = null;
+        }
+        state.next_escape_code = state.next_escape_code.next;
+    }
+}
 
 adjust_line_and_draw_background(FontTexture* font_texture, Array<QuadInstanceData> array, int start_index, int length, TextAlignment alignment, float x0, float x1, float y, Vector4 background_color) {
     x_adjust: float;

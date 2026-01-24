@@ -275,7 +275,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                 available_lines_to_render -= lines;
             }
             else {
-                evaluate_line_without_rendering(&render_line_state, line);
+                evaluate_line_without_rendering(&render_line_state, line, line_number);
             }
 
             line = line.next;
