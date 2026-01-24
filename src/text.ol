@@ -238,8 +238,9 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         line_number_quads: Array<QuadInstanceData>[digits];
         length := 0;
         digit_index := digits - 1;
-        while line_number > 0 {
-            digit := line_number % 10;
+        line_number_value := line_number;
+        while line_number_value > 0 {
+            digit := line_number_value % 10;
 
             glyph := glyphs[digit + '0'];
             x_pos := x + digit_index * font_texture.quad_advance + glyph.quad_adjust.x;
@@ -256,7 +257,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
             }
 
             digit_index--;
-            line_number /= 10;
+            line_number_value /= 10;
         }
 
         x_start += (digits + 1) * font_texture.quad_advance;
@@ -534,7 +535,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 drawing_cursor = true;
             }
             else if state.current_escape_code {
-                font_color = state.current_escape_code.foreground_color;
+                if state.current_escape_code.foreground_color.w {
+                    font_color = state.current_escape_code.foreground_color;
+                }
                 if state.current_escape_code.background_color.w {
                     draw_cursor(x, y, appearance.font_color);
                 }
@@ -553,112 +556,114 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             }
 
             // Handle state
-            if reset_state_after > 0 {
-                reset_state_after--;
-                if reset_state_after == 0 {
-                    state.in_multi_line_string = false;
-                    state.in_multi_line_comment = false;
-                }
-            }
-            else if skip {
-                skip--;
-            }
-            else if !line_color_set {
-                if is_whitespace(char) {
-                    check_for_keyword(state, quad_data, length);
-                    escaping = false;
-                }
-                else if state.in_multi_line_string {
-                    if char == '\\' {
-                        escaping = !escaping;
+            if state.syntax {
+                if reset_state_after > 0 {
+                    reset_state_after--;
+                    if reset_state_after == 0 {
+                        state.in_multi_line_string = false;
+                        state.in_multi_line_comment = false;
                     }
-                    else {
-                        if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                            reset_state_after = multi_line_string_boundary_length - 1;
-                        }
+                }
+                else if skip {
+                    skip--;
+                }
+                else if !line_color_set {
+                    if is_whitespace(char) {
+                        check_for_keyword(state, quad_data, length);
                         escaping = false;
                     }
-                }
-                else if state.in_string {
-                    if char == '\\' {
-                        escaping = !escaping;
+                    else if state.in_multi_line_string {
+                        if char == '\\' {
+                            escaping = !escaping;
+                        }
+                        else {
+                            if !escaping && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                                reset_state_after = multi_line_string_boundary_length - 1;
+                            }
+                            escaping = false;
+                        }
                     }
-                    else {
-                        if !escaping && char == state.syntax.string_boundary {
-                            state.in_string = false;
+                    else if state.in_string {
+                        if char == '\\' {
+                            escaping = !escaping;
+                        }
+                        else {
+                            if !escaping && char == state.syntax.string_boundary {
+                                state.in_string = false;
+                            }
+
+                            escaping = false;
+                        }
+                    }
+                    else if state.in_char {
+                        if char == '\\' {
+                            escaping = !escaping;
+                        }
+                        else {
+                            if !escaping && char == state.syntax.char_boundary {
+                                state.in_char = false;
+                            }
+
+                            escaping = false;
+                        }
+                    }
+                    else if !state.in_single_line_comment {
+                        if state.in_multi_line_comment {
+                            if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
+                                reset_state_after = multi_line_comment_end_length - 1;
+                            }
+                        }
+                        else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
+                            check_for_keyword(state, quad_data, length);
+                            state.in_single_line_comment = true;
+                            if !drawing_cursor {
+                                font_color = appearance.comment_color;
+                            }
+                        }
+                        else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
+                            check_for_keyword(state, quad_data, length);
+                            state.in_multi_line_comment = true;
+                            skip = multi_line_comment_start_length - 1;
+                            if !drawing_cursor {
+                                font_color = appearance.comment_color;
+                            }
+                        }
+                        else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
+                            check_for_keyword(state, quad_data, length);
+                            state.in_multi_line_string = true;
+                            skip = multi_line_string_boundary_length - 1;
+                            if !drawing_cursor {
+                                font_color = appearance.string_color;
+                            }
+                        }
+                        else if state.syntax != null && state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
+                            check_for_keyword(state, quad_data, length);
+                            state.in_string = true;
+                            if !drawing_cursor {
+                                font_color = appearance.string_color;
+                            }
+
+                        }
+                        else if state.syntax != null && state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
+                            check_for_keyword(state, quad_data, length);
+                            state.in_char = true;
+                            if !drawing_cursor {
+                                font_color = appearance.char_color;
+                            }
+
+                        }
+                        else if is_text_character(char) {
+                            if state.current_word_cursor < state.current_word_buffer.length {
+                                state.current_word_buffer[state.current_word_cursor] = char;
+                            }
+                            state.current_word_cursor++;
+                        }
+                        else {
+                            check_for_keyword(state, quad_data, length);
                         }
 
                         escaping = false;
                     }
-                }
-                else if state.in_char {
-                    if char == '\\' {
-                        escaping = !escaping;
-                    }
-                    else {
-                        if !escaping && char == state.syntax.char_boundary {
-                            state.in_char = false;
-                        }
-
-                        escaping = false;
-                    }
-                }
-                else if !state.in_single_line_comment {
-                    if state.in_multi_line_comment {
-                        if match_value_in_line(line, char, state.syntax.multi_line_comment_end, i) {
-                            reset_state_after = multi_line_comment_end_length - 1;
-                        }
-                    }
-                    else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
-                        check_for_keyword(state, quad_data, length);
-                        state.in_single_line_comment = true;
-                        if !drawing_cursor {
-                            font_color = appearance.comment_color;
-                        }
-                    }
-                    else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
-                        check_for_keyword(state, quad_data, length);
-                        state.in_multi_line_comment = true;
-                        skip = multi_line_comment_start_length - 1;
-                        if !drawing_cursor {
-                            font_color = appearance.comment_color;
-                        }
-                    }
-                    else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                        check_for_keyword(state, quad_data, length);
-                        state.in_multi_line_string = true;
-                        skip = multi_line_string_boundary_length - 1;
-                        if !drawing_cursor {
-                            font_color = appearance.string_color;
-                        }
-                    }
-                    else if state.syntax != null && state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
-                        check_for_keyword(state, quad_data, length);
-                        state.in_string = true;
-                        if !drawing_cursor {
-                            font_color = appearance.string_color;
-                        }
-
-                    }
-                    else if state.syntax != null && state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
-                        check_for_keyword(state, quad_data, length);
-                        state.in_char = true;
-                        if !drawing_cursor {
-                            font_color = appearance.char_color;
-                        }
-
-                    }
-                    else if is_text_character(char) {
-                        if state.current_word_cursor < state.current_word_buffer.length {
-                            state.current_word_buffer[state.current_word_cursor] = char;
-                        }
-                        state.current_word_cursor++;
-                    }
-                    else {
-                        check_for_keyword(state, quad_data, length);
-                    }
-
-                    escaping = false;
                 }
             }
 

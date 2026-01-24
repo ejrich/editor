@@ -1301,12 +1301,78 @@ end_insert_mode() {
 
 add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
-    text: string = { data = value.data; }
+    text: string;
 
     each i in value.length {
         char := value[i];
-        // TODO Handle escape codes
-        if char == '\n' {
+        if buffer.escape_code_parse_state.parsing {
+            if buffer.escape_code_parse_state.needs_open_bracket {
+                if char == '[' {
+                    buffer.escape_code_parse_state.needs_open_bracket = false;
+                }
+                else {
+                    buffer.escape_code_parse_state.parsing = false;
+                }
+            }
+            else if char == ';' {
+                interpret_escape_code(&buffer.escape_code_parse_state);
+            }
+            else if char >= '0' && char <= '9' {
+                buffer.escape_code_parse_state.current_code *= 10;
+                buffer.escape_code_parse_state.current_code += char - '0';
+            }
+            else if char == 'm' {
+                interpret_escape_code(&buffer.escape_code_parse_state);
+
+                escape_code := new<EscapeCode>();
+                escape_code.line = buffer.line_count;
+                escape_code.column = line.length;
+                if buffer.escape_code_parse_state.reset {
+                    escape_code.reset = true;
+                }
+                else {
+                    if buffer.escape_code_parse_state.foreground_color.w {
+                        escape_code.foreground_color = buffer.escape_code_parse_state.foreground_color;
+                    }
+                    if buffer.escape_code_parse_state.background_color.w {
+                        escape_code.background_color = buffer.escape_code_parse_state.background_color;
+                    }
+                }
+
+                if buffer.escape_codes {
+                    current_escape_code := buffer.escape_codes;
+                    while current_escape_code.next {
+                        current_escape_code = current_escape_code.next;
+                    }
+
+                    current_escape_code.next = escape_code;
+                }
+                else {
+                    buffer.escape_codes = escape_code;
+                }
+
+                buffer.escape_code_parse_state.parsing = false;
+            }
+            else {
+                buffer.escape_code_parse_state.parsing = false;
+            }
+        }
+        else if char == 0x1B {
+            if text.length {
+                add_text_to_line(line, text, line.length);
+                text.length = 0;
+            }
+
+            buffer.escape_code_parse_state = {
+                parsing = true;
+                needs_open_bracket = true;
+                reset = false;
+                current_code = 0;
+                foreground_color = { x = 0.0; y = 0.0; z = 0.0; w = 0.0; }
+                background_color = { x = 0.0; y = 0.0; z = 0.0; w = 0.0; }
+            }
+        }
+        else if char == '\n' {
             if text.length {
                 add_text_to_line(line, text, line.length);
             }
@@ -1317,6 +1383,9 @@ add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes)
             text = { length = 0; data = value.data + i + 1; }
         }
         else if char != '\r' {
+            if text.length == 0 {
+                text.data = value.data + i;
+            }
             text.length++;
         }
     }
@@ -1326,6 +1395,44 @@ add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes)
     }
 
     calculate_line_digits(buffer);
+}
+
+interpret_escape_code(EscapeCodeParseState* state) {
+    code := state.current_code;
+
+    if code == 0 {
+        state.reset = true;
+        state.foreground_color = vec4();
+        state.background_color = vec4();
+    }
+    else {
+        state.reset = false;
+
+        switch code {
+            // Foregrounds
+            case 30; state.foreground_color = vec4(0.0, 0.0, 0.0, 1.0);
+            case 31; state.foreground_color = vec4(1.0, 0.0, 0.0, 1.0);
+            case 32; state.foreground_color = vec4(0.0, 1.0, 0.0, 1.0);
+            case 33; state.foreground_color = vec4(1.0, 1.0, 0.0, 1.0);
+            case 34; state.foreground_color = vec4(0.0, 0.0, 1.0, 1.0);
+            case 35; state.foreground_color = vec4(1.0, 0.0, 1.0, 1.0);
+            case 36; state.foreground_color = vec4(0.0, 1.0, 1.0, 1.0);
+            case 37; state.foreground_color = vec4(1.0, 1.0, 1.0, 1.0);
+            // Backgrounds
+            case 40; state.background_color = vec4(0.0, 0.0, 0.0, 1.0);
+            case 41; state.background_color = vec4(1.0, 0.0, 0.0, 1.0);
+            case 42; state.background_color = vec4(0.0, 1.0, 0.0, 1.0);
+            case 43; state.background_color = vec4(1.0, 1.0, 0.0, 1.0);
+            case 44; state.background_color = vec4(0.0, 0.0, 1.0, 1.0);
+            case 45; state.background_color = vec4(1.0, 0.0, 1.0, 1.0);
+            case 46; state.background_color = vec4(0.0, 1.0, 1.0, 1.0);
+            case 47; state.background_color = vec4(1.0, 1.0, 1.0, 1.0);
+        }
+
+        // TODO Handle more colors
+    }
+
+    state.current_code = 0;
 }
 
 add_text_to_line(string text) {
@@ -3681,6 +3788,7 @@ struct Buffer {
     next_change: Change*;
     syntax: Syntax*;
     escape_codes: EscapeCode*;
+    escape_code_parse_state: EscapeCodeParseState;
 }
 
 interface string GetBufferTitle()
@@ -3740,6 +3848,15 @@ struct EscapeCode {
     foreground_color: Vector4;
     background_color: Vector4;
     next: EscapeCode*;
+}
+
+struct EscapeCodeParseState {
+    parsing: bool;
+    needs_open_bracket: bool;
+    reset: bool;
+    current_code: u32;
+    foreground_color: Vector4;
+    background_color: Vector4;
 }
 
 open_buffers_list() {
