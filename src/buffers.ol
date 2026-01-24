@@ -1411,25 +1411,39 @@ interpret_escape_code(EscapeCodeParseState* state) {
         switch code {
             // Foregrounds
             case 30; state.foreground_color = vec4(0.0, 0.0, 0.0, 1.0);
-            case 31; state.foreground_color = vec4(1.0, 0.0, 0.0, 1.0);
-            case 32; state.foreground_color = vec4(0.0, 1.0, 0.0, 1.0);
-            case 33; state.foreground_color = vec4(1.0, 1.0, 0.0, 1.0);
+            case 31; state.foreground_color = vec4(0.5, 0.0, 0.0, 1.0);
+            case 32; state.foreground_color = vec4(0.0, 0.5, 0.0, 1.0);
+            case 33; state.foreground_color = vec4(0.5, 5.0, 0.0, 1.0);
             case 34; state.foreground_color = vec4(0.0, 0.0, 1.0, 1.0);
-            case 35; state.foreground_color = vec4(1.0, 0.0, 1.0, 1.0);
-            case 36; state.foreground_color = vec4(0.0, 1.0, 1.0, 1.0);
-            case 37; state.foreground_color = vec4(1.0, 1.0, 1.0, 1.0);
+            case 35; state.foreground_color = vec4(0.5, 0.0, 0.5, 1.0);
+            case 36; state.foreground_color = vec4(0.0, 0.5, 0.5, 1.0);
+            case 37; state.foreground_color = vec4(0.75, 0.75, 0.75, 1.0);
+            case 90; state.foreground_color = vec4(0.5, 0.5, 0.5, 1.0);
+            case 91; state.foreground_color = vec4(1.0, 0.0, 0.0, 1.0);
+            case 92; state.foreground_color = vec4(0.0, 1.0, 0.0, 1.0);
+            case 93; state.foreground_color = vec4(1.0, 1.0, 0.0, 1.0);
+            case 94; state.foreground_color = vec4(0.0, 0.0, 1.0, 1.0);
+            case 95; state.foreground_color = vec4(1.0, 0.0, 1.0, 1.0);
+            case 96; state.foreground_color = vec4(0.0, 1.0, 1.0, 1.0);
+            case 97; state.foreground_color = vec4(1.0, 1.0, 1.0, 1.0);
             // Backgrounds
-            case 40; state.background_color = vec4(0.0, 0.0, 0.0, 1.0);
-            case 41; state.background_color = vec4(1.0, 0.0, 0.0, 1.0);
-            case 42; state.background_color = vec4(0.0, 1.0, 0.0, 1.0);
-            case 43; state.background_color = vec4(1.0, 1.0, 0.0, 1.0);
-            case 44; state.background_color = vec4(0.0, 0.0, 1.0, 1.0);
-            case 45; state.background_color = vec4(1.0, 0.0, 1.0, 1.0);
-            case 46; state.background_color = vec4(0.0, 1.0, 1.0, 1.0);
-            case 47; state.background_color = vec4(1.0, 1.0, 1.0, 1.0);
+            case 40;  state.background_color = vec4(0.0, 0.0, 0.0, 1.0);
+            case 41;  state.background_color = vec4(0.5, 0.0, 0.0, 1.0);
+            case 42;  state.background_color = vec4(0.0, 0.5, 0.0, 1.0);
+            case 43;  state.background_color = vec4(0.5, 5.0, 0.0, 1.0);
+            case 44;  state.background_color = vec4(0.0, 0.0, 1.0, 1.0);
+            case 45;  state.background_color = vec4(0.5, 0.0, 0.5, 1.0);
+            case 46;  state.background_color = vec4(0.0, 0.5, 0.5, 1.0);
+            case 47;  state.background_color = vec4(0.75, 0.75, 0.75, 1.0);
+            case 100; state.background_color = vec4(0.5, 0.5, 0.5, 1.0);
+            case 101; state.background_color = vec4(1.0, 0.0, 0.0, 1.0);
+            case 102; state.background_color = vec4(0.0, 1.0, 0.0, 1.0);
+            case 103; state.background_color = vec4(1.0, 1.0, 0.0, 1.0);
+            case 104; state.background_color = vec4(0.0, 0.0, 1.0, 1.0);
+            case 105; state.background_color = vec4(1.0, 0.0, 1.0, 1.0);
+            case 106; state.background_color = vec4(0.0, 1.0, 1.0, 1.0);
+            case 107; state.background_color = vec4(1.0, 1.0, 1.0, 1.0);
         }
-
-        // TODO Handle more colors
     }
 
     state.current_code = 0;

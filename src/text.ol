@@ -539,7 +539,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                     font_color = state.current_escape_code.foreground_color;
                 }
                 if state.current_escape_code.background_color.w {
-                    draw_cursor(x, y, appearance.font_color);
+                    draw_cursor(x, y, state.current_escape_code.background_color);
                 }
             }
             else if line_color_set {
