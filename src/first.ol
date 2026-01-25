@@ -20,6 +20,7 @@ application_name := "Editor";
 
     #if os == OS.Windows {
         set_windows_subsystem(WindowsSubsystem.Windows);
+        add_windows_resource_file("../assets/editor.rc");
         if DEVELOPER {
             copy_to_output_directory("lib/shaderc/shaderc_shared.dll");
         }

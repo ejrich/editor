@@ -77,6 +77,7 @@ create_window() {
             style = WindowClassStyle.CS_VREDRAW | WindowClassStyle.CS_HREDRAW;
             lpfnWndProc = handle_window_inputs;
             hInstance = hinstance;
+            hIcon = LoadIconA(hinstance, "editor");
             hCursor = LoadCursorA(null, 32512);
             lpszClassName = application_name.data;
         }
