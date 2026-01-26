@@ -38,6 +38,18 @@ init_display() {
         CLIPBOARD = XInternAtom(window.handle, "CLIPBOARD", 0);
         XSEL_DATA = XInternAtom(window.handle, "XSEL_DATA", 0);
         xfd = XConnectionNumber(window.handle);
+
+        window_update_pipes: Array<int>[2];
+        pipe(window_update_pipes.data);
+        window_update_read_pipe = window_update_pipes[0];
+        window_update_write_pipe = window_update_pipes[1];
+
+        if window_update_read_pipe > xfd {
+            fd_listen_count = window_update_read_pipe + 1;
+        }
+        else {
+            fd_listen_count = xfd + 1;
+        }
     }
     else #if os == OS.Windows {
         SetProcessDPIAware();
@@ -56,12 +68,19 @@ create_window() {
         default_window := XDefaultRootWindow(window.handle);
         attributes: XSetWindowAttributes = {
             background_pixel = 0x0;
-            event_mask = cast(s64, XInputMasks.AllEventMask);
+            event_mask = cast(s64, XInputMasks.KeyPressMask | XInputMasks.KeyReleaseMask | XInputMasks.ButtonPressMask | XInputMasks.ButtonReleaseMask | XInputMasks.EnterWindowMask | XInputMasks.LeaveWindowMask | XInputMasks.StructureNotifyMask | XInputMasks.FocusChangeMask | XInputMasks.PropertyChangeMask | XInputMasks.OwnerGrabButtonMask);
             colormap = XCreateColormap(window.handle, default_window, vis.visual, 0);
         }
 
         window.window = XCreateWindow(window.handle, default_window, 0, 0, settings.window_width, settings.window_height, 0, vis.depth, 1, vis.visual, 0x0000281A, &attributes);
         window.graphics_context = XCreateGC(window.handle, window.window, 0, null);
+
+        hints: XWMHints = {
+            flags = 0x1;
+            input = 1;
+            initial_state = 1;
+        }
+        XSetWMHints(window.handle, window.window, &hints);
 
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
@@ -122,19 +141,15 @@ handle_inputs() {
 
         if settings.reactive_render && XPending(window.handle) == 0 {
             fd_set: Fd_Set;
-            each i in fd_set.__fds_bits.length {
-                fd_set.__fds_bits[i] = 0;
-            }
+            clear_fd_set(&fd_set);
 
-            u64_bits := 64; #const
-            index := xfd / u64_bits;
-            bit: u64 = cast(u64, 1) << (xfd % u64_bits);
-            fd_set.__fds_bits[index] |= bit;
+            set_fd_set(&fd_set, xfd);
+            set_fd_set(&fd_set, window_update_read_pipe);
 
             timeout: Timeval = {
                 tv_sec = 10;
             }
-            select(xfd + 1, &fd_set, null, null, &timeout);
+            select(fd_listen_count, &fd_set, null, null, &timeout);
         }
 
         while XPending(window.handle) {
@@ -205,10 +220,6 @@ handle_inputs() {
                         x, y := convert_coordinates(event.xbutton.x, event.xbutton.y);
                         handle_mouse_button(PressState.Up, mouse_button, mod_code, x, y);
                     }
-                }
-                case XEventType.MotionNotify; {
-                    x, y := convert_coordinates(event.xmotion.x, event.xmotion.y);
-                    handle_mouse_move(x, y);
                 }
                 case XEventType.ConfigureNotify; {
                     if settings.window_width != event.xconfigure.width || settings.window_height != event.xconfigure.height {
@@ -307,14 +318,8 @@ handle_inputs() {
 
 trigger_window_update() {
     #if os == OS.Linux {
-        event: XClientMessageEvent = {
-            type = XEventType.ClientMessage;
-            send_event = 1;
-            display = window.handle;
-            window = window.window;
-            format = 32;
-        }
-        XSendEvent(window.handle, window.window, 0, 0, cast(XEvent*, &event));
+        ping: u8 = 1;
+        write(window_update_write_pipe, &ping, 1);
     }
     #if os == OS.Windows {
         SendNotifyMessageA(window.handle, MessageType.WM_USER, 0, 0);
@@ -344,6 +349,9 @@ float, float get_cursor_position() {
     CLIPBOARD: s64;
     XSEL_DATA: s64;
     xfd: u64;
+    window_update_read_pipe: int;
+    window_update_write_pipe: int;
+    fd_listen_count: int;
 }
 
 #private
@@ -509,12 +517,6 @@ else #if os == OS.Windows {
                 mouse_scroll(ScrollDirection.Down, ScrollDirection.Up, wParam);
             case MessageType.WM_MOUSEHWHEEL;
                 mouse_scroll(ScrollDirection.Left, ScrollDirection.Right, wParam);
-            case MessageType.WM_MOUSEMOVE; {
-                x := lParam & 0xFFFF;
-                y := (lParam & 0xFFFF0000) >> 16;
-                x_pos, y_pos := convert_coordinates(x, y);
-                handle_mouse_move(x_pos, y_pos);
-            }
             case MessageType.WM_SIZE; {
                 width: u32 = lParam & 0xFFFF;
                 height: u32 = (lParam & 0xFFFF0000) >> 16;

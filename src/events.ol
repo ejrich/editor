@@ -126,10 +126,6 @@ handle_key_event(PressState state, KeyCode code, ModCode mod, string char) {
     }
 }
 
-handle_mouse_move(float x, float y) {
-    // log("Mouse location %, %\n", x, y);
-}
-
 handle_mouse_scroll(ScrollDirection direction, ModCode mod) {
     // log("Scrolling % with mod %\n", direction, mod);
     handle_buffer_scroll(direction);

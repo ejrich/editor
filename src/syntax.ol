@@ -7,7 +7,7 @@ Syntax* get_syntax_for_file(string file_path) {
     }
 
     result: Syntax*;
-    if extension_start + 1 < file_path.length {
+    if extension_start < file_path.length {
         extension: string = {
             length = file_path.length - extension_start;
             data = file_path.data + extension_start;
@@ -68,60 +68,6 @@ syntax_colors := 7; #const
 #private
 
 syntax_configurations: Array<Syntax> = [
-    {
-        extension = "ol";
-        keywords = [
-            { value = "return";    color = SyntaxColor.Red; },
-            { value = "true";      color = SyntaxColor.Purple; },
-            { value = "false";     color = SyntaxColor.Purple; },
-            { value = "if";        color = SyntaxColor.Red; },
-            { value = "else";      color = SyntaxColor.Red; },
-            { value = "while";     color = SyntaxColor.Red; },
-            { value = "each";      color = SyntaxColor.Red; },
-            { value = "in";        color = SyntaxColor.Orange; },
-            { value = "out";       color = SyntaxColor.Orange; },
-            { value = "struct";    color = SyntaxColor.Aqua; },
-            { value = "enum";      color = SyntaxColor.Aqua; },
-            { value = "union";     color = SyntaxColor.Aqua; },
-            { value = "interface"; color = SyntaxColor.Aqua; },
-            { value = "null";      color = SyntaxColor.Purple; },
-            { value = "cast";      color = SyntaxColor.Orange; },
-            { value = "operator";  color = SyntaxColor.Orange; },
-            { value = "break";     color = SyntaxColor.Red; },
-            { value = "continue";  color = SyntaxColor.Red; },
-            { value = "asm";       color = SyntaxColor.Orange; },
-            { value = "switch";    color = SyntaxColor.Red; },
-            { value = "case";      color = SyntaxColor.Red; },
-            { value = "default";   color = SyntaxColor.Red; },
-            { value = "defer";     color = SyntaxColor.Orange; },
-            { value = "void";      color = SyntaxColor.Yellow; },
-            { value = "bool";      color = SyntaxColor.Yellow; },
-            { value = "s8";        color = SyntaxColor.Yellow; },
-            { value = "u8";        color = SyntaxColor.Yellow; },
-            { value = "s16";       color = SyntaxColor.Yellow; },
-            { value = "u16";       color = SyntaxColor.Yellow; },
-            { value = "int";       color = SyntaxColor.Yellow; },
-            { value = "s32";       color = SyntaxColor.Yellow; },
-            { value = "u32";       color = SyntaxColor.Yellow; },
-            { value = "s64";       color = SyntaxColor.Yellow; },
-            { value = "u64";       color = SyntaxColor.Yellow; },
-            { value = "float";     color = SyntaxColor.Yellow; },
-            { value = "float64";   color = SyntaxColor.Yellow; },
-            { value = "Type";      color = SyntaxColor.Yellow; },
-            { value = "string";    color = SyntaxColor.Yellow; },
-            { value = "Array";     color = SyntaxColor.Yellow; },
-            { value = "CArray";    color = SyntaxColor.Yellow; },
-            { value = "Params";    color = SyntaxColor.Orange; },
-            { value = "Any";       color = SyntaxColor.Yellow; },
-        ]
-        max_keyword_length = 9;
-        single_line_comment = "//";
-        multi_line_comment_start = "/*";
-        multi_line_comment_end = "*/";
-        char_boundary = '\'';
-        string_boundary = '\"';
-        multi_line_string_boundary = "\"\"\"";
-    },
     {
         extension = "c";
         keywords = [
@@ -270,5 +216,104 @@ syntax_configurations: Array<Syntax> = [
             { start = "--- ";  color = SyntaxColor.Orange; },
             { start = "@@";    color = SyntaxColor.Blue; },
         ]
-    }
+    },
+    {
+        extension = "h";
+        keywords = [
+            { value = "auto";     color = SyntaxColor.Orange; },
+            { value = "break";    color = SyntaxColor.Red; },
+            { value = "case";     color = SyntaxColor.Red; },
+            { value = "char";     color = SyntaxColor.Yellow; },
+            { value = "const";    color = SyntaxColor.Orange; },
+            { value = "continue"; color = SyntaxColor.Red; },
+            { value = "default";  color = SyntaxColor.Red; },
+            { value = "do";       color = SyntaxColor.Red; },
+            { value = "double";   color = SyntaxColor.Yellow; },
+            { value = "else";     color = SyntaxColor.Red; },
+            { value = "enum";     color = SyntaxColor.Aqua; },
+            { value = "extern";   color = SyntaxColor.Orange; },
+            { value = "false";    color = SyntaxColor.Purple; },
+            { value = "float";    color = SyntaxColor.Yellow; },
+            { value = "for";      color = SyntaxColor.Red; },
+            { value = "goto";     color = SyntaxColor.Red; },
+            { value = "if";       color = SyntaxColor.Red; },
+            { value = "int";      color = SyntaxColor.Yellow; },
+            { value = "long";     color = SyntaxColor.Yellow; },
+            { value = "register"; color = SyntaxColor.Orange; },
+            { value = "return";   color = SyntaxColor.Red; },
+            { value = "short";    color = SyntaxColor.Yellow; },
+            { value = "signed";   color = SyntaxColor.Yellow; },
+            { value = "sizeof";   color = SyntaxColor.Purple; },
+            { value = "static";   color = SyntaxColor.Red; },
+            { value = "struct";   color = SyntaxColor.Aqua; },
+            { value = "switch";   color = SyntaxColor.Red; },
+            { value = "true";     color = SyntaxColor.Purple; },
+            { value = "typedef";  color = SyntaxColor.Aqua; },
+            { value = "union";    color = SyntaxColor.Aqua; },
+            { value = "unsigned"; color = SyntaxColor.Yellow; },
+            { value = "void";     color = SyntaxColor.Yellow; },
+            { value = "volatile"; color = SyntaxColor.Orange; },
+            { value = "while";    color = SyntaxColor.Red; },
+        ]
+        max_keyword_length = 8;
+        single_line_comment = "//";
+        multi_line_comment_start = "/*";
+        multi_line_comment_end = "*/";
+        char_boundary = '\'';
+        string_boundary = '\"';
+    },
+    {
+        extension = "ol";
+        keywords = [
+            { value = "return";    color = SyntaxColor.Red; },
+            { value = "true";      color = SyntaxColor.Purple; },
+            { value = "false";     color = SyntaxColor.Purple; },
+            { value = "if";        color = SyntaxColor.Red; },
+            { value = "else";      color = SyntaxColor.Red; },
+            { value = "while";     color = SyntaxColor.Red; },
+            { value = "each";      color = SyntaxColor.Red; },
+            { value = "in";        color = SyntaxColor.Orange; },
+            { value = "out";       color = SyntaxColor.Orange; },
+            { value = "struct";    color = SyntaxColor.Aqua; },
+            { value = "enum";      color = SyntaxColor.Aqua; },
+            { value = "union";     color = SyntaxColor.Aqua; },
+            { value = "interface"; color = SyntaxColor.Aqua; },
+            { value = "null";      color = SyntaxColor.Purple; },
+            { value = "cast";      color = SyntaxColor.Orange; },
+            { value = "operator";  color = SyntaxColor.Orange; },
+            { value = "break";     color = SyntaxColor.Red; },
+            { value = "continue";  color = SyntaxColor.Red; },
+            { value = "asm";       color = SyntaxColor.Orange; },
+            { value = "switch";    color = SyntaxColor.Red; },
+            { value = "case";      color = SyntaxColor.Red; },
+            { value = "default";   color = SyntaxColor.Red; },
+            { value = "defer";     color = SyntaxColor.Orange; },
+            { value = "void";      color = SyntaxColor.Yellow; },
+            { value = "bool";      color = SyntaxColor.Yellow; },
+            { value = "s8";        color = SyntaxColor.Yellow; },
+            { value = "u8";        color = SyntaxColor.Yellow; },
+            { value = "s16";       color = SyntaxColor.Yellow; },
+            { value = "u16";       color = SyntaxColor.Yellow; },
+            { value = "int";       color = SyntaxColor.Yellow; },
+            { value = "s32";       color = SyntaxColor.Yellow; },
+            { value = "u32";       color = SyntaxColor.Yellow; },
+            { value = "s64";       color = SyntaxColor.Yellow; },
+            { value = "u64";       color = SyntaxColor.Yellow; },
+            { value = "float";     color = SyntaxColor.Yellow; },
+            { value = "float64";   color = SyntaxColor.Yellow; },
+            { value = "Type";      color = SyntaxColor.Yellow; },
+            { value = "string";    color = SyntaxColor.Yellow; },
+            { value = "Array";     color = SyntaxColor.Yellow; },
+            { value = "CArray";    color = SyntaxColor.Yellow; },
+            { value = "Params";    color = SyntaxColor.Orange; },
+            { value = "Any";       color = SyntaxColor.Yellow; },
+        ]
+        max_keyword_length = 9;
+        single_line_comment = "//";
+        multi_line_comment_start = "/*";
+        multi_line_comment_end = "*/";
+        char_boundary = '\'';
+        string_boundary = '\"';
+        multi_line_string_boundary = "\"\"\"";
+    },
 ]
