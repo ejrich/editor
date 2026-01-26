@@ -150,6 +150,11 @@ handle_inputs() {
                 tv_sec = 10;
             }
             select(fd_listen_count, &fd_set, null, null, &timeout);
+
+            if is_fd_set(&fd_set, window_update_read_pipe) {
+                buf: CArray<u8>[100];
+                read(window_update_read_pipe, &buf, buf.length);
+            }
         }
 
         while XPending(window.handle) {
