@@ -75,11 +75,28 @@ create_window() {
         window.window = XCreateWindow(window.handle, default_window, 0, 0, settings.window_width, settings.window_height, 0, vis.depth, 1, vis.visual, 0x0000281A, &attributes);
         window.graphics_context = XCreateGC(window.handle, window.window, 0, null);
 
+        icon_bits: u8*;
+        #if DEVELOPER {
+            program_directory := get_program_directory();
+            icon_file_path := temp_string(program_directory, "/../assets/Editor.bmp");
+            found, icon_file := read_file(icon_file_path, allocate);
+        }
+        else {
+            icon_bits = __icon_bitmap.data;
+        }
+
+        icon_size := 96; #const
         hints: XWMHints = {
-            flags = 0x1;
+            flags = 0x7;
             input = 1;
             initial_state = 1;
+            icon_pixmap = XCreateBitmapFromData(window.handle, window.window, icon_bits, icon_size, icon_size);
         }
+
+        #if DEVELOPER {
+            free_allocation(icon_file.data);
+        }
+
         XSetWMHints(window.handle, window.window, &hints);
 
         name: XTextProperty;

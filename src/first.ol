@@ -16,6 +16,12 @@ application_name := "Editor";
 
     if os == OS.Linux {
         set_linker(LinkerType.Dynamic);
+        if DEVELOPER {
+            copy_to_output_directory("../assets/Editor.bmp");
+        }
+        else {
+            create_icon_bitmap();
+        }
     }
 
     #if os == OS.Windows {
@@ -264,6 +270,26 @@ application_name := "Editor";
             }
         }
     }
+}
+
+create_icon_bitmap() {
+    directory := get_compiler_working_directory();
+    bitmap_file := temp_string(directory, "/../assets/Editor.bmp");
+    found, icon := read_file(bitmap_file);
+    if !found {
+        report_error("Icon not found at path '../assets/Editor.bmp'");
+        return;
+    }
+
+    icon_array: Array<u8>;
+    icon_array.length = icon.length;
+    icon_array.data = icon.data;
+    icon_bitmap_code := format_string("__icon_bitmap: Array<u8> = %", icon_array);
+
+    add_code(icon_bitmap_code);
+
+    default_free(icon.data);
+    default_free(icon_bitmap_code.data);
 }
 
 // Shader metaprogram
