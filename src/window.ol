@@ -78,8 +78,9 @@ create_window() {
         icon_bits: u8*;
         #if DEVELOPER {
             program_directory := get_program_directory();
-            icon_file_path := temp_string(program_directory, "/../assets/Editor.bmp");
+            icon_file_path := temp_string(program_directory, "/Editor.bmp");
             found, icon_file := read_file(icon_file_path, allocate);
+            icon_bits = icon_file.data;
         }
         else {
             icon_bits = __icon_bitmap.data;
@@ -90,7 +91,7 @@ create_window() {
             flags = 0x7;
             input = 1;
             initial_state = 1;
-            icon_pixmap = XCreateBitmapFromData(window.handle, window.window, icon_bits, icon_size, icon_size);
+            icon_pixmap = XCreateBitmapFromData(window.handle, window.window, icon_bits + 0x46, icon_size, icon_size);
         }
 
         #if DEVELOPER {
@@ -101,6 +102,7 @@ create_window() {
 
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
+        XSetWMName(window.handle, window.window, &name);
 
         XConvertSelection(window.handle, CLIPBOARD, UTF8_STRING, XSEL_DATA, window.window, 0);
 
