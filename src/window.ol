@@ -109,7 +109,8 @@ create_window() {
             }
         }
 
-        XChangeProperty(window.handle, window.window, XInternAtom(window.handle, "_NET_WM_ICON", 1), 6, 32, 0, cast(u8*, icon_bitmap_array.data), icon_bitmap_array.length);
+        net_wm_icon := XInternAtom(window.handle, "_NET_WM_ICON", 1);
+        XChangeProperty(window.handle, window.window, net_wm_icon, 6, 32, 0, cast(u8*, icon_bitmap_array.data), icon_bitmap_array.length);
 
         free_allocation(icon_bitmap_array.data);
 
@@ -386,31 +387,34 @@ float, float get_cursor_position() {
 }
 
 #if os == OS.Linux {
-    UTF8_STRING: s64;
     CLIPBOARD: s64;
+}
+
+#private
+
+#if os == OS.Linux {
+    UTF8_STRING: s64;
     XSEL_DATA: s64;
     xfd: u64;
     window_update_read_pipe: int;
     window_update_write_pipe: int;
     fd_listen_count: int;
-}
 
-#private
-
-struct BitmapHeader {
-    magic: u16;
-    size1: u16;
-    size2: u16;
-    reserved0: u16;
-    reserved1: u16;
-    offset1: u16;
-    offset2: u16;
-    header1: u16;
-    header2: u16;
-    width1: u16;
-    width2: u16;
-    height1: u16;
-    height2: u16;
+    struct BitmapHeader {
+        magic: u16;
+        size1: u16;
+        size2: u16;
+        reserved0: u16;
+        reserved1: u16;
+        offset1: u16;
+        offset2: u16;
+        header1: u16;
+        header2: u16;
+        width1: u16;
+        width2: u16;
+        height1: u16;
+        height2: u16;
+    }
 }
 
 resize_window(u32 width, u32 height) {
