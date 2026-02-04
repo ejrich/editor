@@ -75,6 +75,7 @@ create_window() {
         window.window = XCreateWindow(window.handle, default_window, 0, 0, settings.window_width, settings.window_height, 0, vis.depth, 1, vis.visual, 0x0000281A, &attributes);
         window.graphics_context = XCreateGC(window.handle, window.window, 0, null);
 
+        // Set the icon for the program
         icon_bits: u8*;
         #if DEVELOPER {
             program_directory := get_program_directory();
@@ -102,7 +103,7 @@ create_window() {
         icon_bitmap_array[0] = icon_header.width1;
         icon_bitmap_array[1] = icon_header.height1;
 
-        bitmap_data := cast(u32*, icon_file.data + icon_header.offset1);
+        bitmap_data := cast(u32*, icon_bits + icon_header.offset1);
         each x in icon_header.width1 {
             each y in icon_header.height1 {
                 icon_bitmap_array[x + (icon_header.height1 - 1 - y) * icon_header.height1 + 2] = bitmap_data[x + y * icon_header.height1];
@@ -118,6 +119,7 @@ create_window() {
             free_allocation(icon_file.data);
         }
 
+        // Name the window
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
         XSetWMName(window.handle, window.window, &name);
