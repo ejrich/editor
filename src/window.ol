@@ -86,19 +86,36 @@ create_window() {
             icon_bits = __icon_bitmap.data;
         }
 
-        icon_size := 96; #const
+        icon_header := cast(BitmapHeader*, icon_bits);
+
         hints: XWMHints = {
             flags = 0x7;
             input = 1;
             initial_state = 1;
-            icon_pixmap = XCreateBitmapFromData(window.handle, window.window, icon_bits + 0x46, icon_size, icon_size);
+            icon_pixmap = XCreateBitmapFromData(window.handle, window.window, icon_bits + icon_header.offset1, icon_header.width1, icon_header.height1);
         }
+
+        XSetWMHints(window.handle, window.window, &hints);
+
+        icon_bitmap_array: Array<u64>;
+        array_resize(&icon_bitmap_array, icon_header.width1 * icon_header.height1 + 2, allocate);
+        icon_bitmap_array[0] = icon_header.width1;
+        icon_bitmap_array[1] = icon_header.height1;
+
+        bitmap_data := cast(u32*, icon_file.data + icon_header.offset1);
+        each x in icon_header.width1 {
+            each y in icon_header.height1 {
+                icon_bitmap_array[x + (icon_header.height1 - 1 - y) * icon_header.height1 + 2] = bitmap_data[x + y * icon_header.height1];
+            }
+        }
+
+        XChangeProperty(window.handle, window.window, XInternAtom(window.handle, "_NET_WM_ICON", 1), 6, 32, 0, cast(u8*, icon_bitmap_array.data), icon_bitmap_array.length);
+
+        free_allocation(icon_bitmap_array.data);
 
         #if DEVELOPER {
             free_allocation(icon_file.data);
         }
-
-        XSetWMHints(window.handle, window.window, &hints);
 
         name: XTextProperty;
         XStringListToTextProperty(&application_name.data, 1, &name);
@@ -379,6 +396,22 @@ float, float get_cursor_position() {
 }
 
 #private
+
+struct BitmapHeader {
+    magic: u16;
+    size1: u16;
+    size2: u16;
+    reserved0: u16;
+    reserved1: u16;
+    offset1: u16;
+    offset2: u16;
+    header1: u16;
+    header2: u16;
+    width1: u16;
+    width2: u16;
+    height1: u16;
+    height2: u16;
+}
 
 resize_window(u32 width, u32 height) {
     settings = { window_width = width; window_height = height; }
