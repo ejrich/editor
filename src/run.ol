@@ -162,7 +162,7 @@ bool start_command(string command, string directory, ProcessData* process_data, 
         pid := fork();
 
         if pid < 0 {
-            return false, 0;
+            return false;
         }
 
         read_pipe := 0; #const
@@ -192,7 +192,7 @@ bool start_command(string command, string directory, ProcessData* process_data, 
         }
 
         close(stdout_pipe_files[write_pipe]);
-        if handle_std_in {
+        if handle_stdin {
             close(stdin_pipe_files[read_pipe]);
         }
 
