@@ -1,3 +1,12 @@
+init_shell() {
+    #if os == OS.Linux {
+        shell = get_environment_variable("SHELL", allocate);
+        if string_is_empty(shell) {
+            shell = "/bin/sh";
+        }
+    }
+}
+
 queue_command_to_run(string command) {
     params := new<RunCommandParams>();
     params.command = command;
@@ -46,13 +55,15 @@ Buffer* run_command_and_save_to_buffer(string command) {
     buffer.line_count_digits = 1;
     buffer.lines = allocate_line();
 
-    success, exit_code := execute_command(command, buffer);
+    process: ProcessData;
+    success, exit_code := execute_command(command, &process, buffer);
 
     return buffer;
 }
 
 run_command_silent(string command) {
-    execute_command(command, null, null);
+    process: ProcessData;
+    execute_command(command, &process, null);
 }
 
 struct RunData {
@@ -63,17 +74,175 @@ struct RunData {
     run_mutex: Semaphore;
 }
 
+bool start_command(string command, string directory, ProcessData* process_data, bool handle_stdin, bool is_terminal) {
+    #if os == OS.Windows {
+        sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
+        stdout_read_handle, stdout_write_handle, stdin_read_handle, stdin_write_handle: Handle*;
+        if !CreatePipe(&stdout_read_handle, &stdout_write_handle, &sa, 0) {
+            return false;
+        }
+        SetHandleInformation(stdout_read_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
+
+        si: STARTUPINFOA = {
+            cb = size_of(STARTUPINFOA); dwFlags = 0x100;
+            hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            hStdError = stdout_write_handle; hStdOutput = stdout_write_handle;
+        }
+
+        if handle_stdin {
+            if !CreatePipe(&stdin_read_handle, &stdin_write_handle, &sa, 0) {
+                return false;
+            }
+            SetHandleInformation(stdin_write_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
+
+            si.hStdInput = stdin_read_handle;
+        }
+
+        pi: PROCESS_INFORMATION;
+
+        flags := ProcessCreationFlags.DETACHED_PROCESS;
+        if is_terminal {
+            flags = ProcessCreationFlags.CREATE_SUSPENDED | ProcessCreationFlags.CREATE_NO_WINDOW;
+            command = temp_string("powershell -NoLogo ", command);
+        }
+
+        current_directory: u8*;
+        if !string_is_empty(directory) {
+            current_directory = directory.data;
+        }
+
+        if !CreateProcessA(null, command, null, null, true, flags, null, current_directory, &si, &pi) {
+            CloseHandle(stdout_read_handle);
+            CloseHandle(stdout_write_handle);
+
+            if handle_stdin {
+                CloseHandle(stdin_read_handle);
+                CloseHandle(stdin_write_handle);
+            }
+            return false;
+        }
+
+        if is_terminal {
+            job_object := CreateJobObjectA(null, null);
+            AssignProcessToJobObject(job_object, pi.hProcess);
+            ResumeThread(pi.hThread);
+
+            if process_data {
+                process_data.job_object = job_object;
+            }
+        }
+
+        if process_data {
+            process_data.thread = pi.hThread;
+            process_data.process = pi.hProcess;
+
+            if handle_stdin {
+                process_data.input_pipe = stdin_write_handle;
+            }
+            process_data.output_pipe = stdout_read_handle;
+        }
+
+        if handle_stdin {
+            CloseHandle(stdin_read_handle);
+        }
+        CloseHandle(stdout_write_handle);
+    }
+    else {
+        stdout_pipe_files, stdin_pipe_files: Array<int>[2];
+        if pipe2(stdout_pipe_files.data, 0x80000) < 0 {
+            return false;
+        }
+
+        if handle_stdin {
+            if pipe2(stdin_pipe_files.data, 0x80000) < 0 {
+                return false;
+            }
+        }
+
+        pid := fork();
+
+        if pid < 0 {
+            return false, 0;
+        }
+
+        read_pipe := 0; #const
+        write_pipe := 1; #const
+
+        if pid == 0 {
+            close(stdout_pipe_files[read_pipe]);
+            dup2(stdout_pipe_files[write_pipe], stdout);
+
+            if handle_stdin {
+                close(stdin_pipe_files[write_pipe]);
+                dup2(stdin_pipe_files[read_pipe], stdin);
+            }
+
+            if !string_is_empty(directory) {
+                chdir(directory.data);
+            }
+
+            exec_args: Array<u8*>[5];
+            exec_args[0] = shell.data;
+            exec_args[1] = "-c".data;
+            exec_args[2] = "--".data;
+            exec_args[3] = command.data;
+            exec_args[4] = null;
+            execve(shell.data, exec_args.data, __environment_variables_pointer);
+            exit(-1);
+        }
+
+        close(stdout_pipe_files[write_pipe]);
+        if handle_std_in {
+            close(stdin_pipe_files[read_pipe]);
+        }
+
+        if process_data {
+            process_data.pid = pid;
+            if handle_stdin {
+                process_data.input_pipe = stdin_pipe_files[write_pipe];
+            }
+            process_data.output_pipe = stdout_pipe_files[read_pipe];
+        }
+    }
+
+    return true;
+}
+
+close_process_and_get_exit_code(ProcessData* process_data, int* exit_code) {
+    #if os == OS.Windows {
+        GetExitCodeProcess(process_data.process, exit_code);
+
+        CloseHandle(process_data.job_object);
+        CloseHandle(process_data.thread);
+        CloseHandle(process_data.process);
+        CloseHandle(process_data.input_pipe);
+        CloseHandle(process_data.output_pipe);
+    }
+    else {
+        close(process_data.input_pipe);
+        close(process_data.output_pipe);
+
+        wait4(process_data.pid, exit_code, 0, null);
+    }
+}
+
 #if os == OS.Windows {
     struct ProcessData {
         thread: Handle*;
         process: Handle*;
         job_object: Handle*;
+        input_pipe: Handle*;
+        output_pipe: Handle*;
     }
 }
 else {
     struct ProcessData {
         pid: int;
+        input_pipe: int;
+        output_pipe: int;
     }
+
+    shell: string;
 }
 
 struct RunCommandParams {
@@ -105,7 +274,7 @@ run_command(int index, JobData data) {
         displayed = true;
     }
 
-    success, exit_code := execute_command(params.command, &params.workspace.run_data.buffer, &params.workspace.run_data.buffer_window, &params.workspace.run_data.current_process, &params.workspace.run_data.current_command.exited);
+    success, exit_code := execute_command(params.command, &params.workspace.run_data.current_process, &params.workspace.run_data.buffer, &params.workspace.run_data.buffer_window, &params.workspace.run_data.current_command.exited);
 
     if success {
         params.workspace.run_data.current_command.exit_code = exit_code;
@@ -119,107 +288,42 @@ run_command(int index, JobData data) {
     trigger_window_update();
 }
 
-bool, int execute_command(string command, Buffer* buffer, BufferWindow* buffer_window = null, ProcessData* process_data = null, bool* exited = null) {
+bool, int execute_command(string command, ProcessData* process_data, Buffer* buffer, BufferWindow* buffer_window = null, bool* exited = null) {
     exit_code: int;
 
-    #if os == OS.Windows {
-        sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
-        read_handle, write_handle: Handle*;
+    started := start_command(command, empty_string, process_data, false, false);
 
-        if !CreatePipe(&read_handle, &write_handle, &sa, 0) {
-            return false, 0;
+    if started {
+        #if os == OS.Windows {
+            buf: CArray<u8>[1000];
+            while exited == null || !(*exited) {
+                read: int;
+                success := ReadFile(process_data.output_pipe, &buf, buf.length, &read, null);
+
+                if !success || read == 0 break;
+
+                text: string = { length = read; data = &buf; }
+                add_to_buffer(buffer_window, buffer, text);
+            }
         }
-        SetHandleInformation(read_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
+        else {
+            buf: CArray<u8>[1000];
+            while exited == null || !(*exited) {
+                length := read(process_data.output_pipe, &buf, buf.length);
 
-        si: STARTUPINFOA = {
-            cb = size_of(STARTUPINFOA); dwFlags = 0x100;
-            hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-            hStdError = write_handle; hStdOutput = write_handle;
-        }
-        pi: PROCESS_INFORMATION;
+                if length <= 0 break;
 
-        if !CreateProcessA(null, command, null, null, true, ProcessCreationFlags.DETACHED_PROCESS, null, null, &si, &pi) {
-            CloseHandle(read_handle);
-            CloseHandle(write_handle);
-            return false, 0;
-        }
-
-        if process_data {
-            process_data.thread = pi.hThread;
-            process_data.process = pi.hProcess;
-        }
-
-        CloseHandle(si.hStdInput);
-        CloseHandle(write_handle);
-
-        buf: CArray<u8>[1000];
-        while exited == null || !(*exited) {
-            read: int;
-            success := ReadFile(read_handle, &buf, buf.length, &read, null);
-
-            if !success || read == 0 break;
-
-            text: string = { length = read; data = &buf; }
-            add_to_buffer(buffer_window, buffer, text);
+                text: string = { length = length; data = &buf; }
+                add_to_buffer(buffer_window, buffer, text);
+            }
         }
 
-        GetExitCodeProcess(pi.hProcess, &exit_code);
-
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        CloseHandle(read_handle);
-    }
-    else {
-        pipe_files: Array<int>[2];
-        if pipe2(pipe_files.data, 0x80000) < 0 {
-            return false, 0;
-        }
-
-        pid := fork();
-
-        if pid < 0 {
-            return false, 0;
-        }
-
-        read_pipe := 0; #const
-        write_pipe := 1; #const
-
-        if pid == 0 {
-            close(pipe_files[read_pipe]);
-            dup2(pipe_files[write_pipe], stdout);
-
-            exec_args: Array<u8*>[5];
-            exec_args[0] = "sh".data;
-            exec_args[1] = "-c".data;
-            exec_args[2] = "--".data;
-            exec_args[3] = command.data;
-            exec_args[4] = null;
-            execve("/bin/sh".data, exec_args.data, __environment_variables_pointer);
-            exit(-1);
-        }
-
-        close(pipe_files[write_pipe]);
-
-        if process_data {
-            process_data.pid = pid;
-        }
-
-        buf: CArray<u8>[1000];
-        while exited == null || !(*exited) {
-            length := read(pipe_files[read_pipe], &buf, buf.length);
-
-            if length <= 0 break;
-
-            text: string = { length = length; data = &buf; }
-            add_to_buffer(buffer_window, buffer, text);
-        }
-
-        close(pipe_files[read_pipe]);
-        wait4(pid, &exit_code, 0, null);
+        close_process_and_get_exit_code(process_data, &exit_code);
     }
 
-    return true, exit_code;
+    return started, exit_code;
 }
+
 
 clear_run_buffer_window(string command, Workspace* workspace) {
     workspace.run_data.buffer_window = {

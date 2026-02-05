@@ -1,12 +1,3 @@
-init_terminal() {
-    #if os == OS.Linux {
-        shell = get_environment_variable("SHELL", allocate);
-        if string_is_empty(shell) {
-            shell = "/bin/sh";
-        }
-    }
-}
-
 struct TerminalData {
     displaying: bool;
     running: bool;
@@ -20,7 +11,6 @@ struct TerminalData {
     buffer: Buffer = { read_only = true; title = get_terminal_title; }
     buffer_window: BufferWindow;
     process: ProcessData;
-    pipes: TerminalPipes;
     command_history: Array<string>;
     selected_history_index: int;
 }
@@ -67,10 +57,10 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
         }
         else {
             #if os == OS.Windows {
-                WriteFile(workspace.terminal_data.pipes.input, char.data, char.length, null, null);
+                WriteFile(workspace.terminal_data.process.input_pipe, char.data, char.length, null, null);
             }
             #if os == OS.Linux {
-                write(workspace.terminal_data.pipes.input, char.data, char.length);
+                write(workspace.terminal_data.process.input_pipe, char.data, char.length);
             }
         }
     }
@@ -221,22 +211,6 @@ clear_terminal_buffer_window(Workspace* workspace) {
 }
 
 #private
-
-
-#if os == OS.Windows {
-    struct TerminalPipes {
-        input: Handle*;
-        output: Handle*;
-    }
-}
-else {
-    struct TerminalPipes {
-        input: int;
-        output: int;
-    }
-
-    shell: string;
-}
 
 stop_running_terminal_command(Workspace* workspace) {
     if workspace.terminal_data.running {
@@ -426,149 +400,36 @@ execute_terminal_command(int index, JobData data) {
         trigger_window_update();
     }
 
+    command := get_command(workspace);
+    workspace.terminal_data.running = start_command(command, workspace.terminal_data.directory, &workspace.terminal_data.process, true, true);
+
+    if !workspace.terminal_data.running return;
+
     #if os == OS.Windows {
-        sa: SECURITY_ATTRIBUTES = { nLength = size_of(SECURITY_ATTRIBUTES); bInheritHandle = true; }
-        stdout_read_handle, stdout_write_handle: Handle*;
-        if !CreatePipe(&stdout_read_handle, &stdout_write_handle, &sa, 0) {
-            return;
-        }
-        SetHandleInformation(stdout_read_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
-
-        stdin_read_handle, stdin_write_handle: Handle*;
-        if !CreatePipe(&stdin_read_handle, &stdin_write_handle, &sa, 0) {
-            return;
-        }
-        SetHandleInformation(stdin_write_handle, HandleFlags.HANDLE_FLAG_INHERIT, HandleFlags.None);
-
-        si: STARTUPINFOA = {
-            cb = size_of(STARTUPINFOA); dwFlags = 0x100;
-            hStdInput = stdin_read_handle;
-            hStdError = stdout_write_handle; hStdOutput = stdout_write_handle;
-        }
-        pi: PROCESS_INFORMATION;
-
-        command := get_command(workspace);
-        ps_command := temp_string("powershell -NoLogo ", command);
-        flags := ProcessCreationFlags.CREATE_SUSPENDED | ProcessCreationFlags.CREATE_NO_WINDOW;
-        if !CreateProcessA(null, ps_command, null, null, true, flags, null, workspace.terminal_data.directory, &si, &pi) {
-            log("Failed to start terminal\n");
-            CloseHandle(stdout_read_handle);
-            CloseHandle(stdout_write_handle);
-            CloseHandle(stdin_read_handle);
-            CloseHandle(stdin_write_handle);
-            return;
-        }
-
-        job_object := CreateJobObjectA(null, null);
-        AssignProcessToJobObject(job_object, pi.hProcess);
-        ResumeThread(pi.hThread);
-
-        CloseHandle(stdin_read_handle);
-        CloseHandle(stdout_write_handle);
-
-        workspace.terminal_data = {
-            running = true;
-            process = {
-                thread = pi.hThread;
-                process = pi.hProcess;
-                job_object = job_object;
-            }
-            pipes = {
-                input = stdin_write_handle;
-                output = stdout_read_handle;
-            }
-        }
-
         buf: CArray<u8>[1000];
         while workspace.terminal_data.running {
             read: int;
-            success := ReadFile(stdout_read_handle, &buf, buf.length, &read, null);
+            success := ReadFile(workspace.terminal_data.process.output_pipe, &buf, buf.length, &read, null);
 
             if !success || read == 0 break;
 
             text: string = { length = read; data = &buf; }
             add_to_terminal_buffer(workspace, text);
         }
-
-        GetExitCodeProcess(pi.hProcess, &workspace.terminal_data.exit_code);
-
-        CloseHandle(job_object);
-        CloseHandle(pi.hThread);
-        CloseHandle(pi.hProcess);
-        CloseHandle(stdout_read_handle);
-        CloseHandle(stdin_write_handle);
     }
     else {
-        stdout_pipe_files: Array<int>[2];
-        if pipe2(stdout_pipe_files.data, 0x80000) < 0 {
-            return;
-        }
-
-        stdin_pipe_files: Array<int>[2];
-        if pipe2(stdin_pipe_files.data, 0x80000) < 0 {
-            return;
-        }
-
-        pid := fork();
-
-        if pid < 0 {
-            return;
-        }
-
-        read_pipe := 0; #const
-        write_pipe := 1; #const
-
-        if pid == 0 {
-            close(stdout_pipe_files[read_pipe]);
-            dup2(stdout_pipe_files[write_pipe], stdout);
-
-            close(stdin_pipe_files[write_pipe]);
-            dup2(stdin_pipe_files[read_pipe], stdin);
-
-            command := get_command(workspace);
-            chdir(workspace.terminal_data.directory.data);
-
-            exec_args: Array<u8*>[4];
-            exec_args[0] = shell.data;
-            exec_args[1] = "-c".data;
-            exec_args[2] = "--".data;
-            exec_args[3] = command.data;
-            exec_args[4] = null;
-            execve(shell.data, exec_args.data, __environment_variables_pointer);
-            exit(-1);
-        }
-
-        close(stdout_pipe_files[write_pipe]);
-        close(stdin_pipe_files[read_pipe]);
-
-        workspace.terminal_data = {
-            running = true;
-            process = {
-                pid = pid;
-            }
-            pipes = {
-                input = stdin_pipe_files[write_pipe];
-                output = stdout_pipe_files[read_pipe];
-            }
-        }
-
         buf: CArray<u8>[1000];
         while workspace.terminal_data.running {
-            length := read(stdout_pipe_files[read_pipe], &buf, buf.length);
+            length := read(workspace.terminal_data.process.output_pipe, &buf, buf.length);
 
             if length <= 0 break;
 
             text: string = { length = length; data = &buf; }
             add_to_terminal_buffer(workspace, text);
         }
-
-        if workspace.terminal_data.running {
-            close(stdout_pipe_files[read_pipe]);
-            close(stdin_pipe_files[write_pipe]);
-        }
-
-        wait4(pid, &workspace.terminal_data.exit_code, 0, null);
     }
+
+    close_process_and_get_exit_code(&workspace.terminal_data.process, &workspace.terminal_data.exit_code);
 
     log("Terminal command exited with code %\n", workspace.terminal_data.exit_code);
 }
