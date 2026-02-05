@@ -4,6 +4,7 @@
 #import "clipboard.ol"
 #import "control.ol"
 #import "commands.ol"
+#import "debugger.ol"
 #import "events.ol"
 #import "graphics.ol"
 #import "jumps.ol"
