@@ -1,4 +1,5 @@
 - Settings
+debug_command=./run_tree/editor src/first.ol
 source_control=Perforce
 perforce_client_suffix=-editor
 

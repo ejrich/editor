@@ -10,6 +10,7 @@ struct Workspace {
     bottom_window_selected: bool;
     run_data: RunData;
     terminal_data: TerminalData;
+    debugger_data: DebuggerData;
     local_settings: LocalSettings;
     command_keybinds: Array<CommandKeybind>;
 }

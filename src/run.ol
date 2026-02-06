@@ -17,20 +17,22 @@ queue_command_to_run(string command) {
     queue_work(&low_priority_queue, run_command, data);
 }
 
-force_command_to_stop() {
+bool force_command_to_stop() {
     workspace := get_workspace();
 
-    if workspace.run_data.current_command.running {
-        #if os == OS.Windows {
-            TerminateThread(workspace.run_data.current_process.thread, command_exited_code);
-            TerminateProcess(workspace.run_data.current_process.process, command_exited_code);
-        }
-        else {
-            kill(workspace.run_data.current_process.pid, KillSignal.SIGKILL);
-        }
+    if !workspace.run_data.current_command.running return false;
 
-        workspace.run_data.current_command.exited = true;
+    #if os == OS.Windows {
+        TerminateThread(workspace.run_data.current_process.thread, command_exited_code);
+        TerminateProcess(workspace.run_data.current_process.process, command_exited_code);
     }
+    else {
+        kill(workspace.run_data.current_process.pid, KillSignal.SIGKILL);
+    }
+
+    workspace.run_data.current_command.exited = true;
+
+    return true;
 }
 
 close_run_buffer_and_stop_command() {

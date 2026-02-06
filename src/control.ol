@@ -786,7 +786,9 @@ lowercase(ModCode mod) {
 // Command keybinds
 [keybind, no_repeat]
 stop_command(ModCode mod) {
-    force_command_to_stop();
+    if force_command_to_stop() return;
+
+    stop_debugger();
 }
 
 [keybind, no_repeat]
@@ -818,4 +820,30 @@ close_workspace(ModCode mod) {
 [keybind, no_repeat]
 search_for_value(ModCode mod) {
     search_for_value_in_buffer();
+}
+
+// Debugger commands
+[keybind, no_repeat]
+debugger_start_or_continue(ModCode mod) {
+    start_or_continue_debugger();
+}
+
+[keybind, no_repeat]
+debugger_toggle_breakpoint(ModCode mod) {
+    toggle_breakpoint();
+}
+
+[keybind, no_repeat]
+debugger_step_over(ModCode mod) {
+    step_over();
+}
+
+[keybind, no_repeat]
+debugger_step_in(ModCode mod) {
+    step_in();
+}
+
+[keybind, no_repeat]
+debugger_step_out(ModCode mod) {
+    step_out();
 }

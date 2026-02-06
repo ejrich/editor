@@ -1,4 +1,5 @@
 struct LocalSettings {
+    debug_command: string;
     source_control: SourceControl;
 
     // Perforce specific settings
