@@ -594,15 +594,18 @@ init_graphics() {
             exit_program(1);
         }
 
-        result = vkCreateSemaphore(device, &semaphore_info, &allocator, &render_finished_semaphores[i]);
-        if result != VkResult.VK_SUCCESS {
-            log("Unable to create semaphore %\n", result);
-            exit_program(1);
-        }
-
         result = vkCreateFence(device, &fence_info, &allocator, &in_flight_fences[i]);
         if result != VkResult.VK_SUCCESS {
             log("Unable to create fence %\n", result);
+            exit_program(1);
+        }
+    }
+
+    array_resize(&render_finished_semaphores, swap_chain_images.length, allocate, reallocate);
+    each i in swap_chain_images.length {
+        result = vkCreateSemaphore(device, &semaphore_info, &allocator, &render_finished_semaphores[i]);
+        if result != VkResult.VK_SUCCESS {
+            log("Unable to create semaphore %\n", result);
             exit_program(1);
         }
     }
@@ -646,8 +649,11 @@ deinit_graphics() {
 
     each i in 0..MAX_FRAMES_IN_FLIGHT-1 {
         vkDestroySemaphore(device, image_available_semaphores[i], &allocator);
-        vkDestroySemaphore(device, render_finished_semaphores[i], &allocator);
         vkDestroyFence(device, in_flight_fences[i], &allocator);
+    }
+
+    each i in swap_chain_images.length {
+        vkDestroySemaphore(device, render_finished_semaphores[i], &allocator);
     }
 
     each fence in thread_fences {
@@ -1299,7 +1305,7 @@ submit_frame() {
         commandBufferCount = 1;
         pCommandBuffers = &current_command_buffer;
         signalSemaphoreCount = 1;
-        pSignalSemaphores = &render_finished_semaphores[frame_index];
+        pSignalSemaphores = &render_finished_semaphores[image_index];
     }
 
     vkResetFences(device, 1, &in_flight_fences[frame_index]);
@@ -1307,7 +1313,7 @@ submit_frame() {
 
     present_info: VkPresentInfoKHR = {
         waitSemaphoreCount = 1;
-        pWaitSemaphores = &render_finished_semaphores[frame_index];
+        pWaitSemaphores = &render_finished_semaphores[image_index];
         swapchainCount = 1;
         pSwapchains = &swap_chain;
         pImageIndices = &image_index;
@@ -1421,7 +1427,7 @@ texture_sampler: VkSampler*;
 
 // Synchronization
 image_available_semaphores: Array<VkSemaphore*>[MAX_FRAMES_IN_FLIGHT];
-render_finished_semaphores: Array<VkSemaphore*>[MAX_FRAMES_IN_FLIGHT];
+render_finished_semaphores: Array<VkSemaphore*>;
 in_flight_fences: Array<VkFence*>[MAX_FRAMES_IN_FLIGHT];
 images_in_flight: Array<VkFence*>;
 
