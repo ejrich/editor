@@ -45,7 +45,7 @@ start_or_close_terminal() {
 
 bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string char) {
     workspace := get_workspace();
-    if !workspace.terminal_data.displaying || !workspace.terminal_data.writing || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+    if !workspace.terminal_data.writing || unable_to_input_to_terminal(workspace) return false;
 
     // Pipe input to running commands or the command buffer
     if workspace.terminal_data.running {
@@ -122,7 +122,7 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
 
 bool change_terminal_cursor(bool append, bool boundary) {
     workspace := get_workspace();
-    if !workspace.terminal_data.displaying || !workspace.bottom_window_selected || get_run_window(workspace) != null return false;
+    if unable_to_input_to_terminal(workspace) return false;
 
     if workspace.terminal_data.running {
         workspace.terminal_data.writing = true;
@@ -167,50 +167,20 @@ BufferWindow* get_terminal_window(Workspace* workspace) {
 }
 
 clear_terminal_buffer_window(Workspace* workspace) {
-    workspace.terminal_data.buffer_window = {
-        cursor = 0;
-        line = 0;
-        start_line = 0;
-    }
-
-    if workspace.terminal_data.buffer.line_count == 0 {
-        workspace.terminal_data.buffer = {
-            line_count = 1;
-            line_count_digits = 1;
-            lines = allocate_line();
-        }
-    }
-    else if workspace.terminal_data.buffer.line_count == 1 {
-        free_child_lines(workspace.terminal_data.buffer.lines.child);
-        workspace.terminal_data.buffer.lines.length = 0;
-    }
-    else {
-        line := workspace.terminal_data.buffer.lines;
-
-        workspace.terminal_data.buffer = {
-            line_count = 1;
-            line_count_digits = 1;
-            lines = allocate_line();
-        }
-
-        while line {
-            next := line.next;
-            free_line_and_children(line);
-            line = next;
-        }
-    }
-
-    escape_code := workspace.terminal_data.buffer.escape_codes;
-    while escape_code {
-        next := escape_code.next;
-        free_allocation(escape_code);
-        escape_code = next;
-    }
-
-    workspace.terminal_data.buffer.escape_codes = null;
+    clear_buffer_and_window(&workspace.terminal_data.buffer, &workspace.terminal_data.buffer_window);
 }
 
 #private
+
+bool unable_to_input_to_terminal(Workspace* workspace) {
+    if !workspace.terminal_data.displaying ||
+        !workspace.bottom_window_selected ||
+        get_debugger_window(workspace) != null ||
+        get_run_window(workspace) != null
+        return true;
+
+    return false;
+}
 
 stop_running_terminal_command(Workspace* workspace) {
     if workspace.terminal_data.running {

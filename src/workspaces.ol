@@ -22,6 +22,7 @@ init_workspaces() {
         workspace.index = (i + 1) % number_of_workspaces;
         workspace.run_data.buffer_window.static_buffer = &workspace.run_data.buffer;
         workspace.terminal_data.buffer_window.static_buffer = &workspace.terminal_data.buffer;
+        workspace.debugger_data.buffer_window.static_buffer = &workspace.debugger_data.buffer;
         create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
     }
 

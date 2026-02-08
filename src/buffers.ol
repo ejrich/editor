@@ -471,7 +471,7 @@ switch_to_buffer(SelectedWindow window) {
 
 toggle_bottom_buffer_selection(bool selected) {
     workspace := get_workspace();
-    if get_run_window(workspace) != null || get_terminal_window(workspace) != null {
+    if get_debugger_window(workspace) != null || get_run_window(workspace) != null || get_terminal_window(workspace) != null {
         workspace.bottom_window_selected = selected;
     }
 }
@@ -2346,6 +2346,13 @@ replace_characters(u8 char) {
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
+    record_start_line, record_end_line := buffer_window.line;
+    if edit_mode != EditMode.Normal {
+        record_start_line, record_end_line = get_visual_start_and_end_lines(buffer_window);
+    }
+
+    begin_change(buffer, record_start_line, record_end_line, buffer_window.cursor, buffer_window.line);
+
     switch edit_mode {
         case EditMode.Normal; {
             line := get_buffer_line(buffer, buffer_window.line);
@@ -2417,6 +2424,8 @@ replace_characters(u8 char) {
             }
         }
     }
+
+    record_change(buffer, record_start_line, record_end_line, buffer_window.cursor, buffer_window.line);
 }
 
 replace_characters_in_line(BufferLine* line, u8 char, u32 start, u32 end) {
@@ -3841,6 +3850,44 @@ free_buffer(Buffer* buffer, bool free_pointer = true, bool free_path = false) {
     }
 }
 
+clear_buffer_and_window(Buffer* buffer, BufferWindow* buffer_window) {
+    buffer_window.cursor = 0;
+    buffer_window.line = 0;
+    buffer_window.start_line = 0;
+
+    if buffer.line_count == 0 {
+        buffer.line_count = 1;
+        buffer.line_count_digits = 1;
+        buffer.lines = allocate_line();
+    }
+    else if buffer.line_count == 1 {
+        free_child_lines(buffer.lines.child);
+        buffer.lines.length = 0;
+    }
+    else {
+        line := buffer.lines;
+
+        buffer.line_count = 1;
+        buffer.line_count_digits = 1;
+        buffer.lines = allocate_line();
+
+        while line {
+            next := line.next;
+            free_line_and_children(line);
+            line = next;
+        }
+    }
+
+    escape_code := buffer.escape_codes;
+    while escape_code {
+        next := escape_code.next;
+        free_allocation(escape_code);
+        escape_code = next;
+    }
+
+    buffer.escape_codes = null;
+}
+
 line_buffer_length := 500; #const
 
 struct BufferLine {
@@ -3969,6 +4016,11 @@ BufferWindow* get_current_window() {
 }
 
 BufferWindow*, bool get_bottom_window(Workspace* workspace) {
+    debugger_window := get_debugger_window(workspace);
+    if debugger_window {
+        return debugger_window, workspace.bottom_window_selected;
+    }
+
     run_window := get_run_window(workspace);
     if run_window {
         return run_window, workspace.bottom_window_selected;
@@ -4805,7 +4857,7 @@ u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {
     workspace := get_workspace();
 
     both_windows_open := workspace.left_window.displayed && workspace.right_window.displayed;
-    if !both_windows_open || window == get_run_window(workspace) || window == get_terminal_window(workspace) {
+    if !both_windows_open || window == get_debugger_window(workspace) || window == get_run_window(workspace) || window == get_terminal_window(workspace) {
         return global_font_config.max_chars_per_line_full - digits - 1;
     }
 
@@ -4814,14 +4866,15 @@ u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {
 
 u32, u32 determine_max_lines_and_scroll_offset(BufferWindow* buffer_window) {
     workspace := get_workspace();
+    debugger_window := get_debugger_window(workspace);
     run_window := get_run_window(workspace);
     terminal_window := get_terminal_window(workspace);
 
-    if run_window == null && terminal_window == null {
+    if debugger_window == null && run_window == null && terminal_window == null {
         return global_font_config.max_lines_without_bottom_window, settings.scroll_offset;
     }
 
-    if run_window == buffer_window || terminal_window == buffer_window {
+    if debugger_window == buffer_window || run_window == buffer_window || terminal_window == buffer_window {
         return global_font_config.bottom_window_max_lines, settings.scroll_offset / 4;
     }
 

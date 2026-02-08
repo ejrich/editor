@@ -328,33 +328,7 @@ bool, int execute_command(string command, ProcessData* process_data, Buffer* buf
 
 
 clear_run_buffer_window(string command, Workspace* workspace) {
-    workspace.run_data.buffer_window = {
-        cursor = 0;
-        line = 0;
-        start_line = 0;
-    }
-
-    line := workspace.run_data.buffer.lines;
-    escape_code := workspace.terminal_data.buffer.escape_codes;
-
-    workspace.run_data.buffer = {
-        line_count = 1;
-        line_count_digits = 1;
-        lines = allocate_line();
-        escape_codes = null;
-    }
-
-    while line {
-        next := line.next;
-        free_line_and_children(line);
-        line = next;
-    }
-
-    while escape_code {
-        next := escape_code.next;
-        free_allocation(escape_code);
-        escape_code = next;
-    }
+    clear_buffer_and_window(&workspace.run_data.buffer, &workspace.run_data.buffer_window);
 }
 
 add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
