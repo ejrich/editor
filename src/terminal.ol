@@ -74,7 +74,7 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                 }
             }
             case KeyCode.Tab; {
-                // TODO Implement
+                // @Future Tab autocomplete
             }
             case KeyCode.Enter; {
                 handle_command(workspace);

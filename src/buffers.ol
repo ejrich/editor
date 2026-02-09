@@ -167,6 +167,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     else {
         start_line := clamp(window.start_line, 0, buffer.line_count - 1);
         digits := buffer.line_count_digits;
+        breakpoint := buffer.breakpoints;
 
         visual_start_line, visual_end_line := -1;
         if selected {
@@ -270,7 +271,13 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                     }
                 }
 
-                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end);
+                has_breakpoint := false;
+                if breakpoint != null && breakpoint.line == line_number {
+                    has_breakpoint = true;
+                    breakpoint = breakpoint.next;
+                }
+
+                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end, has_breakpoint);
                 y -= global_font_config.line_height * lines;
                 available_lines_to_render -= lines;
             }
@@ -3814,6 +3821,7 @@ struct Buffer {
     syntax: Syntax*;
     escape_codes: EscapeCode*;
     escape_code_parse_state: EscapeCodeParseState;
+    breakpoints: Breakpoint*;
 }
 
 interface string GetBufferTitle()

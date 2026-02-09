@@ -214,7 +214,7 @@ evaluate_line_without_rendering(RenderLineState* state, BufferLine* line, u32 li
     reset_render_line_state(state);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end) {
+u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end, bool has_breakpoint) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -231,6 +231,23 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
 
         draw_line_background(font_texture, x, y, max_x, rendered_line_count);
+    }
+
+    // Draw the breakpoint
+    if has_breakpoint {
+        breakpoint_quad: QuadInstanceData = {
+            color = appearance.syntax_colors[cast(u8, SyntaxColor.Red)];
+            flags = QuadFlags.Solid;
+            position = {
+                x = x + (font_texture.quad_advance * digits) / 2.0;
+                y = y - font_texture.max_line_bearing_y / 3 + font_texture.line_height * 0.5;
+                z = 0.1;
+            }
+            width = font_texture.quad_advance * digits;
+            height = font_texture.line_height;
+        }
+
+        draw_quad(&breakpoint_quad, 1);
     }
 
     // Create the glyphs for the line number

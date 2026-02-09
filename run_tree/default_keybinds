@@ -58,3 +58,5 @@ debugger_toggle_breakpoint=F9
 debugger_step_over=F10
 debugger_step_in=F11
 debugger_step_out=Shift+F11
+debugger_run_to=Shift+F10
+debugger_skip_to=Control+F11

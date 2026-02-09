@@ -847,3 +847,13 @@ debugger_step_in(ModCode mod) {
 debugger_step_out(ModCode mod) {
     step_out();
 }
+
+[keybind, no_repeat]
+debugger_run_to(ModCode mod) {
+    run_to();
+}
+
+[keybind, no_repeat]
+debugger_skip_to(ModCode mod) {
+    skip_to();
+}
