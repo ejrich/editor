@@ -1299,7 +1299,7 @@ end_insert_mode() {
     record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
-add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
+BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
     text: string;
 
@@ -1395,6 +1395,8 @@ add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes)
     }
 
     calculate_line_digits(buffer);
+
+    return line;
 }
 
 interpret_escape_code(EscapeCodeParseState* state) {

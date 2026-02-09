@@ -26,7 +26,7 @@ start_or_close_terminal() {
             writing = false;
         }
     }
-    else {
+    else if !workspace.debugger_data.running {
         close_run_buffer_and_stop_command();
         set_command_line(workspace);
 
@@ -375,28 +375,13 @@ execute_terminal_command(int index, JobData data) {
 
     if !workspace.terminal_data.running return;
 
-    #if os == OS.Windows {
-        buf: CArray<u8>[1000];
-        while workspace.terminal_data.running {
-            read: int;
-            success := ReadFile(workspace.terminal_data.process.output_pipe, &buf, buf.length, &read, null);
+    buf: CArray<u8>[1000];
+    while workspace.terminal_data.running {
+        success, text := read_from_output_pipe(&workspace.terminal_data.process, &buf, buf.length);
 
-            if !success || read == 0 break;
+        if !success break;
 
-            text: string = { length = read; data = &buf; }
-            add_to_terminal_buffer(workspace, text);
-        }
-    }
-    else {
-        buf: CArray<u8>[1000];
-        while workspace.terminal_data.running {
-            length := read(workspace.terminal_data.process.output_pipe, &buf, buf.length);
-
-            if length <= 0 break;
-
-            text: string = { length = length; data = &buf; }
-            add_to_terminal_buffer(workspace, text);
-        }
+        add_to_terminal_buffer(workspace, text);
     }
 
     close_process_and_get_exit_code(&workspace.terminal_data.process, &workspace.terminal_data.exit_code);
@@ -444,8 +429,9 @@ string get_command(Workspace* workspace) #inline {
 }
 
 add_to_terminal_buffer(Workspace* workspace, string text) {
-    add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text, true);
+    line := add_text_to_end_of_buffer(&workspace.terminal_data.buffer, text, true);
     workspace.terminal_data.buffer_window.line = workspace.terminal_data.buffer.line_count - 1;
+    workspace.terminal_data.buffer_window.cursor = line.length;
     adjust_start_line(&workspace.terminal_data.buffer_window);
     trigger_window_update();
 }

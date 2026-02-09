@@ -22,17 +22,21 @@ bool force_command_to_stop() {
 
     if !workspace.run_data.current_command.running return false;
 
-    #if os == OS.Windows {
-        TerminateThread(workspace.run_data.current_process.thread, command_exited_code);
-        TerminateProcess(workspace.run_data.current_process.process, command_exited_code);
-    }
-    else {
-        kill(workspace.run_data.current_process.pid, KillSignal.SIGKILL);
-    }
+    terminate_process(&workspace.run_data.current_process);
 
     workspace.run_data.current_command.exited = true;
 
     return true;
+}
+
+terminate_process(ProcessData* process) {
+    #if os == OS.Windows {
+        TerminateThread(process.thread, command_exited_code);
+        TerminateProcess(process.process, command_exited_code);
+    }
+    else {
+        kill(process.pid, KillSignal.SIGKILL);
+    }
 }
 
 close_run_buffer_and_stop_command() {
@@ -210,6 +214,33 @@ bool start_command(string command, string directory, ProcessData* process_data, 
     return true;
 }
 
+bool, string read_from_output_pipe(ProcessData* process, u8* buffer, int buffer_length) {
+    success := true;
+    value: string;
+
+    #if os == OS.Windows {
+        read: int;
+        success = ReadFile(process.output_pipe, buffer, buffer_length, &read, null);
+
+        if read == 0 {
+            success = false;
+        }
+
+        value = { length = read; data = buffer; }
+    }
+    else {
+        length := read(process.output_pipe, buffer, buffer_length);
+
+        if length <= 0 {
+            success = false;
+        }
+
+        value = { length = length; data = buffer; }
+    }
+
+    return success, value;
+}
+
 close_process_and_get_exit_code(ProcessData* process_data, int* exit_code) {
     #if os == OS.Windows {
         GetExitCodeProcess(process_data.process, exit_code);
@@ -296,28 +327,13 @@ bool, int execute_command(string command, ProcessData* process_data, Buffer* buf
     started := start_command(command, empty_string, process_data, false, false);
 
     if started {
-        #if os == OS.Windows {
-            buf: CArray<u8>[1000];
-            while exited == null || !(*exited) {
-                read: int;
-                success := ReadFile(process_data.output_pipe, &buf, buf.length, &read, null);
+        buf: CArray<u8>[1000];
+        while exited == null || !(*exited) {
+            success, text := read_from_output_pipe(process_data, &buf, buf.length);
 
-                if !success || read == 0 break;
+            if !success break;
 
-                text: string = { length = read; data = &buf; }
-                add_to_buffer(buffer_window, buffer, text);
-            }
-        }
-        else {
-            buf: CArray<u8>[1000];
-            while exited == null || !(*exited) {
-                length := read(process_data.output_pipe, &buf, buf.length);
-
-                if length <= 0 break;
-
-                text: string = { length = length; data = &buf; }
-                add_to_buffer(buffer_window, buffer, text);
-            }
+            add_to_buffer(buffer_window, buffer, text);
         }
 
         close_process_and_get_exit_code(process_data, &exit_code);

@@ -37,6 +37,8 @@ bool stop_debugger() {
     }
 
     // TODO Stop
+    terminate_process(&workspace.debugger_data.process);
+    workspace.debugger_data.running = false;
     return true;
 }
 
@@ -68,6 +70,20 @@ step_out() {
     // TODO Implement
 }
 
+run_to() {
+    workspace := get_workspace();
+    if !workspace.debugger_data.running return;
+
+    // TODO Implement
+}
+
+skip_to() {
+    workspace := get_workspace();
+    if !workspace.debugger_data.running return;
+
+    // TODO Implement
+}
+
 #private
 
 debugger_thread(int thread, JobData data) {
@@ -75,7 +91,7 @@ debugger_thread(int thread, JobData data) {
 
     clear_debugger_buffer_window(workspace);
 
-    command := temp_string("gdb -q --args ", workspace.local_settings.debug_command);
+    command := temp_string("lldb -- ", workspace.local_settings.debug_command);
     running := start_command(command, workspace.directory, &workspace.debugger_data.process, true, false);
 
     if !running {
@@ -83,30 +99,18 @@ debugger_thread(int thread, JobData data) {
         return;
     }
 
-    send_command_to_debugger(workspace, "r");
+    buf: CArray<u8>[1000];
+    success, text := read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
+    add_to_debugger_buffer(workspace, text);
 
-    #if os == OS.Windows {
-        buf: CArray<u8>[1000];
-        while workspace.debugger_data.running {
-            read: int;
-            success := ReadFile(workspace.debugger_data.process.output_pipe, &buf, buf.length, &read, null);
+    send_command_to_debugger(workspace, "r\n");
 
-            if !success || read == 0 break;
+    while workspace.debugger_data.running {
+        success, text = read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
 
-            text: string = { length = read; data = &buf; }
-            add_to_debugger_buffer(workspace, text);
-        }
-    }
-    else {
-        buf: CArray<u8>[1000];
-        while workspace.debugger_data.running {
-            length := read(workspace.debugger_data.process.output_pipe, &buf, buf.length);
+        if !success break;
 
-            if length <= 0 break;
-
-            text: string = { length = length; data = &buf; }
-            add_to_debugger_buffer(workspace, text);
-        }
+        add_to_debugger_buffer(workspace, text);
     }
 
     exit_code: s32;
@@ -120,12 +124,15 @@ send_command_to_debugger(Workspace* workspace, string command) {
     #if os == OS.Linux {
         write(workspace.debugger_data.process.input_pipe, command.data, command.length);
     }
+
+    add_to_debugger_buffer(workspace, command);
 }
 
 add_to_debugger_buffer(Workspace* workspace, string text) {
     // TODO Filter when necessary
-    add_text_to_end_of_buffer(&workspace.debugger_data.buffer, text, true);
+    line := add_text_to_end_of_buffer(&workspace.debugger_data.buffer, text, true);
     workspace.debugger_data.buffer_window.line = workspace.debugger_data.buffer.line_count - 1;
+    workspace.debugger_data.buffer_window.cursor = line.length;
     adjust_start_line(&workspace.debugger_data.buffer_window);
     trigger_window_update();
 }
