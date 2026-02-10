@@ -19,16 +19,14 @@ enum DebuggerParseStatus : u8 {
     None;
     Source;
     Variables;
-    Expression;
     StackTrace;
     Registers;
     Threads;
+    Expression;
 }
 
 struct DebuggerParseState {
     command_line_read: bool;
-    header_read: bool;
-    lines_read: u16;
 }
 
 // TODO Move breakpoint lines when deleting/adding lines
@@ -267,7 +265,7 @@ debugger_thread(int thread, JobData data) {
         return;
     }
 
-    buf: CArray<u8>[5000];
+    buf: CArray<u8>[10000];
     success, text := read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
     add_to_debugger_buffer(workspace, text);
 
@@ -282,6 +280,14 @@ debugger_thread(int thread, JobData data) {
             breakpoint = breakpoint.next;
         }
     }
+
+    send_command_to_debugger(workspace, "target stop-hook add\n");
+    send_command_to_debugger(workspace, "source info\n");
+    send_command_to_debugger(workspace, "v\n");
+    send_command_to_debugger(workspace, "bt\n");
+    send_command_to_debugger(workspace, "register read\n");
+    send_command_to_debugger(workspace, "thread list\n");
+    send_command_to_debugger(workspace, "DONE\n");
 
     send_command_to_debugger(workspace, "r\n");
     workspace.debugger_data.command_executing = true;
@@ -344,115 +350,97 @@ send_command_to_debugger(Workspace* workspace, string command) {
 }
 
 bool parse_debugger_output(Workspace* workspace, string text) {
-    process := "Process "; #const
-    if starts_with(text, process) {
-        i := process.length;
-        parsing_pid := true;
-        parsing_status := false;
-        while i < text.length {
-            char := text[i];
-            if char == ' ' {
-                if parsing_pid {
-                    parsing_pid = false;
-                    parsing_status = true;
-                }
-            }
-            else if parsing_pid && (char < '0' || char > '9') {
-                break;
-            }
-            else if parsing_status {
-                status: string = { length = text.length - i; data = text.data + i; }
-                if starts_with(status, "stopped") {
-                    workspace.debugger_data.command_executing = false;
-                    if !workspace.debugger_data.skip_next_stop {
-                        data: JobData;
-                        data.pointer = workspace;
-                        queue_work(&low_priority_queue, load_debugger_info, data);
-                    }
-
-                    workspace.debugger_data.skip_next_stop = false;
-                    return true;
-                }
-
-                break;
-            }
-
-            i++;
-        }
-    }
-
     if workspace.debugger_data.parse_status == DebuggerParseStatus.None {
-        return false;
-    }
-
-    if !workspace.debugger_data.parse_state.command_line_read {
-        i := 0;
-        while i < text.length {
-            char := text[i++];
-            if char == '\n' {
-                workspace.debugger_data.parse_state.command_line_read = true;
-                break;
-            }
+        source_info_start := "Lines found in module "; #const
+        if starts_with(text, source_info_start) {
+            // Execution is paused, start parsing the program state
+            workspace.debugger_data.command_executing = false;
+            workspace.debugger_data.parse_status = DebuggerParseStatus.Source;
         }
-
-        text.length -= i;
-        text.data += i;
-    }
-
-    if !workspace.debugger_data.parse_state.header_read {
-        switch workspace.debugger_data.parse_status {
-            case DebuggerParseStatus.Variables;
-            case DebuggerParseStatus.Expression; {}
-            default; {
-                i := 0;
+        else {
+            process := "Process "; #const
+            if starts_with(text, process) {
+                i := process.length;
+                parsing_pid := true;
+                parsing_status := false;
                 while i < text.length {
-                    char := text[i++];
-                    if char == '\n' {
-                        workspace.debugger_data.parse_state.header_read = true;
+                    char := text[i];
+                    if char == ' ' {
+                        if parsing_pid {
+                            parsing_pid = false;
+                            parsing_status = true;
+                        }
+                    }
+                    else if parsing_pid && (char < '0' || char > '9') {
                         break;
                     }
-                }
+                    else if parsing_status {
+                        status: string = { length = text.length - i; data = text.data + i; }
+                        if starts_with(status, "stopped") {
+                            workspace.debugger_data.command_executing = false;
+                            if !workspace.debugger_data.skip_next_stop {
+                                data: JobData;
+                                data.pointer = workspace;
+                                queue_work(&low_priority_queue, load_watches, data);
+                            }
 
-                text.length -= i;
-                text.data += i;
+                            workspace.debugger_data.skip_next_stop = false;
+                            return true;
+                        }
+
+                        break;
+                    }
+
+                    i++;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    log("%, %\n", workspace.debugger_data.parse_status, text);
+
+    switch workspace.debugger_data.parse_status {
+        case DebuggerParseStatus.Source; {
+            // TODO Parse
+            workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+        }
+        case DebuggerParseStatus.Variables; {
+            // TODO Parse
+            workspace.debugger_data.parse_status = DebuggerParseStatus.StackTrace;
+        }
+        case DebuggerParseStatus.StackTrace; {
+            // TODO Parse
+            workspace.debugger_data.parse_status = DebuggerParseStatus.Registers;
+        }
+        case DebuggerParseStatus.Registers; {
+            // TODO Parse
+            workspace.debugger_data.parse_status = DebuggerParseStatus.Threads;
+        }
+        case DebuggerParseStatus.Threads; {
+            // TODO Parse
+            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+        }
+        case DebuggerParseStatus.Expression; {
+            if workspace.debugger_data.parse_state.command_line_read {
+                // TODO Allocate and add result to watches
+                workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+            }
+            else if starts_with(text, "(lldb)") {
+                workspace.debugger_data.parse_state.command_line_read = true;
             }
         }
     }
 
-    if text.length == 0 return true;
-
-    log("%, '%'\n", workspace.debugger_data.parse_status, text);
-
-    // TODO Implement these
-    switch workspace.debugger_data.parse_status {
-        case DebuggerParseStatus.Source; {
-        }
-        case DebuggerParseStatus.Variables; {
-        }
-        case DebuggerParseStatus.Expression; {
-        }
-        case DebuggerParseStatus.StackTrace; {
-        }
-        case DebuggerParseStatus.Registers; {
-        }
-        case DebuggerParseStatus.Threads; {
-        }
-    }
-
-    workspace.debugger_data.parse_status = DebuggerParseStatus.None;
     return true;
 }
 
-load_debugger_info(int thread, JobData data) {
+load_watches(int thread, JobData data) {
     workspace: Workspace* = data.pointer;
 
-    wait_for_debugger_parsing(workspace, "source info\n", DebuggerParseStatus.Source);
-    wait_for_debugger_parsing(workspace, "v\n", DebuggerParseStatus.Variables);
     // TODO Evaluate watches
-    // wait_for_debugger_parsing(workspace, "p\n", DebuggerParseStatus.Expression);
-    // wait_for_debugger_parsing(workspace, "bt\n", DebuggerParseStatus.StackTrace);
-    // wait_for_debugger_parsing(workspace, "register read\n", DebuggerParseStatus.Registers);
-    // wait_for_debugger_parsing(workspace, "thread list\n", DebuggerParseStatus.Threads);
+    // wait_for_debugger_parsing(workspace, "p frame_index\n", DebuggerParseStatus.Expression);
 }
 
 wait_for_debugger_parsing(Workspace* workspace, string command, DebuggerParseStatus status) {
