@@ -404,27 +404,102 @@ bool parse_debugger_output(Workspace* workspace, string text) {
     switch workspace.debugger_data.parse_status {
         case DebuggerParseStatus.Source; {
             // TODO Parse
+            // Lines found in module `editor
+            // [0x000000000041ad44-0x000000000041ad59): /home/evan/editor/src/buffers.ol:3:5
             workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
         }
         case DebuggerParseStatus.Variables; {
             // TODO Parse
+            // (Workspace *) workspace = 0xff0000000000000a
+            // (BufferWindow *) bottom_window = 0x00000000004795e0
+            // (bool) bottom_focused = true
             workspace.debugger_data.parse_status = DebuggerParseStatus.StackTrace;
         }
         case DebuggerParseStatus.StackTrace; {
             // TODO Parse
+            // * thread #1, name = 'editor', stop reason = breakpoint 1.1
+            //   * frame #0: 0x000000000041ad44 editor`draw_buffers at buffers.ol:3:5
+            //     frame #1: 0x000000000040dcaf editor`main at main.ol:78:17
+            //     frame #2: 0x00000000004055a1 editor`__start(argc=2, argv=0x00007fffffffd128) at runtime.ol:296:5
+            //     frame #3: 0x00000000004596dd editor`_start + 13
             workspace.debugger_data.parse_status = DebuggerParseStatus.Registers;
         }
         case DebuggerParseStatus.Registers; {
             // TODO Parse
+            // General Purpose Registers:
+            //        rax = 0x0000000000000000
+            //        rbx = 0x0000000000000000
+            //        rcx = 0xff0000000000000a
+            //        rdx = 0x000000000047b8e0  editor`__bss_start + 37888
+            //        rdi = 0x00000000000001ff
+            //        rsi = 0x0000000000002300
+            //        rbp = 0x00007fffffffd120
+            //        rsp = 0x00007fffffffcfd0
+            //         r8 = 0x00007fffd830d000
+            //         r9 = 0x0000000000000000
+            //        r10 = 0x0000000000000000
+            //        r11 = 0x0000000000000000
+            //        r12 = 0x00000000004596d0  editor`_start
+            //        r13 = 0x00007fffffffd120
+            //        r14 = 0x0000000000000000
+            //        r15 = 0x0000000000000000
+            //        rip = 0x000000000041ad44  editor`draw_buffers + 4 at buffers.ol:3:5
+            //     rflags = 0x0000000000000202
+            //         cs = 0x0000000000000033
+            //         fs = 0x0000000000000000
+            //         gs = 0x0000000000000000
+            //         ss = 0x000000000000002b
+            //    fs_base = 0x00007ffff76f2340
+            //    gs_base = 0x0000000000000000
+            //         ds = 0x0000000000000000
+            //         es = 0x0000000000000000
             workspace.debugger_data.parse_status = DebuggerParseStatus.Threads;
         }
         case DebuggerParseStatus.Threads; {
             // TODO Parse
+            // Process 14109 stopped
+            // * thread #1: tid = 14109, 0x000000000041ad44 editor`draw_buffers at buffers.ol:3:5, name = 'editor', stop reason = breakpoint 1.1
+            //   thread #2: tid = 14216, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #3: tid = 14217, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #4: tid = 14218, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #5: tid = 14219, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #6: tid = 14220, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #7: tid = 14221, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #8: tid = 14222, 0x0000Threads, Threads, r`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #9: tid = 14223, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
+            //   thread #10: tid = 14224, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #11: tid = 14225, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #12: tid = 14226, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #13: tid = 14227, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #14: tid = 14228, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #15: tid = 14229, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020Threads, Threads, 13, name = 'editor'
+            //   thread #16: tid = 14230, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046e020) at thread.ol:55:13, name = 'editor'
+            //   thread #17: tid = 14289, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor:disk$0'
+            //   thread #18: tid = 14290, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor:disk$0'
+            //   thread #19: tid = 14291, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor:disk$0'
+            //   thread #20: tid = 14292, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor:disk$0'
+            //   thread #23: tid = 14295, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor'
+            //   thread #24: tid = 14298, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor'
+            //   thread #25: tid = 14319, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_canThreads, WSI swapchain q'
+            //   thread #26: tid = 14320, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'WSI swapchain e'
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
         case DebuggerParseStatus.Expression; {
             if workspace.debugger_data.parse_state.command_line_read {
                 // TODO Allocate and add result to watches
+                // Ex 1:
+                // (BufferWindow) {
+                //   cursor = 257
+                //   line = 0
+                //   start_line = 17
+                //   buffer_index = 0
+                //   hex_view = true
+                //   start_byte = 32767
+                //   previous = 0x0000000000000006
+                // Ex 2:
+                // (unsigned int) 1
+                // Ex 3:
+                // (BufferWindow *) 0x00000000004795e0
                 workspace.debugger_data.parse_status = DebuggerParseStatus.None;
             }
             else if starts_with(text, "(lldb)") {
