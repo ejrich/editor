@@ -8,7 +8,9 @@ struct DebuggerData {
     buffer: Buffer = { read_only = true; title = get_debugger_buffer_title; }
     buffer_window: BufferWindow;
     command_executing: bool;
+    skip_next_stop: bool;
     parse_status: DebuggerParseStatus;
+    parse_state: DebuggerParseState;
     paused_file_index: u32;
     paused_line: u32;
 }
@@ -21,6 +23,12 @@ enum DebuggerParseStatus : u8 {
     StackTrace;
     Registers;
     Threads;
+}
+
+struct DebuggerParseState {
+    command_line_read: bool;
+    header_read: bool;
+    lines_read: u16;
 }
 
 // TODO Move breakpoint lines when deleting/adding lines
@@ -50,6 +58,7 @@ start_or_continue_debugger() {
             started = true;
             failed_to_start = false;
             exited = false;
+            skip_next_stop = false;
         }
 
         data: JobData;
@@ -165,7 +174,7 @@ step_over() {
     workspace := get_workspace();
     if !workspace.debugger_data.running || workspace.debugger_data.command_executing return;
 
-    send_command_to_debugger(workspace, "next\n");
+    send_command_to_debugger(workspace, "n\n");
     workspace.debugger_data.command_executing = true;
 }
 
@@ -173,7 +182,7 @@ step_in() {
     workspace := get_workspace();
     if !workspace.debugger_data.running || workspace.debugger_data.command_executing return;
 
-    send_command_to_debugger(workspace, "step\n");
+    send_command_to_debugger(workspace, "s\n");
     workspace.debugger_data.command_executing = true;
 }
 
@@ -219,7 +228,38 @@ debugger_thread(int thread, JobData data) {
 
     clear_debugger_buffer_window(workspace);
 
-    command := temp_string("lldb -- ", workspace.local_settings.debug_command);
+    found_executable := false;
+    executable, args: string;
+    each i in workspace.local_settings.debug_command.length {
+        char := workspace.local_settings.debug_command[i];
+        if found_executable {
+            if char == ' ' {
+                args = {
+                    length = workspace.local_settings.debug_command.length - i;
+                    data = workspace.local_settings.debug_command.data + i;
+                }
+                break;
+            }
+            else {
+                executable.length++;
+            }
+        }
+        else if char != ' ' {
+            found_executable = true;
+            executable = {
+                length = 1;
+                data = workspace.local_settings.debug_command.data + i;
+            }
+        }
+    }
+
+    #if os == OS.Windows {
+        if !ends_with(executable, ".exe") {
+            executable = temp_string(executable, ".exe");
+        }
+    }
+
+    command := temp_string("lldb -- ", executable, args);
     workspace.debugger_data.started = start_command(command, workspace.directory, &workspace.debugger_data.process, true, false);
 
     if !workspace.debugger_data.started {
@@ -227,7 +267,7 @@ debugger_thread(int thread, JobData data) {
         return;
     }
 
-    buf: CArray<u8>[1000];
+    buf: CArray<u8>[5000];
     success, text := read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
     add_to_debugger_buffer(workspace, text);
 
@@ -274,8 +314,10 @@ exit_debugger(int thread, JobData data) {
 }
 
 escape_debugger(Workspace* workspace) {
+    workspace.debugger_data.skip_next_stop = true;
+
     #if os == OS.Windows {
-        // TODO Figure this out
+        send_command_to_debugger(workspace, "process interrupt\n");
     }
     #if os == OS.Linux {
         kill(workspace.debugger_data.process.pid, KillSignal.SIGINT);
@@ -302,7 +344,6 @@ send_command_to_debugger(Workspace* workspace, string command) {
 }
 
 bool parse_debugger_output(Workspace* workspace, string text) {
-
     process := "Process "; #const
     if starts_with(text, process) {
         i := process.length;
@@ -322,8 +363,14 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             else if parsing_status {
                 status: string = { length = text.length - i; data = text.data + i; }
                 if starts_with(status, "stopped") {
-                    // TODO Parse the file and line that was stopped
                     workspace.debugger_data.command_executing = false;
+                    if !workspace.debugger_data.skip_next_stop {
+                        data: JobData;
+                        data.pointer = workspace;
+                        queue_work(&low_priority_queue, load_debugger_info, data);
+                    }
+
+                    workspace.debugger_data.skip_next_stop = false;
                     return true;
                 }
 
@@ -337,6 +384,44 @@ bool parse_debugger_output(Workspace* workspace, string text) {
     if workspace.debugger_data.parse_status == DebuggerParseStatus.None {
         return false;
     }
+
+    if !workspace.debugger_data.parse_state.command_line_read {
+        i := 0;
+        while i < text.length {
+            char := text[i++];
+            if char == '\n' {
+                workspace.debugger_data.parse_state.command_line_read = true;
+                break;
+            }
+        }
+
+        text.length -= i;
+        text.data += i;
+    }
+
+    if !workspace.debugger_data.parse_state.header_read {
+        switch workspace.debugger_data.parse_status {
+            case DebuggerParseStatus.Variables;
+            case DebuggerParseStatus.Expression; {}
+            default; {
+                i := 0;
+                while i < text.length {
+                    char := text[i++];
+                    if char == '\n' {
+                        workspace.debugger_data.parse_state.header_read = true;
+                        break;
+                    }
+                }
+
+                text.length -= i;
+                text.data += i;
+            }
+        }
+    }
+
+    if text.length == 0 return true;
+
+    log("%, '%'\n", workspace.debugger_data.parse_status, text);
 
     // TODO Implement these
     switch workspace.debugger_data.parse_status {
@@ -359,7 +444,27 @@ bool parse_debugger_output(Workspace* workspace, string text) {
 }
 
 load_debugger_info(int thread, JobData data) {
-    // TODO Implement
+    workspace: Workspace* = data.pointer;
+
+    wait_for_debugger_parsing(workspace, "source info\n", DebuggerParseStatus.Source);
+    wait_for_debugger_parsing(workspace, "v\n", DebuggerParseStatus.Variables);
+    // TODO Evaluate watches
+    // wait_for_debugger_parsing(workspace, "p\n", DebuggerParseStatus.Expression);
+    // wait_for_debugger_parsing(workspace, "bt\n", DebuggerParseStatus.StackTrace);
+    // wait_for_debugger_parsing(workspace, "register read\n", DebuggerParseStatus.Registers);
+    // wait_for_debugger_parsing(workspace, "thread list\n", DebuggerParseStatus.Threads);
+}
+
+wait_for_debugger_parsing(Workspace* workspace, string command, DebuggerParseStatus status) {
+    state: DebuggerParseState;
+    workspace.debugger_data = {
+        parse_status = status;
+        parse_state = state;
+    }
+
+    send_command_to_debugger(workspace, command);
+
+    while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
 }
 
 add_to_debugger_buffer(Workspace* workspace, string text) {
