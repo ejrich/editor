@@ -214,7 +214,7 @@ evaluate_line_without_rendering(RenderLineState* state, BufferLine* line, u32 li
     reset_render_line_state(state);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end, bool has_breakpoint) {
+u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end, bool has_breakpoint, bool debug_line) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -248,6 +248,11 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         }
 
         draw_quad(&breakpoint_quad, 1);
+    }
+
+    // Draw the debug pointer
+    if debug_line {
+        draw_cursor(x + font_texture.quad_advance * digits, y, appearance.syntax_colors[cast(u8, SyntaxColor.Yellow)]);
     }
 
     // Create the glyphs for the line number

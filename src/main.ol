@@ -194,10 +194,10 @@ bool string_contains(string value, string sub_value) {
     return false;
 }
 
-Array<string> split_string(string value) #inline {
+Array<string> split_string(string value, u8 delimeter = '\n') #inline {
     lines := 1;
     each i in value.length {
-        if value[i] == '\n' {
+        if value[i] == delimeter {
             lines++;
         }
     }
@@ -210,7 +210,7 @@ Array<string> split_string(string value) #inline {
         index := 0;
         str: string = { data = value.data; }
         each i in value.length {
-            if value[i] == '\n' {
+            if value[i] == delimeter {
                 value_lines[index++] = str;
                 str = { length = 0; data = value.data + i + 1; }
             }

@@ -82,8 +82,12 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     draw_quad(&info_quad, 1);
 
     buffer: Buffer;
+    current_debugger_line := -1;
     if window.buffer_index >= 0 {
         buffer = workspace.buffers[window.buffer_index];
+        if workspace.debugger_data.running && !workspace.debugger_data.command_executing && workspace.debugger_data.paused_file_index == window.buffer_index {
+            current_debugger_line = workspace.debugger_data.paused_line;
+        }
     }
     else if window.static_buffer {
         buffer = *window.static_buffer;
@@ -277,7 +281,9 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                     breakpoint = breakpoint.next;
                 }
 
-                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end, has_breakpoint);
+                debug_line := line_number == current_debugger_line;
+
+                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end, has_breakpoint, debug_line);
                 y -= global_font_config.line_height * lines;
                 available_lines_to_render -= lines;
             }
@@ -4223,6 +4229,7 @@ bool is_whitespace(u8 char) {
         case ' ';
         case '\t';
         case '\r';
+        case '\n';
             return true;
     }
 

@@ -10,8 +10,7 @@ struct DebuggerData {
     command_executing: bool;
     skip_next_stop: bool;
     parse_status: DebuggerParseStatus;
-    parse_state: DebuggerParseState;
-    paused_file_index: u32;
+    paused_file_index: s32;
     paused_line: u32;
 }
 
@@ -23,10 +22,6 @@ enum DebuggerParseStatus : u8 {
     Registers;
     Threads;
     Expression;
-}
-
-struct DebuggerParseState {
-    command_line_read: bool;
 }
 
 // TODO Move breakpoint lines when deleting/adding lines
@@ -217,6 +212,7 @@ skip_to() {
 
     command := format_string("jump %\n", temp_allocate, line);
     send_command_to_debugger(workspace, command);
+    workspace.debugger_data.paused_line = line;
 }
 
 #private
@@ -399,13 +395,61 @@ bool parse_debugger_output(Workspace* workspace, string text) {
         }
     }
 
-    log("%, %\n", workspace.debugger_data.parse_status, text);
+    {
+        i := 0;
+        while i < text.length {
+            if !is_whitespace(text[i]) {
+                break;
+            }
+            i++;
+        }
+        text.length -= i;
+        text.data += i;
+    }
+
+    if starts_with(text, "(lldb)") || text.length == 0 return true;
 
     switch workspace.debugger_data.parse_status {
         case DebuggerParseStatus.Source; {
-            // TODO Parse
             // Lines found in module `editor
             // [0x000000000041ad44-0x000000000041ad59): /home/evan/editor/src/buffers.ol:3:5
+            workspace.debugger_data.paused_file_index = -1;
+
+            move_to_next_line(&text);
+            text_parts := split_string(text, ' ');
+            if text_parts.length >= 2 && starts_with(text_parts[1], workspace.directory) {
+                location := text_parts[1];
+                location.length -= workspace.directory.length + 1;
+                location.data += workspace.directory.length + 1;
+
+                location_parts := split_string(location, ':');
+                if location_parts.length >= 2 {
+                    file := location_parts[0];
+                    line_number := location_parts[1];
+
+                    each buffer, i in workspace.buffers {
+                        if paths_are_same(buffer.relative_path, location_parts[0]) {
+                            workspace.debugger_data.paused_file_index = i;
+                        }
+                    }
+
+                    line := 0;
+                    each i in line_number.length {
+                        char := line_number[i];
+                        if char >= '0' && char <= '9' {
+                            line *= 10;
+                            line += char - '0';
+                        }
+                        else {
+                            break;
+                        }
+                    }
+                    workspace.debugger_data.paused_line = line;
+
+                    // TODO Bring up the file at the paused line
+                }
+            }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
         }
         case DebuggerParseStatus.Variables; {
@@ -422,6 +466,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //     frame #1: 0x000000000040dcaf editor`main at main.ol:78:17
             //     frame #2: 0x00000000004055a1 editor`__start(argc=2, argv=0x00007fffffffd128) at runtime.ol:296:5
             //     frame #3: 0x00000000004596dd editor`_start + 13
+            move_to_next_line(&text);
             workspace.debugger_data.parse_status = DebuggerParseStatus.Registers;
         }
         case DebuggerParseStatus.Registers; {
@@ -453,6 +498,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //    gs_base = 0x0000000000000000
             //         ds = 0x0000000000000000
             //         es = 0x0000000000000000
+            move_to_next_line(&text);
             workspace.debugger_data.parse_status = DebuggerParseStatus.Threads;
         }
         case DebuggerParseStatus.Threads; {
@@ -482,29 +528,52 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //   thread #24: tid = 14298, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'editor'
             //   thread #25: tid = 14319, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_canThreads, WSI swapchain q'
             //   thread #26: tid = 14320, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'WSI swapchain e'
+            move_to_next_line(&text);
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
         case DebuggerParseStatus.Expression; {
-            if workspace.debugger_data.parse_state.command_line_read {
-                // TODO Allocate and add result to watches
-                // Ex 1:
-                // (BufferWindow) {
-                //   cursor = 257
-                //   line = 0
-                //   start_line = 17
-                //   buffer_index = 0
-                //   hex_view = true
-                //   start_byte = 32767
-                //   previous = 0x0000000000000006
-                // Ex 2:
-                // (unsigned int) 1
-                // Ex 3:
-                // (BufferWindow *) 0x00000000004795e0
-                workspace.debugger_data.parse_status = DebuggerParseStatus.None;
-            }
-            else if starts_with(text, "(lldb)") {
-                workspace.debugger_data.parse_state.command_line_read = true;
-            }
+            // TODO Allocate and add result to watches
+            // Ex 1:
+            // (BufferWindow) {
+            //   cursor = 257
+            //   line = 0
+            //   start_line = 17
+            //   buffer_index = 0
+            //   hex_view = true
+            //   start_byte = 32767
+            //   previous = 0x0000000000000006
+            // Ex 2:
+            // (unsigned int) 1
+            // Ex 3:
+            // (BufferWindow *) 0x00000000004795e0
+            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+        }
+    }
+
+    return true;
+}
+
+move_to_next_line(string* value) {
+    i := 0;
+    while i < value.length {
+        char := value.data[i++];
+        if char == '\n' {
+            break;
+        }
+    }
+
+    value.length -= i;
+    value.data += i;
+}
+
+bool paths_are_same(string a, string b) {
+    if a.length != b.length return false;
+
+    each i in a.length {
+        a_char := a[i];
+        b_char := b[i];
+        if a_char != b_char && !((a_char == '/' && b_char == '\\') || (a_char == '\\' && b_char == '/')) {
+            return false;
         }
     }
 
@@ -519,11 +588,7 @@ load_watches(int thread, JobData data) {
 }
 
 wait_for_debugger_parsing(Workspace* workspace, string command, DebuggerParseStatus status) {
-    state: DebuggerParseState;
-    workspace.debugger_data = {
-        parse_status = status;
-        parse_state = state;
-    }
+    workspace.debugger_data.parse_status = status;
 
     send_command_to_debugger(workspace, command);
 
