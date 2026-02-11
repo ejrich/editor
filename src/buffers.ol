@@ -1,5 +1,6 @@
 // Buffer rendering
 draw_buffers() {
+    b: Buffer = { relative_path = "{\""; }
     if !is_font_ready(settings.font_size) return;
 
     workspace := get_workspace();
@@ -414,6 +415,10 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
         buffer_index = workspace.buffers.length - 1;
     }
 
+    return open_buffer_index(workspace, buffer_index);
+}
+
+BufferWindow* open_buffer_index(Workspace* workspace, int buffer_index) {
     buffer_window: BufferWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left; {

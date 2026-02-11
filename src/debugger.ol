@@ -12,6 +12,14 @@ struct DebuggerData {
     parse_status: DebuggerParseStatus;
     paused_file_index: s32;
     paused_line: u32;
+    local_variables: DynamicArray<LocalVariable>;
+    local_variables_data: string;
+    stack_frames: DynamicArray<StackFrame>;
+    stack_frames_data: string;
+    registers: DynamicArray<Register>;
+    threads: DynamicArray<Thread>;
+    watches: DynamicArray<WatchExpression>;
+    watch_index: int;
 }
 
 enum DebuggerParseStatus : u8 {
@@ -29,6 +37,44 @@ struct Breakpoint {
     line: u32;
     active: bool;
     next: Breakpoint*;
+}
+
+struct LocalVariable {
+    name: string;
+    type: string;
+    value: string;
+}
+
+struct StackFrame {
+    index: u16;
+    address: u64;
+    function: string;
+    location: string;
+}
+
+struct Register {
+    name: string;
+    size: u8;
+    value: u64;
+}
+
+struct Thread {
+    number: int;
+    id: int;
+    active: bool;
+}
+
+struct WatchExpression {
+    expression: string;
+    error: bool;
+    type: string;
+    value: string;
+    data: u8*;
+}
+
+struct DynamicArray<T> {
+    length: u64;
+    array: Array<T>;
 }
 
 BufferWindow* get_debugger_window(Workspace* workspace) {
@@ -427,9 +473,18 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     file := location_parts[0];
                     line_number := location_parts[1];
 
+                    each i in file.length {
+                        if file[i] == '\\' {
+                            file[i] = '/';
+                        }
+                    }
+
+                    file_found := false;
                     each buffer, i in workspace.buffers {
-                        if paths_are_same(buffer.relative_path, location_parts[0]) {
+                        if buffer.relative_path == file {
                             workspace.debugger_data.paused_file_index = i;
+                            file_found = true;
+                            break;
                         }
                     }
 
@@ -446,17 +501,151 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     }
                     workspace.debugger_data.paused_line = line;
 
-                    // TODO Bring up the file at the paused line
+                    buffer_window: BufferWindow*;
+                    if file_found {
+                        buffer_window = open_buffer_index(workspace, workspace.debugger_data.paused_file_index);
+                    }
+                    else {
+                        buffer_window = open_file_buffer(file, true);
+                        workspace.debugger_data.paused_file_index = workspace.buffers.length - 1;
+                    }
+
+                    buffer_window.line = line - 1;
+                    adjust_start_line(buffer_window);
                 }
             }
 
             workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
         }
         case DebuggerParseStatus.Variables; {
-            // TODO Parse
             // (Workspace *) workspace = 0xff0000000000000a
             // (BufferWindow *) bottom_window = 0x00000000004795e0
             // (bool) bottom_focused = true
+            allocate_strings(&text);
+            if !string_is_empty(workspace.debugger_data.local_variables_data) {
+                free_allocation(workspace.debugger_data.local_variables_data.data);
+            }
+            workspace.debugger_data.local_variables_data = text;
+            workspace.debugger_data.local_variables.length = 0;
+
+            parsing_type := true;
+            parsing_name, parsing_value, parse_value_to_eol, in_string, escape, reset := false;
+            struct_depth := 0;
+            variable: LocalVariable;
+            each i in text.length {
+                char := text[i];
+                if parsing_type {
+                    if char == '(' {
+                        variable.type.data = text.data + i + 1;
+                    }
+                    else if char == ')' {
+                        parsing_type = false;
+                        parsing_name = true;
+                    }
+                    else {
+                        variable.type.length++;
+                    }
+                }
+                else if parsing_name {
+                    if char == ' ' {
+                        if variable.name.length {
+                            parsing_name = false;
+                            parsing_value = true;
+                        }
+                        else {
+                            variable.name.data = text.data + i + 1;
+                        }
+                    }
+                    else {
+                        variable.name.length++;
+                    }
+                }
+                else if parsing_value {
+                    if char == ' ' && variable.value.length == 0 {
+                        variable.value.data = text.data + i + 1;
+                    }
+                    else if variable.value.data {
+                        if variable.value.length == 0 {
+                            if char == '{' {
+                                struct_depth++;
+                            }
+                            else {
+                                parse_value_to_eol = true;
+                            }
+                            variable.value.length++;
+                        }
+                        else if parse_value_to_eol {
+                            if char == '\n' {
+                                reset = true;
+                            }
+                            else {
+                                variable.value.length++;
+                            }
+                        }
+                        else {
+                            variable.value.length++;
+                            if char == '\"' {
+                                if !in_string {
+                                    in_string = true;
+                                }
+                                else if !escape {
+                                    in_string = false;
+                                }
+                                escape = false;
+                            }
+                            else if !in_string {
+                                if char == '{' {
+                                    struct_depth++;
+                                }
+                                else if char == '}' {
+                                    struct_depth--;
+                                    if struct_depth == 0 {
+                                        reset = true;
+                                    }
+                                }
+                            }
+                            else if escape {
+                                escape = false;
+                            }
+                            else if char == '\\' {
+                                escape = true;
+                            }
+                            // TODO Implement
+                        }
+
+                        if reset {
+                            parsing_value = false;
+                            parse_value_to_eol = false;
+                            in_string = false;
+                            parsing_type = true;
+                            reset = false;
+
+                            add_to_array(&workspace.debugger_data.local_variables, variable);
+                            log("%\n", variable);
+
+                            variable = {
+                                name = {
+                                    length = 0;
+                                    data = null;
+                                }
+                                type = {
+                                    length = 0;
+                                    data = null;
+                                }
+                                value = {
+                                    length = 0;
+                                    data = null;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if parsing_value {
+                add_to_array(&workspace.debugger_data.local_variables, variable);
+            }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.StackTrace;
         }
         case DebuggerParseStatus.StackTrace; {
@@ -532,7 +721,6 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
         case DebuggerParseStatus.Expression; {
-            // TODO Allocate and add result to watches
             // Ex 1:
             // (BufferWindow) {
             //   cursor = 257
@@ -546,6 +734,15 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // (unsigned int) 1
             // Ex 3:
             // (BufferWindow *) 0x00000000004795e0
+            // Ex 4 (Error case):
+            // error: Couldn't apply expression side effects : Couldn't dematerialize a result variable: couldn't read its memory
+            watch := &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
+            if starts_with(text, "error:") {
+                watch.error = true;
+            }
+            else {
+                // TODO Allocate and add result to watches
+            }
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
     }
@@ -566,30 +763,32 @@ move_to_next_line(string* value) {
     value.data += i;
 }
 
-bool paths_are_same(string a, string b) {
-    if a.length != b.length return false;
-
-    each i in a.length {
-        a_char := a[i];
-        b_char := b[i];
-        if a_char != b_char && !((a_char == '/' && b_char == '\\') || (a_char == '\\' && b_char == '/')) {
-            return false;
-        }
+add_to_array<T>(DynamicArray<T>* array, T value) {
+    block_size := 10; #const
+    if array.length == array.array.length {
+        array_resize(&array.array, array.length + block_size, allocate, reallocate);
     }
 
-    return true;
+    array.array[array.length++] = value;
 }
 
 load_watches(int thread, JobData data) {
     workspace: Workspace* = data.pointer;
 
-    // TODO Evaluate watches
-    // wait_for_debugger_parsing(workspace, "p frame_index\n", DebuggerParseStatus.Expression);
+    each i in workspace.debugger_data.watches.length {
+        evaluate_watch(workspace, i);
+    }
 }
 
-wait_for_debugger_parsing(Workspace* workspace, string command, DebuggerParseStatus status) {
-    workspace.debugger_data.parse_status = status;
+evaluate_watch(Workspace* workspace, int index) {
+    watch := workspace.debugger_data.watches.array[index];
 
+    workspace.debugger_data = {
+        parse_status = DebuggerParseStatus.Expression;
+        watch_index = index;
+    }
+
+    command := temp_string("p ", watch.expression, "\n");
     send_command_to_debugger(workspace, command);
 
     while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
