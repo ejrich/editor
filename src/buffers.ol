@@ -1,6 +1,5 @@
 // Buffer rendering
 draw_buffers() {
-    b: Buffer = { relative_path = "{\""; }
     if !is_font_ready(settings.font_size) return;
 
     workspace := get_workspace();

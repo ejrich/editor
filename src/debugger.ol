@@ -46,6 +46,7 @@ struct LocalVariable {
 }
 
 struct StackFrame {
+    active: bool;
     index: u16;
     address: u64;
     function: string;
@@ -610,7 +611,6 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             else if char == '\\' {
                                 escape = true;
                             }
-                            // TODO Implement
                         }
 
                         if reset {
@@ -621,21 +621,11 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             reset = false;
 
                             add_to_array(&workspace.debugger_data.local_variables, variable);
-                            log("%\n", variable);
 
                             variable = {
-                                name = {
-                                    length = 0;
-                                    data = null;
-                                }
-                                type = {
-                                    length = 0;
-                                    data = null;
-                                }
-                                value = {
-                                    length = 0;
-                                    data = null;
-                                }
+                                name = { length = 0; data = null; }
+                                type = { length = 0; data = null; }
+                                value = { length = 0; data = null; }
                             }
                         }
                     }
@@ -656,6 +646,86 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //     frame #2: 0x00000000004055a1 editor`__start(argc=2, argv=0x00007fffffffd128) at runtime.ol:296:5
             //     frame #3: 0x00000000004596dd editor`_start + 13
             move_to_next_line(&text);
+
+            allocate_strings(&text);
+            if !string_is_empty(workspace.debugger_data.stack_frames_data) {
+                free_allocation(workspace.debugger_data.stack_frames_data.data);
+            }
+            workspace.debugger_data.stack_frames_data = text;
+            workspace.debugger_data.stack_frames.length = 0;
+
+            lines := split_string(text);
+            each line in lines {
+                if line.length {
+                    frame: StackFrame = { active = line[2] == '*'; }
+
+                    line_start := "    frame #"; #const
+                    i := line_start.length;
+                    while i < line.length {
+                        char := line[i++];
+                        if char >= '0' && char <= '9' {
+                            frame.index *= 10;
+                            frame.index += char - '0';
+                        }
+                        else {
+                            break;
+                        }
+                    }
+
+                    i += 3;
+                    while i < line.length {
+                        char := line[i++];
+                        if char >= '0' && char <= '9' {
+                            frame.address *= 16;
+                            frame.address += char - '0';
+                        }
+                        else if char >= 'A' && char <= 'F' {
+                            frame.address *= 16;
+                            frame.address += char - '7';
+                        }
+                        else if char >= 'a' && char <= 'f' {
+                            frame.address *= 16;
+                            frame.address += char - 'W';
+                        }
+                        else {
+                            break;
+                        }
+                    }
+
+                    i++;
+                    while i < line.length {
+                        char := line[i];
+                        if char == '`' && frame.function.length == 0 {
+                            frame.function.data = line.data + i + 1;
+                        }
+                        else if frame.function.data {
+                            if char == '(' || char == ' ' {
+                                break;
+                            }
+                            else {
+                                frame.function.length++;
+                            }
+                        }
+
+                        i++;
+                    }
+
+                    while i < line.length {
+                        sub_line: string = { length = line.length - i; data = line.data + i; }
+                        location_start := " at "; #const
+                        if starts_with(sub_line, location_start) {
+                            sub_line.length -= location_start.length;
+                            sub_line.data += location_start.length;
+                            frame.location = sub_line;
+                            break;
+                        }
+                        i++;
+                    }
+
+                    add_to_array(&workspace.debugger_data.stack_frames, frame);
+                }
+            }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.Registers;
         }
         case DebuggerParseStatus.Registers; {
