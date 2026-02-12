@@ -620,6 +620,10 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             parsing_type = true;
                             reset = false;
 
+                            if variable.value[variable.value.length - 1] == '\r' {
+                                variable.value.length--;
+                            }
+
                             add_to_array(&workspace.debugger_data.local_variables, variable);
 
                             variable = {
@@ -633,13 +637,16 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             }
 
             if parsing_value {
+                if variable.value[variable.value.length - 1] == '\r' {
+                    variable.value.length--;
+                }
+
                 add_to_array(&workspace.debugger_data.local_variables, variable);
             }
 
             workspace.debugger_data.parse_status = DebuggerParseStatus.StackTrace;
         }
         case DebuggerParseStatus.StackTrace; {
-            // TODO Parse
             // * thread #1, name = 'editor', stop reason = breakpoint 1.1
             //   * frame #0: 0x000000000041ad44 editor`draw_buffers at buffers.ol:3:5
             //     frame #1: 0x000000000040dcaf editor`main at main.ol:78:17
@@ -722,6 +729,10 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         i++;
                     }
 
+                    if frame.location.length > 0 && frame.location[frame.location.length - 1] == '\r' {
+                        frame.location.length--;
+                    }
+
                     add_to_array(&workspace.debugger_data.stack_frames, frame);
                 }
             }
@@ -729,7 +740,6 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             workspace.debugger_data.parse_status = DebuggerParseStatus.Registers;
         }
         case DebuggerParseStatus.Registers; {
-            // TODO Parse
             // General Purpose Registers:
             //        rax = 0x0000000000000000
             //        rbx = 0x0000000000000000
@@ -758,10 +768,98 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //         ds = 0x0000000000000000
             //         es = 0x0000000000000000
             move_to_next_line(&text);
+
+            initial := workspace.debugger_data.registers.length == 0;
+            index := 0;
+            lines := split_string(text);
+            each line in lines {
+                if line.length {
+                    register: Register*;
+                    i := 0;
+                    if initial {
+                        value: Register;
+
+                        while i < line.length {
+                            char := line[i];
+                            if char == ' ' {
+                                if value.name.length > 0 {
+                                    allocate_strings(&value.name);
+                                    i += 4;
+                                    break;
+                                }
+                            }
+                            else {
+                                if value.name.length == 0 {
+                                    value.name.data = line.data + i;
+                                }
+                                value.name.length++;
+                            }
+
+                            i++;
+                        }
+
+                        register = &value;
+                    }
+                    else {
+                        register = &workspace.debugger_data.registers.array[index++];
+                        register.size = 0;
+                        register.value = 0;
+
+                        while i < line.length {
+                            char := line[i++];
+                            if char == '=' {
+                                i += 2;
+                                break;
+                            }
+                        }
+                    }
+
+                    base, size_factor: u8;
+                    while i < line.length {
+                        char := line[i++];
+                        if base == 0 {
+                            switch char {
+                                case 'b'; {
+                                    base = 2;
+                                    size_factor = 1;
+                                }
+                                case 'x'; {
+                                    base = 16;
+                                    size_factor = 4;
+                                }
+                            }
+                        }
+                        else {
+                            if char >= '0' && char <= '9' {
+                                register.value *= base;
+                                register.value += char - '0';
+                                register.size += size_factor;
+                            }
+                            else if char >= 'A' && char <= 'F' {
+                                register.value *= base;
+                                register.value += char - '7';
+                                register.size += size_factor;
+                            }
+                            else if char >= 'a' && char <= 'f' {
+                                register.value *= base;
+                                register.value += char - 'W';
+                                register.size += size_factor;
+                            }
+                            else {
+                                break;
+                            }
+                        }
+                    }
+
+                    if initial {
+                        add_to_array(&workspace.debugger_data.registers, *register);
+                    }
+                }
+            }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.Threads;
         }
         case DebuggerParseStatus.Threads; {
-            // TODO Parse
             // Process 14109 stopped
             // * thread #1: tid = 14109, 0x000000000041ad44 editor`draw_buffers at buffers.ol:3:5, name = 'editor', stop reason = breakpoint 1.1
             //   thread #2: tid = 14216, 0x00000000004455d5 editor`semaphore_wait(semaphore=0x000000000046fc30) at thread.ol:55:13, name = 'editor'
@@ -788,6 +886,65 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //   thread #25: tid = 14319, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_canThreads, WSI swapchain q'
             //   thread #26: tid = 14320, 0x00007ffff7cdf9f2 libc.so.6`__syscall_cancel_arch at syscall_cancel.S:56, name = 'WSI swapchain e'
             move_to_next_line(&text);
+
+            workspace.debugger_data.threads.length = 0;
+            lines := split_string(text);
+            each line in lines {
+                if line.length {
+                    thread: Thread = { active = line[0] == '*'; }
+
+                    line_start := "  thread #"; #const
+                    i := line_start.length;
+                    while i < line.length {
+                        char := line[i++];
+                        if char >= '0' && char <= '9' {
+                            thread.number *= 10;
+                            thread.number += char - '0';
+                        }
+                        else {
+                            break;
+                        }
+                    }
+
+                    i += 7;
+                    first := true;
+                    base := 10;
+                    while i < line.length {
+                        char := line[i++];
+                        if first {
+                            if char == '0' {
+                                base = 16;
+                                i++;
+                                continue;
+                            }
+                        }
+
+                        if char >= '0' && char <= '9' {
+                            thread.id *= base;
+                            thread.id += char - '0';
+                        }
+                        else if base == 16 {
+                            if char >= 'A' && char <= 'F' {
+                                thread.id *= 16;
+                                thread.id += char - '7';
+                            }
+                            else if char >= 'a' && char <= 'f' {
+                                thread.id *= 16;
+                                thread.id += char - 'W';
+                            }
+                            else {
+                                break;
+                            }
+                        }
+                        else {
+                            break;
+                        }
+                    }
+
+                    add_to_array(&workspace.debugger_data.threads, thread);
+                }
+            }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
         case DebuggerParseStatus.Expression; {
