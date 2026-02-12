@@ -70,7 +70,7 @@ struct WatchExpression {
     error: bool;
     type: string;
     value: string;
-    data: u8*;
+    data: string;
 }
 
 struct DynamicArray<T> {
@@ -95,10 +95,12 @@ start_or_continue_debugger() {
         force_command_to_stop();
         workspace.debugger_data = {
             running = true;
-            started = true;
             failed_to_start = false;
             exited = false;
             skip_next_stop = false;
+            local_variables = { length = 0; }
+            stack_frames = { length = 0; }
+            threads = { length = 0; }
         }
 
         data: JobData;
@@ -260,6 +262,15 @@ skip_to() {
     command := format_string("jump %\n", temp_allocate, line);
     send_command_to_debugger(workspace, command);
     workspace.debugger_data.paused_line = line;
+}
+
+add_watch(string expression) {
+    workspace := get_workspace();
+
+    watch: WatchExpression = {
+        expression = expression;
+    }
+    add_to_array(&workspace.debugger_data.watches, watch);
 }
 
 #private
@@ -620,10 +631,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             parsing_type = true;
                             reset = false;
 
-                            if variable.value[variable.value.length - 1] == '\r' {
-                                variable.value.length--;
-                            }
-
+                            trim_whitespace_from_end(&variable.value);
                             add_to_array(&workspace.debugger_data.local_variables, variable);
 
                             variable = {
@@ -637,10 +645,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             }
 
             if parsing_value {
-                if variable.value[variable.value.length - 1] == '\r' {
-                    variable.value.length--;
-                }
-
+                trim_whitespace_from_end(&variable.value);
                 add_to_array(&workspace.debugger_data.local_variables, variable);
             }
 
@@ -729,10 +734,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         i++;
                     }
 
-                    if frame.location.length > 0 && frame.location[frame.location.length - 1] == '\r' {
-                        frame.location.length--;
-                    }
-
+                    trim_whitespace_from_end(&frame.location);
                     add_to_array(&workspace.debugger_data.stack_frames, frame);
                 }
             }
@@ -968,8 +970,35 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 watch.error = true;
             }
             else {
-                // TODO Allocate and add result to watches
+                if !string_is_empty(watch.data) {
+                    watch.type = { length = 0; data = null; }
+                    watch.value = { length = 0; data = null; }
+                    free_allocation(watch.data.data);
+                }
+                allocate_strings(&text);
+                watch.data = text;
+
+                each i in text.length {
+                    char := text[i];
+                    if char == '(' {
+                        watch.type.data = text.data + i + 1;
+                    }
+                    else if char == ')' {
+                        start := i + 2;
+                        watch.value = {
+                            length = text.length - start;
+                            data = text.data + start;
+                        }
+                        break;
+                    }
+                    else {
+                        watch.type.length++;
+                    }
+                }
+
+                trim_whitespace_from_end(&watch.value);
             }
+
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
     }
@@ -988,6 +1017,17 @@ move_to_next_line(string* value) {
 
     value.length -= i;
     value.data += i;
+}
+
+trim_whitespace_from_end(string* value) {
+    while value.length {
+        if is_whitespace(value.data[value.length - 1]) {
+            value.length--;
+        }
+        else {
+            break;
+        }
+    }
 }
 
 add_to_array<T>(DynamicArray<T>* array, T value) {
