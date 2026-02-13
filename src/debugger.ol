@@ -12,14 +12,25 @@ struct DebuggerData {
     parse_status: DebuggerParseStatus;
     paused_file_index: s32;
     paused_line: u32;
+    view: DebuggerView;
+    view_start_index: u16;
+    view_index: u16;
     local_variables: DynamicArray<LocalVariable>;
     local_variables_data: string;
-    stack_frames: DynamicArray<StackFrame>;
-    stack_frames_data: string;
-    registers: DynamicArray<Register>;
-    threads: DynamicArray<Thread>;
     watches: DynamicArray<WatchExpression>;
     watch_index: int;
+    stack_frames: DynamicArray<StackFrame>;
+    stack_frames_data: string;
+    threads: DynamicArray<Thread>;
+    registers: DynamicArray<Register>;
+}
+
+enum DebuggerView : u8 {
+    Locals;
+    Watches;
+    Stack;
+    Threads;
+    Registers;
 }
 
 enum DebuggerParseStatus : u8 {
@@ -78,6 +89,78 @@ struct DynamicArray<T> {
     array: Array<T>;
 }
 
+draw_debugger_views(Workspace* workspace) {
+    if !workspace.debugger_data.running return;
+
+    x := global_font_config.quad_advance;
+    y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines_with_bottom_window + 1);
+
+    views := cast(EnumTypeInfo*, type_of(DebuggerView));
+    each view in views.values {
+        color := appearance.font_color;
+        background: Vector4;
+        if view.value == cast(u8, workspace.debugger_data.view) {
+            color = appearance.visual_font_color;
+            background = appearance.font_color;
+        }
+
+        render_text(view.name, settings.font_size, x, y, color, background);
+        x += (view.name.length + 1) * global_font_config.quad_advance;
+    }
+
+    x = 0.0;
+    y -= global_font_config.line_height;
+
+    available_lines := global_font_config.bottom_window_max_lines - 1;
+    i := workspace.debugger_data.view_start_index;
+    blank_background: Vector4;
+
+    switch workspace.debugger_data.view {
+        case DebuggerView.Locals; {
+            if !workspace.debugger_data.command_executing {
+                // TODO Implement
+            }
+        }
+        case DebuggerView.Watches; {
+            // TODO Implement
+        }
+        case DebuggerView.Stack; {
+            if !workspace.debugger_data.command_executing {
+                // TODO Implement
+            }
+        }
+        case DebuggerView.Threads; {
+            if !workspace.debugger_data.command_executing {
+                render_text("  #     Id", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                y -= global_font_config.line_height;
+                while available_lines > 0 && i < workspace.debugger_data.threads.length {
+                    thread := workspace.debugger_data.threads.array[i++];
+                    if thread.active {
+                        draw_cursor(x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Red)]);
+                    }
+
+                    x += 2 * global_font_config.quad_advance;
+                    render_text(settings.font_size, x, y, appearance.font_color, blank_background, "%", thread.number);
+
+                    x += 6 * global_font_config.quad_advance;
+                    render_text(settings.font_size, x, y, appearance.font_color, blank_background, "%", thread.id);
+
+                    available_lines--;
+
+                    x = 0.0;
+                    y -= global_font_config.line_height;
+                }
+            }
+        }
+        case DebuggerView.Registers; {
+            if !workspace.debugger_data.command_executing {
+                // TODO Implement
+            }
+        }
+    }
+}
+
 BufferWindow* get_debugger_window(Workspace* workspace) {
     if workspace.debugger_data.running {
         return &workspace.debugger_data.buffer_window;
@@ -97,6 +180,9 @@ start_or_continue_debugger() {
             running = true;
             failed_to_start = false;
             exited = false;
+            view = DebuggerView.Locals;
+            view_start_index = 0;
+            view_index = 0;
             skip_next_stop = false;
             local_variables = { length = 0; }
             stack_frames = { length = 0; }
@@ -1077,16 +1163,16 @@ string get_debugger_buffer_title() {
     workspace := get_workspace();
 
     if workspace.debugger_data.failed_to_start {
-        return format_string("Failed to start lldb with command '%'", temp_allocate, workspace.local_settings.debug_command);
+        return "Failed to start lldb";
     }
 
     if !workspace.debugger_data.command_executing {
-        return format_string("Execution paused for command '%'", temp_allocate, workspace.local_settings.debug_command);
+        return "Execution paused";
     }
 
     if workspace.debugger_data.exited {
-        return format_string("lldb exited with code '%'", temp_allocate, workspace.debugger_data.exit_code);
+        return format_string("lldb exited, code %", temp_allocate, workspace.debugger_data.exit_code);
     }
 
-    return format_string("Running debugger with command '%'", temp_allocate, workspace.local_settings.debug_command);
+    return "Running debugger";
 }

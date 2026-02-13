@@ -321,6 +321,21 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
+draw_cursor(float x, float y, Vector4 color) {
+    x_pos := x + global_font_config.quad_advance / 2.0;
+    y_pos := y + global_font_config.block_y_offset;
+
+    cursor_quad: QuadInstanceData = {
+        color = color;
+        position = { x = x_pos; y = y_pos; z = 0.1; }
+        flags = QuadFlags.Solid;
+        width = global_font_config.quad_advance;
+        height = global_font_config.line_height;
+    }
+
+    draw_quad(&cursor_quad, 1);
+}
+
 
 struct Font {
     handle: FT_Face*;
@@ -814,21 +829,6 @@ adjust_line_and_draw_background(FontTexture* font_texture, Array<QuadInstanceDat
 
         draw_quad(&background, 1);
     }
-}
-
-draw_cursor(float x, float y, Vector4 color) {
-    x_pos := x + global_font_config.quad_advance / 2.0;
-    y_pos := y + global_font_config.block_y_offset;
-
-    cursor_quad: QuadInstanceData = {
-        color = color;
-        position = { x = x_pos; y = y_pos; z = 0.1; }
-        flags = QuadFlags.Solid;
-        width = global_font_config.quad_advance;
-        height = global_font_config.line_height;
-    }
-
-    draw_quad(&cursor_quad, 1);
 }
 
 FontTexture* load_font_texture(u32 size) {

@@ -4,7 +4,7 @@ draw_buffers() {
 
     workspace := get_workspace();
 
-    bottom_window, bottom_focused := get_bottom_window(workspace);
+    bottom_window, bottom_focused, bottom_full_width := get_bottom_window(workspace);
 
     if workspace.left_window.displayed && workspace.right_window.displayed {
         draw_divider(bottom_window == null);
@@ -23,8 +23,10 @@ draw_buffers() {
     }
 
     if bottom_window {
-        draw_buffer_window(workspace, bottom_window, -1.0, bottom_focused, true, true);
+        draw_buffer_window(workspace, bottom_window, -1.0, bottom_focused, bottom_full_width, true);
     }
+
+    draw_debugger_views(workspace);
 
     draw_command();
 }
@@ -4035,23 +4037,23 @@ BufferWindow* get_current_window() {
     return editor_window.buffer_window;
 }
 
-BufferWindow*, bool get_bottom_window(Workspace* workspace) {
+BufferWindow*, bool, bool get_bottom_window(Workspace* workspace) {
     debugger_window := get_debugger_window(workspace);
     if debugger_window {
-        return debugger_window, workspace.bottom_window_selected;
+        return debugger_window, workspace.bottom_window_selected, false;
     }
 
     run_window := get_run_window(workspace);
     if run_window {
-        return run_window, workspace.bottom_window_selected;
+        return run_window, workspace.bottom_window_selected, true;
     }
 
     terminal_window := get_terminal_window(workspace);
     if terminal_window {
-        return terminal_window, workspace.bottom_window_selected;
+        return terminal_window, workspace.bottom_window_selected, true;
     }
 
-    return null, false;
+    return null, false, false;
 }
 
 BufferWindow*, Buffer* get_current_window_and_buffer() {
@@ -4877,8 +4879,12 @@ u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
 u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {
     workspace := get_workspace();
 
+    if window == get_debugger_window(workspace) {
+        return global_font_config.max_chars_per_line - digits - 1;
+    }
+
     both_windows_open := workspace.left_window.displayed && workspace.right_window.displayed;
-    if !both_windows_open || window == get_debugger_window(workspace) || window == get_run_window(workspace) || window == get_terminal_window(workspace) {
+    if !both_windows_open || window == get_run_window(workspace) || window == get_terminal_window(workspace) {
         return global_font_config.max_chars_per_line_full - digits - 1;
     }
 
