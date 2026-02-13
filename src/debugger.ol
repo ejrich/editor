@@ -7,6 +7,7 @@ struct DebuggerData {
     process: ProcessData;
     buffer: Buffer = { read_only = true; title = get_debugger_buffer_title; }
     buffer_window: BufferWindow;
+    send_mutex: Semaphore;
     command_executing: bool;
     skip_next_stop: bool;
     parse_status: DebuggerParseStatus;
@@ -20,6 +21,8 @@ struct DebuggerData {
     watches: DynamicArray<WatchExpression>;
     watch_index: int;
     stack_frames: DynamicArray<StackFrame>;
+    max_function_length: int;
+    max_location_length: int;
     stack_frames_data: string;
     threads: DynamicArray<Thread>;
     registers: DynamicArray<Register>;
@@ -78,6 +81,7 @@ struct Thread {
 
 struct WatchExpression {
     expression: string;
+    parsing: bool;
     error: bool;
     type: string;
     value: string;
@@ -91,6 +95,16 @@ struct DynamicArray<T> {
 
 draw_debugger_views(Workspace* workspace) {
     if !workspace.debugger_data.running return;
+
+    divider_quad: QuadInstanceData = {
+        color = appearance.font_color;
+        position = { y = global_font_config.bottom_window_divider_y; }
+        flags = QuadFlags.Solid;
+        width = 1.0 / settings.window_width;
+        height = global_font_config.bottom_window_divider_height;
+    }
+
+    draw_quad(&divider_quad, 1);
 
     x := global_font_config.quad_advance;
     y := 1.0 - global_font_config.first_line_offset - global_font_config.line_height * (global_font_config.max_lines_with_bottom_window + 1);
@@ -108,6 +122,8 @@ draw_debugger_views(Workspace* workspace) {
         x += (view.name.length + 1) * global_font_config.quad_advance;
     }
 
+    draw_list_line(y);
+
     x = 0.0;
     y -= global_font_config.line_height;
 
@@ -118,23 +134,111 @@ draw_debugger_views(Workspace* workspace) {
     switch workspace.debugger_data.view {
         case DebuggerView.Locals; {
             if !workspace.debugger_data.command_executing {
-                // TODO Implement
+                while available_lines > 0 && i < workspace.debugger_data.local_variables.length {
+                    local := &workspace.debugger_data.local_variables.array[i++];
+
+                    render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += (local.name.length + 1) * global_font_config.quad_advance;
+                    render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += global_font_config.quad_advance;
+                    render_text(local.type, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += local.type.length * global_font_config.quad_advance;
+                    render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += 4 * global_font_config.quad_advance;
+                    render_text(local.value, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    draw_list_line(y);
+                    available_lines--;
+                    x = 0.0;
+                    y -= global_font_config.line_height;
+                }
             }
         }
         case DebuggerView.Watches; {
-            // TODO Implement
+            while available_lines > 0 && i < workspace.debugger_data.watches.length {
+                watch := &workspace.debugger_data.watches.array[i++];
+
+                render_text(watch.expression, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                if !workspace.debugger_data.command_executing {
+                    x += (watch.expression.length + 1) * global_font_config.quad_advance;
+
+                    if watch.error {
+                        render_text("= ??", settings.font_size, x, y, appearance.font_color, blank_background);
+                    }
+                    else if !watch.parsing {
+                        render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                        x += global_font_config.quad_advance;
+                        render_text(watch.type, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                        x += watch.type.length * global_font_config.quad_advance;
+                        render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                        x += 4 * global_font_config.quad_advance;
+                        render_text(watch.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                    }
+                }
+
+                draw_list_line(y);
+                available_lines--;
+                x = 0.0;
+                y -= global_font_config.line_height;
+            }
         }
         case DebuggerView.Stack; {
             if !workspace.debugger_data.command_executing {
-                // TODO Implement
+                header_start := "  #   "; #const
+                render_text(header_start, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                x += header_start.length * global_font_config.quad_advance;
+                render_text("Function", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                x += workspace.debugger_data.max_function_length * global_font_config.quad_advance;
+                render_text("Location", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                x += workspace.debugger_data.max_location_length * global_font_config.quad_advance;
+                render_text("Address", settings.font_size, x, y, appearance.font_color, blank_background);
+                draw_list_line(y);
+
+                while available_lines > 0 && i < workspace.debugger_data.stack_frames.length {
+                    x = 0.0;
+                    y -= global_font_config.line_height;
+
+                    frame := workspace.debugger_data.stack_frames.array[i++];
+                    if frame.active {
+                        draw_cursor(x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Red)]);
+                    }
+
+                    x += 2 * global_font_config.quad_advance;
+                    render_text(settings.font_size, x, y, appearance.font_color, blank_background, "%", frame.index);
+
+                    x += 4 * global_font_config.quad_advance;
+                    render_text(frame.function, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += workspace.debugger_data.max_function_length * global_font_config.quad_advance;
+                    render_text(frame.location, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += workspace.debugger_data.max_location_length * global_font_config.quad_advance;
+                    render_text(settings.font_size, x, y, appearance.font_color, blank_background, "0x%", uint_format(frame.address, 16, 16));
+
+                    available_lines--;
+                }
             }
         }
         case DebuggerView.Threads; {
             if !workspace.debugger_data.command_executing {
                 render_text("  #     Id", settings.font_size, x, y, appearance.font_color, blank_background);
+                draw_list_line(y);
 
-                y -= global_font_config.line_height;
                 while available_lines > 0 && i < workspace.debugger_data.threads.length {
+                    x = 0.0;
+                    y -= global_font_config.line_height;
+
                     thread := workspace.debugger_data.threads.array[i++];
                     if thread.active {
                         draw_cursor(x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Red)]);
@@ -147,15 +251,26 @@ draw_debugger_views(Workspace* workspace) {
                     render_text(settings.font_size, x, y, appearance.font_color, blank_background, "%", thread.id);
 
                     available_lines--;
-
-                    x = 0.0;
-                    y -= global_font_config.line_height;
                 }
             }
         }
         case DebuggerView.Registers; {
             if !workspace.debugger_data.command_executing {
-                // TODO Implement
+                render_text("Name      Value", settings.font_size, x, y, appearance.font_color, blank_background);
+                draw_list_line(y);
+
+                while available_lines > 0 && i < workspace.debugger_data.registers.length {
+                    x = 0.0;
+                    y -= global_font_config.line_height;
+
+                    register := workspace.debugger_data.registers.array[i++];
+                    render_text(register.name, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                    x += 10 * global_font_config.quad_advance;
+                    render_text(settings.font_size, x, y, appearance.font_color, blank_background, "0x%", uint_format(register.value, 16, register.size / 4));
+
+                    available_lines--;
+                }
             }
         }
     }
@@ -188,6 +303,8 @@ start_or_continue_debugger() {
             stack_frames = { length = 0; }
             threads = { length = 0; }
         }
+
+        add_watch("workspace");
 
         data: JobData;
         data.pointer = workspace;
@@ -361,6 +478,21 @@ add_watch(string expression) {
 
 #private
 
+draw_list_line(float y) {
+    line_quad: QuadInstanceData = {
+        color = appearance.font_color;
+        position = {
+            x = 0.5;
+            y = y - global_font_config.block_y_offset;
+        }
+        flags = QuadFlags.Solid;
+        width = 1.0;
+        height = 1.0 / settings.window_height;
+    }
+
+    draw_quad(&line_quad, 1);
+}
+
 debugger_thread(int thread, JobData data) {
     workspace: Workspace* = data.pointer;
 
@@ -481,6 +613,9 @@ continue_debugger(Workspace* workspace) {
 }
 
 send_command_to_debugger(Workspace* workspace, string command) {
+    semaphore_wait(&workspace.debugger_data.send_mutex);
+    defer semaphore_release(&workspace.debugger_data.send_mutex);
+
     #if os == OS.Windows {
         WriteFile(workspace.debugger_data.process.input_pipe, command.data, command.length, null, null);
     }
@@ -749,8 +884,12 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             if !string_is_empty(workspace.debugger_data.stack_frames_data) {
                 free_allocation(workspace.debugger_data.stack_frames_data.data);
             }
-            workspace.debugger_data.stack_frames_data = text;
-            workspace.debugger_data.stack_frames.length = 0;
+            workspace.debugger_data = {
+                stack_frames = { length = 0; }
+                max_function_length = "Function ".length;
+                max_location_length = "Location ".length;
+                stack_frames_data = text;
+            }
 
             lines := split_string(text);
             each line in lines {
@@ -821,6 +960,14 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     }
 
                     trim_whitespace_from_end(&frame.location);
+                    if frame.function.length + 1 > workspace.debugger_data.max_function_length {
+                        workspace.debugger_data.max_function_length = frame.function.length + 1;
+                    }
+
+                    if frame.location.length + 1 > workspace.debugger_data.max_location_length {
+                        workspace.debugger_data.max_location_length = frame.location.length + 1;
+                    }
+
                     add_to_array(&workspace.debugger_data.stack_frames, frame);
                 }
             }
@@ -1052,10 +1199,13 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // Ex 4 (Error case):
             // error: Couldn't apply expression side effects : Couldn't dematerialize a result variable: couldn't read its memory
             watch := &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
-            if starts_with(text, "error:") {
+            watch.parsing = true;
+
+            if text.length == 0 || text[0] != '(' {
                 watch.error = true;
             }
             else {
+                watch.error = false;
                 if !string_is_empty(watch.data) {
                     watch.type = { length = 0; data = null; }
                     watch.value = { length = 0; data = null; }
@@ -1085,6 +1235,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 trim_whitespace_from_end(&watch.value);
             }
 
+            watch.parsing = false;
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
     }

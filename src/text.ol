@@ -393,6 +393,8 @@ struct GlobalFontConfig {
     divider_height: float;
     divider_y_with_bottom_window: float;
     divider_height_with_bottom_window: float;
+    bottom_window_divider_y: float;
+    bottom_window_divider_height: float;
 }
 
 global_font_config: GlobalFontConfig;
@@ -1007,6 +1009,7 @@ adjust_texture_to_window(FontTexture* texture) {
         bottom_window_lines := (total_lines_excluding_command / 4) - 1;
         main_window_lines_with_bottom_window := total_lines_excluding_command - bottom_window_lines - 2;
         top_line_offset := texture.line_height - texture.max_line_bearing_y / 3.0;
+        divider_y := texture.line_height / 2.0 + texture.max_line_bearing_y / 3.0;
 
         global_font_config = {
             quad_advance = texture.quad_advance;
@@ -1019,10 +1022,12 @@ adjust_texture_to_window(FontTexture* texture) {
             bottom_window_max_lines = bottom_window_lines;
             max_chars_per_line = cast(u32, 1.0 / texture.quad_advance);
             max_chars_per_line_full = cast(u32, 2.0 / texture.quad_advance);
-            divider_y = texture.line_height / 2.0 + texture.max_line_bearing_y / 2.5;
+            divider_y = divider_y;
             divider_height = texture.line_height * max_lines;
             divider_y_with_bottom_window =  texture.line_height * (bottom_window_lines + 2) / 2.0 + texture.max_line_bearing_y / 2.5;
             divider_height_with_bottom_window = texture.line_height * main_window_lines_with_bottom_window;
+            bottom_window_divider_y = divider_y - texture.line_height * (main_window_lines_with_bottom_window + 2) / 2.0;
+            bottom_window_divider_height = texture.line_height * (bottom_window_lines + 1);
         }
     }
 }
