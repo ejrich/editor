@@ -4,7 +4,7 @@ draw_buffers() {
 
     workspace := get_workspace();
 
-    bottom_window, bottom_focused, bottom_full_width := get_bottom_window(workspace);
+    bottom_window, bottom_focused, bottom_selected, bottom_full_width := get_bottom_window(workspace);
 
     if workspace.left_window.displayed && workspace.right_window.displayed {
         draw_divider(bottom_window == null);
@@ -23,7 +23,7 @@ draw_buffers() {
     }
 
     if bottom_window {
-        draw_buffer_window(workspace, bottom_window, -1.0, bottom_focused, bottom_full_width, true);
+        draw_buffer_window(workspace, bottom_window, -1.0, bottom_focused && bottom_selected, bottom_full_width, true);
     }
 
     draw_debugger_views(workspace);
@@ -458,39 +458,56 @@ switch_or_focus_buffer(SelectedWindow window) {
 
 switch_to_buffer(SelectedWindow window) {
     workspace := get_workspace();
-    if window == workspace.current_window return;
 
-    original_window, new_window: EditorWindow*;
-    switch window {
-        case SelectedWindow.Left; {
-            original_window = &workspace.right_window;
-            new_window = &workspace.left_window;
+    defer {
+        reset_key_command();
+        reset_post_movement_command();
+        edit_mode = EditMode.Normal;
+    }
+
+    debugger_window := get_debugger_window(workspace);
+    if workspace.bottom_window_selected && debugger_window != null {
+        workspace.debugger_data.views_focused = window == SelectedWindow.Right;
+        return;
+    }
+    else if window != workspace.current_window {
+        original_window, new_window: EditorWindow*;
+        switch window {
+            case SelectedWindow.Left; {
+                original_window = &workspace.right_window;
+                new_window = &workspace.left_window;
+            }
+            case SelectedWindow.Right; {
+                original_window = &workspace.left_window;
+                new_window = &workspace.right_window;
+            }
         }
-        case SelectedWindow.Right; {
-            original_window = &workspace.left_window;
-            new_window = &workspace.right_window;
+
+        assert(original_window != null && new_window != null);
+
+        if !new_window.displayed {
+            if new_window.buffer_window == null
+                new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
+            new_window.displayed = true;
         }
     }
 
-    assert(original_window != null && new_window != null);
-
-    if !new_window.displayed {
-        if new_window.buffer_window == null
-            new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
-        new_window.displayed = true;
-    }
-
-    reset_key_command();
-    reset_post_movement_command();
-    edit_mode = EditMode.Normal;
     workspace.bottom_window_selected = false;
-
     workspace.current_window = window;
 }
 
 toggle_bottom_buffer_selection(bool selected) {
     workspace := get_workspace();
-    if get_debugger_window(workspace) != null || get_run_window(workspace) != null || get_terminal_window(workspace) != null {
+    if get_debugger_window(workspace) != null {
+        workspace.bottom_window_selected = selected;
+        if selected {
+            workspace.debugger_data.views_focused = workspace.current_window == SelectedWindow.Right;
+        }
+        else {
+            workspace.debugger_data.views_focused = false;
+        }
+    }
+    else if get_run_window(workspace) != null || get_terminal_window(workspace) != null {
         workspace.bottom_window_selected = selected;
     }
 }
@@ -2517,6 +2534,18 @@ resize_buffers() {
         adjust_start_line(workspace.left_window.buffer_window);
     if workspace.right_window.displayed
         adjust_start_line(workspace.right_window.buffer_window);
+
+    debugger_window := get_debugger_window(workspace);
+    if debugger_window
+        adjust_start_line(debugger_window);
+
+    run_window := get_run_window(workspace);
+    if run_window
+        adjust_start_line(run_window);
+
+    terminal_window := get_terminal_window(workspace);
+    if terminal_window
+        adjust_start_line(terminal_window);
 }
 
 go_to_line(s32 line) {
@@ -4037,23 +4066,23 @@ BufferWindow* get_current_window() {
     return editor_window.buffer_window;
 }
 
-BufferWindow*, bool, bool get_bottom_window(Workspace* workspace) {
+BufferWindow*, bool, bool, bool get_bottom_window(Workspace* workspace) {
     debugger_window := get_debugger_window(workspace);
     if debugger_window {
-        return debugger_window, workspace.bottom_window_selected, false;
+        return debugger_window, workspace.bottom_window_selected, !workspace.debugger_data.views_focused, false;
     }
 
     run_window := get_run_window(workspace);
     if run_window {
-        return run_window, workspace.bottom_window_selected, true;
+        return run_window, workspace.bottom_window_selected, true, true;
     }
 
     terminal_window := get_terminal_window(workspace);
     if terminal_window {
-        return terminal_window, workspace.bottom_window_selected, true;
+        return terminal_window, workspace.bottom_window_selected, true, true;
     }
 
-    return null, false, false;
+    return null, false, false, false;
 }
 
 BufferWindow*, Buffer* get_current_window_and_buffer() {
@@ -4902,7 +4931,7 @@ u32, u32 determine_max_lines_and_scroll_offset(BufferWindow* buffer_window) {
     }
 
     if debugger_window == buffer_window || run_window == buffer_window || terminal_window == buffer_window {
-        return global_font_config.bottom_window_max_lines, settings.scroll_offset / 4;
+        return global_font_config.bottom_window_max_lines, 0;
     }
 
     return global_font_config.max_lines_with_bottom_window, settings.scroll_offset;

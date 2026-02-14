@@ -14,6 +14,7 @@ struct DebuggerData {
     paused_file_index: s32;
     paused_line: u32;
     view: DebuggerView;
+    views_focused: bool;
     view_start_index: u16;
     view_index: u16;
     local_variables: DynamicArray<LocalVariable>;
@@ -135,6 +136,10 @@ draw_debugger_views(Workspace* workspace) {
         case DebuggerView.Locals; {
             if !workspace.debugger_data.command_executing {
                 while available_lines > 0 && i < workspace.debugger_data.local_variables.length {
+                    if i == workspace.debugger_data.view_index {
+                        draw_selected_line(y);
+                    }
+
                     local := &workspace.debugger_data.local_variables.array[i++];
 
                     render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
@@ -160,6 +165,10 @@ draw_debugger_views(Workspace* workspace) {
         }
         case DebuggerView.Watches; {
             while available_lines > 0 && i < workspace.debugger_data.watches.length {
+                if i == workspace.debugger_data.view_index {
+                    draw_selected_line(y);
+                }
+
                 watch := &workspace.debugger_data.watches.array[i++];
 
                 render_text(watch.expression, settings.font_size, x, y, appearance.font_color, blank_background);
@@ -189,6 +198,10 @@ draw_debugger_views(Workspace* workspace) {
                 x = 0.0;
                 y -= global_font_config.line_height;
             }
+
+            if i == workspace.debugger_data.view_index {
+                draw_selected_line(y);
+            }
         }
         case DebuggerView.Stack; {
             if !workspace.debugger_data.command_executing {
@@ -208,6 +221,10 @@ draw_debugger_views(Workspace* workspace) {
                 while available_lines > 0 && i < workspace.debugger_data.stack_frames.length {
                     x = 0.0;
                     y -= global_font_config.line_height;
+
+                    if i == workspace.debugger_data.view_index {
+                        draw_selected_line(y);
+                    }
 
                     frame := workspace.debugger_data.stack_frames.array[i++];
                     if frame.active {
@@ -239,6 +256,10 @@ draw_debugger_views(Workspace* workspace) {
                     x = 0.0;
                     y -= global_font_config.line_height;
 
+                    if i == workspace.debugger_data.view_index {
+                        draw_selected_line(y);
+                    }
+
                     thread := workspace.debugger_data.threads.array[i++];
                     if thread.active {
                         draw_cursor(x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Red)]);
@@ -263,6 +284,10 @@ draw_debugger_views(Workspace* workspace) {
                     x = 0.0;
                     y -= global_font_config.line_height;
 
+                    if i == workspace.debugger_data.view_index {
+                        draw_selected_line(y);
+                    }
+
                     register := workspace.debugger_data.registers.array[i++];
                     render_text(register.name, settings.font_size, x, y, appearance.font_color, blank_background);
 
@@ -274,6 +299,97 @@ draw_debugger_views(Workspace* workspace) {
             }
         }
     }
+}
+
+bool change_debugger_tab(int change) {
+    workspace := get_workspace();
+
+    if !workspace.debugger_data.running || !workspace.debugger_data.views_focused {
+        return false;
+    }
+
+    view_type := cast(EnumTypeInfo*, type_of(DebuggerView));
+    last_view := view_type.values[view_type.values.length - 1].value;
+
+    view := cast(s8, workspace.debugger_data.view);
+    view += change;
+
+    if view < 0 {
+        view = last_view;
+    }
+    else if view > last_view {
+        view = 0;
+    }
+
+    workspace.debugger_data = {
+        view = cast(DebuggerView, view);
+        view_start_index = 0;
+        view_index = 0;
+    }
+
+    return true;
+}
+
+bool change_debugger_index(int change) {
+    workspace := get_workspace();
+
+    if !workspace.debugger_data.running || !workspace.debugger_data.views_focused || (workspace.debugger_data.command_executing && workspace.debugger_data.view != DebuggerView.Watches) {
+        return false;
+    }
+
+    available_lines := global_font_config.bottom_window_max_lines - 1;
+
+    new_index := workspace.debugger_data.view_index + change;
+    if new_index <= 0 {
+        workspace.debugger_data = {
+            view_start_index = 0;
+            view_index = 0;
+        }
+    }
+    else {
+        max := 0;
+        switch workspace.debugger_data.view {
+            case DebuggerView.Locals; {
+                if workspace.debugger_data.local_variables.length {
+                    max = workspace.debugger_data.local_variables.length - 1;
+                }
+            }
+            case DebuggerView.Watches; {
+                max = workspace.debugger_data.watches.length;
+            }
+            case DebuggerView.Stack; {
+                available_lines--;
+                max = workspace.debugger_data.stack_frames.length - 1;
+            }
+            case DebuggerView.Threads; {
+                available_lines--;
+                max = workspace.debugger_data.threads.length - 1;
+            }
+            case DebuggerView.Registers; {
+                available_lines--;
+                max = workspace.debugger_data.registers.length - 1;
+            }
+        }
+
+        if max == 0 {
+            workspace.debugger_data = {
+                view_start_index = 0;
+                view_index = 0;
+            }
+        }
+        else {
+            new_index = clamp(new_index, 0, max);
+            if new_index < workspace.debugger_data.view_start_index {
+                workspace.debugger_data.view_start_index = new_index;
+            }
+            else if new_index - workspace.debugger_data.view_start_index >= available_lines {
+                workspace.debugger_data.view_start_index = new_index - available_lines + 1;
+            }
+            workspace.debugger_data.view_index = new_index;
+        }
+    }
+
+    return true;
 }
 
 BufferWindow* get_debugger_window(Workspace* workspace) {
@@ -488,6 +604,22 @@ draw_list_line(float y) {
         flags = QuadFlags.Solid;
         width = 1.0;
         height = 1.0 / settings.window_height;
+    }
+
+    draw_quad(&line_quad, 1);
+}
+
+draw_selected_line(float y) {
+    line_quad: QuadInstanceData = {
+        color = appearance.current_line_color;
+        position = {
+            x = 0.5;
+            y = y + global_font_config.block_y_offset;
+            z = 0.3;
+        }
+        flags = QuadFlags.Solid;
+        width = 1.0;
+        height = global_font_config.line_height;
     }
 
     draw_quad(&line_quad, 1);

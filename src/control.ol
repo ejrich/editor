@@ -538,6 +538,8 @@ quit(ModCode mod) {
 move_up(ModCode mod) {
     if change_list_select(1) return;
 
+    if change_debugger_index(-1) return;
+
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
     }
@@ -563,6 +565,8 @@ move_up(ModCode mod) {
 [keybind, no_repeat, list]
 move_down(ModCode mod) {
     if change_list_select(-1) return;
+
+    if change_debugger_index(1) return;
 
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
@@ -598,6 +602,8 @@ move_left(ModCode mod) {
         switch_to_buffer(SelectedWindow.Left);
     }
     else {
+        if change_debugger_tab(-1) return;
+
         cursor_changes := get_repeats();
         move_cursor(true, cursor_changes);
     }
@@ -612,6 +618,8 @@ move_right(ModCode mod) {
         switch_to_buffer(SelectedWindow.Right);
     }
     else {
+        if change_debugger_tab(1) return;
+
         cursor_changes := get_repeats();
         move_cursor(false, cursor_changes);
     }
