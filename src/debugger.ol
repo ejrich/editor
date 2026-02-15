@@ -59,6 +59,7 @@ struct LocalVariable {
     name: string;
     type: string;
     value: string;
+    // value: DebugValue*;
 }
 
 struct StackFrame {
@@ -88,6 +89,18 @@ struct WatchExpression {
     type: string;
     value: string;
     data: string;
+    // value: DebugValue*;
+}
+
+struct DebugValue {
+    type: string;
+    value: string;
+    struct_values: Array<DebugValue*>;
+
+    // For memory management
+    parent: DebugValue*;
+    data: string;
+    data_freed: bool;
 }
 
 struct DynamicArray<T> {
@@ -348,7 +361,11 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                 }
                 else if expression.length {
                     allocate_strings(&expression);
-                    add_watch(workspace, expression);
+                    watch: WatchExpression = {
+                        expression = expression;
+                    }
+
+                    add_to_array(&workspace.debugger_data.watches, watch);
                     trigger_load_watches(workspace);
                 }
 
@@ -722,14 +739,6 @@ skip_to() {
 }
 
 #private
-
-add_watch(Workspace* workspace, string expression) {
-    watch: WatchExpression = {
-        expression = expression;
-    }
-
-    add_to_array(&workspace.debugger_data.watches, watch);
-}
 
 delete_watch(Workspace* workspace) {
     if workspace.debugger_data.view_index < workspace.debugger_data.watches.length {
