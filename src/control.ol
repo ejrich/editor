@@ -538,8 +538,6 @@ quit(ModCode mod) {
 move_up(ModCode mod) {
     if change_list_select(1) return;
 
-    if change_debugger_index(-1) return;
-
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
     }
@@ -553,6 +551,8 @@ move_up(ModCode mod) {
         toggle_bottom_buffer_selection(false);
     }
     else {
+        if change_debugger_index(-1) return;
+
         line_changes := get_repeats();
         move_line(true, key_command.command == KeyCommand.GoTo, line_changes);
     }
@@ -565,8 +565,6 @@ move_up(ModCode mod) {
 [keybind, no_repeat, list]
 move_down(ModCode mod) {
     if change_list_select(-1) return;
-
-    if change_debugger_index(1) return;
 
     if edit_mode == EditMode.BlockInsert {
         edit_mode = EditMode.Insert;
@@ -584,6 +582,8 @@ move_down(ModCode mod) {
         toggle_bottom_buffer_selection(true);
     }
     else {
+        if change_debugger_index(1) return;
+
         post_movement_command.changed_by_line = true;
         move_line(false, key_command.command == KeyCommand.GoTo, line_changes);
     }

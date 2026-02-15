@@ -21,6 +21,7 @@ struct DebuggerData {
     local_variables_data: string;
     watches: DynamicArray<WatchExpression>;
     watch_index: int;
+    editing_watch: bool;
     stack_frames: DynamicArray<StackFrame>;
     max_function_length: int;
     max_location_length: int;
@@ -136,7 +137,7 @@ draw_debugger_views(Workspace* workspace) {
         case DebuggerView.Locals; {
             if !workspace.debugger_data.command_executing {
                 while available_lines > 0 && i < workspace.debugger_data.local_variables.length {
-                    if i == workspace.debugger_data.view_index {
+                    if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
                     }
 
@@ -165,42 +166,61 @@ draw_debugger_views(Workspace* workspace) {
         }
         case DebuggerView.Watches; {
             while available_lines > 0 && i < workspace.debugger_data.watches.length {
-                if i == workspace.debugger_data.view_index {
-                    draw_selected_line(y);
+                if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
+                    draw_selected_line(y, workspace.debugger_data.editing_watch);
                 }
 
-                watch := &workspace.debugger_data.watches.array[i++];
-
-                render_text(watch.expression, settings.font_size, x, y, appearance.font_color, blank_background);
-
-                if !workspace.debugger_data.command_executing {
-                    x += (watch.expression.length + 1) * global_font_config.quad_advance;
-
-                    if watch.error {
-                        render_text("= ??", settings.font_size, x, y, appearance.font_color, blank_background);
+                if workspace.debugger_data.editing_watch && workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
+                    watch_string: string = {
+                        length = watch_length;
+                        data = watch_buffer.data;
                     }
-                    else if !watch.parsing {
-                        render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += global_font_config.quad_advance;
-                        render_text(watch.type, settings.font_size, x, y, appearance.font_color, blank_background);
+                    render_highlighted_line_with_cursor(watch_string, x, y, watch_cursor, 1.0);
+                }
+                else {
+                    watch := &workspace.debugger_data.watches.array[i];
 
-                        x += watch.type.length * global_font_config.quad_advance;
-                        render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+                    render_text(watch.expression, settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += 4 * global_font_config.quad_advance;
-                        render_text(watch.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                    if !workspace.debugger_data.command_executing {
+                        x += (watch.expression.length + 1) * global_font_config.quad_advance;
+
+                        if watch.error {
+                            render_text("= ??", settings.font_size, x, y, appearance.font_color, blank_background);
+                        }
+                        else if !watch.parsing {
+                            render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                            x += global_font_config.quad_advance;
+                            render_text(watch.type, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                            x += watch.type.length * global_font_config.quad_advance;
+                            render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+
+                            x += 4 * global_font_config.quad_advance;
+                            render_text(watch.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                        }
                     }
                 }
 
+                i++;
                 draw_list_line(y);
                 available_lines--;
                 x = 0.0;
                 y -= global_font_config.line_height;
             }
 
-            if i == workspace.debugger_data.view_index {
-                draw_selected_line(y);
+            if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
+                draw_selected_line(y, workspace.debugger_data.editing_watch);
+                if workspace.debugger_data.editing_watch {
+                    watch_string: string = {
+                        length = watch_length;
+                        data = watch_buffer.data;
+                    }
+
+                    render_highlighted_line_with_cursor(watch_string, x, y, watch_cursor, 1.0);
+                }
             }
         }
         case DebuggerView.Stack; {
@@ -222,7 +242,7 @@ draw_debugger_views(Workspace* workspace) {
                     x = 0.0;
                     y -= global_font_config.line_height;
 
-                    if i == workspace.debugger_data.view_index {
+                    if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
                     }
 
@@ -256,7 +276,7 @@ draw_debugger_views(Workspace* workspace) {
                     x = 0.0;
                     y -= global_font_config.line_height;
 
-                    if i == workspace.debugger_data.view_index {
+                    if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
                     }
 
@@ -284,7 +304,7 @@ draw_debugger_views(Workspace* workspace) {
                     x = 0.0;
                     y -= global_font_config.line_height;
 
-                    if i == workspace.debugger_data.view_index {
+                    if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
                     }
 
@@ -299,6 +319,126 @@ draw_debugger_views(Workspace* workspace) {
             }
         }
     }
+}
+
+bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string char) {
+    workspace := get_workspace();
+
+    if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused || workspace.debugger_data.view != DebuggerView.Watches {
+        return false;
+    }
+
+    switch code {
+        case KeyCode.Enter; {
+            if workspace.debugger_data.editing_watch {
+                expression := get_watch_string();
+
+                if workspace.debugger_data.view_index < workspace.debugger_data.watches.length {
+                    if expression.length {
+                        watch := &workspace.debugger_data.watches.array[workspace.debugger_data.view_index];
+                        if watch.expression != expression {
+                            clear_watch(watch);
+                            watch.expression = expression;
+                            trigger_load_watches(workspace);
+                        }
+                    }
+                    else {
+                        delete_watch(workspace);
+                    }
+                }
+                else if expression.length {
+                    allocate_strings(&expression);
+                    add_watch(workspace, expression);
+                    trigger_load_watches(workspace);
+                }
+
+                workspace.debugger_data.editing_watch = false;
+            }
+            else {
+                watch_cursor = 0;
+                watch_length = 0;
+                if workspace.debugger_data.view_index < workspace.debugger_data.watches.length {
+                    watch := workspace.debugger_data.watches.array[workspace.debugger_data.view_index];
+                    memory_copy(watch_buffer.data, watch.expression.data, watch.expression.length);
+
+                    watch_cursor = watch.expression.length;
+                    watch_length = watch.expression.length;
+                }
+
+                workspace.debugger_data.editing_watch = true;
+            }
+
+            return true;
+        }
+        case KeyCode.Escape; {
+            workspace.debugger_data.editing_watch = false;
+            return true;
+        }
+        case KeyCode.Backspace; {
+            if workspace.debugger_data.editing_watch {
+                if watch_length {
+                    if watch_cursor < watch_length {
+                        memory_copy(watch_buffer.data + watch_cursor - 1, watch_buffer.data + watch_cursor, watch_length - watch_cursor);
+                    }
+
+                    watch_cursor--;
+                    watch_length--;
+                }
+            }
+            else {
+                delete_watch(workspace);
+            }
+
+            return true;
+        }
+        case KeyCode.Delete; {
+            if workspace.debugger_data.editing_watch {
+                if watch_cursor < watch_length {
+                    memory_copy(watch_buffer.data + watch_cursor, watch_buffer.data + watch_cursor + 1, watch_length - watch_cursor);
+
+                    watch_length--;
+                }
+            }
+            else {
+                delete_watch(workspace);
+            }
+
+            return true;
+        }
+        case KeyCode.Left; {
+            if workspace.debugger_data.editing_watch {
+                watch_cursor = clamp(watch_cursor - 1, 0, watch_length);
+                return true;
+            }
+        }
+        case KeyCode.Right; {
+            if workspace.debugger_data.editing_watch {
+                watch_cursor = clamp(watch_cursor + 1, 0, watch_length);
+                return true;
+            }
+        }
+        default; {
+            if char.length > 0 && (mod & ModCode.Control) != ModCode.Control && workspace.debugger_data.editing_watch {
+                if watch_length + char.length <= watch_buffer_length {
+                    if watch_cursor < watch_length {
+                        each i in watch_length - watch_cursor {
+                            index := watch_length - i - 1;
+                            watch_buffer[index + char.length] = watch_buffer[index];
+                        }
+                    }
+
+                    memory_copy(watch_buffer.data + watch_cursor, char.data, char.length);
+
+                    watch_cursor += char.length;
+                    watch_length += char.length;
+                }
+
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 bool change_debugger_tab(int change) {
@@ -419,8 +559,6 @@ start_or_continue_debugger() {
             stack_frames = { length = 0; }
             threads = { length = 0; }
         }
-
-        add_watch("workspace");
 
         data: JobData;
         data.pointer = workspace;
@@ -583,16 +721,67 @@ skip_to() {
     workspace.debugger_data.paused_line = line;
 }
 
-add_watch(string expression) {
-    workspace := get_workspace();
+#private
 
+add_watch(Workspace* workspace, string expression) {
     watch: WatchExpression = {
         expression = expression;
     }
+
     add_to_array(&workspace.debugger_data.watches, watch);
 }
 
-#private
+delete_watch(Workspace* workspace) {
+    if workspace.debugger_data.view_index < workspace.debugger_data.watches.length {
+        watch := &workspace.debugger_data.watches.array[workspace.debugger_data.view_index];
+        clear_watch(watch);
+
+        if workspace.debugger_data.view_index < workspace.debugger_data.watches.length - 1 {
+            each i in workspace.debugger_data.view_index..workspace.debugger_data.watches.length - 2 {
+                workspace.debugger_data.watches.array[i] = workspace.debugger_data.watches.array[i + 1];
+            }
+        }
+
+        workspace.debugger_data.watches.length--;
+    }
+}
+
+clear_watch(WatchExpression* watch) {
+    free_allocation(watch.expression.data);
+    free_allocation(watch.data.data);
+
+    watch.type = { length = 0; data = null; }
+    watch.value = { length = 0; data = null; }
+    watch.data = { length = 0; data = null; }
+}
+
+string get_watch_string() {
+    expression: string;
+    start := 0;
+
+    each i in watch_length {
+        char := watch_buffer[i];
+        if !is_whitespace(char) {
+            if expression.data == null {
+                expression = {
+                    length = 1;
+                    data = watch_buffer.data + i;
+                }
+                start = i;
+            }
+            else {
+                expression.length = i - start + 1;
+            }
+        }
+    }
+
+    return expression;
+}
+
+watch_buffer_length := 100; #const
+watch_buffer: Array<u8>[watch_buffer_length];
+watch_cursor: int;
+watch_length: int;
 
 draw_list_line(float y) {
     line_quad: QuadInstanceData = {
@@ -609,7 +798,7 @@ draw_list_line(float y) {
     draw_quad(&line_quad, 1);
 }
 
-draw_selected_line(float y) {
+draw_selected_line(float y, bool highlight = false) {
     line_quad: QuadInstanceData = {
         color = appearance.current_line_color;
         position = {
@@ -620,6 +809,10 @@ draw_selected_line(float y) {
         flags = QuadFlags.Solid;
         width = 1.0;
         height = global_font_config.line_height;
+    }
+
+    if highlight {
+        line_quad.color = appearance.font_color;
     }
 
     draw_quad(&line_quad, 1);
@@ -786,9 +979,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         if starts_with(status, "stopped") {
                             workspace.debugger_data.command_executing = false;
                             if !workspace.debugger_data.skip_next_stop {
-                                data: JobData;
-                                data.pointer = workspace;
-                                queue_work(&low_priority_queue, load_watches, data);
+                                trigger_load_watches(workspace);
                             }
 
                             workspace.debugger_data.skip_next_stop = false;
@@ -1406,6 +1597,14 @@ add_to_array<T>(DynamicArray<T>* array, T value) {
     }
 
     array.array[array.length++] = value;
+}
+
+trigger_load_watches(Workspace* workspace) {
+    if !workspace.debugger_data.command_executing {
+        data: JobData;
+        data.pointer = workspace;
+        queue_work(&low_priority_queue, load_watches, data);
+    }
 }
 
 load_watches(int thread, JobData data) {

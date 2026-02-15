@@ -321,6 +321,14 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
+render_highlighted_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1, bool render_cursor = true) {
+    // Load the font and texture
+    font_texture := load_font_texture(settings.font_size);
+    if font_texture == null return;
+
+    render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available, 0, text.length);
+}
+
 draw_cursor(float x, float y, Vector4 color) {
     x_pos := x + global_font_config.quad_advance / 2.0;
     y_pos := y + global_font_config.block_y_offset;
