@@ -58,8 +58,7 @@ struct Breakpoint {
 struct LocalVariable {
     name: string;
     type: string;
-    value: string;
-    // value: DebugValue*;
+    value: DebugValue;
 }
 
 struct StackFrame {
@@ -87,20 +86,27 @@ struct WatchExpression {
     parsing: bool;
     error: bool;
     type: string;
-    value: string;
     data: string;
-    // value: DebugValue*;
+    value: DebugValue;
 }
 
 struct DebugValue {
-    type: string;
+    error: bool;
+    is_pointer: bool;
+    is_struct: bool;
+    struct_expanded: bool;
     value: string;
-    struct_values: Array<DebugValue*>;
+    struct_field_values: Array<StructFieldDebugValue>;
 
     // For memory management
     parent: DebugValue*;
     data: string;
     data_freed: bool;
+}
+
+struct StructFieldDebugValue {
+    name: string;
+    value: DebugValue*;
 }
 
 struct DynamicArray<T> {
@@ -168,7 +174,7 @@ draw_debugger_views(Workspace* workspace) {
                     render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
                     x += 4 * global_font_config.quad_advance;
-                    render_text(local.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                    render_text(local.value.value, settings.font_size, x, y, appearance.font_color, blank_background);
 
                     draw_list_line(y);
                     available_lines--;
@@ -212,7 +218,7 @@ draw_debugger_views(Workspace* workspace) {
                             render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
                             x += 4 * global_font_config.quad_advance;
-                            render_text(watch.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                            render_text(watch.value.value, settings.font_size, x, y, appearance.font_color, blank_background);
                         }
                     }
                 }
@@ -461,7 +467,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
 bool change_debugger_tab(int change) {
     workspace := get_workspace();
 
-    if !workspace.debugger_data.running || !workspace.debugger_data.views_focused {
+    if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused {
         return false;
     }
 
@@ -490,7 +496,7 @@ bool change_debugger_tab(int change) {
 bool change_debugger_index(int change) {
     workspace := get_workspace();
 
-    if !workspace.debugger_data.running || !workspace.debugger_data.views_focused || (workspace.debugger_data.command_executing && workspace.debugger_data.view != DebuggerView.Watches) {
+    if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused || (workspace.debugger_data.command_executing && workspace.debugger_data.view != DebuggerView.Watches) {
         return false;
     }
 
@@ -760,7 +766,6 @@ clear_watch(WatchExpression* watch) {
     free_allocation(watch.data.data);
 
     watch.type = { length = 0; data = null; }
-    watch.value = { length = 0; data = null; }
     watch.data = { length = 0; data = null; }
 }
 
@@ -1006,19 +1011,21 @@ bool parse_debugger_output(Workspace* workspace, string text) {
         }
     }
 
-    {
-        i := 0;
-        while i < text.length {
-            if !is_whitespace(text[i]) {
-                break;
-            }
-            i++;
+    clear_start_of_line(&text);
+
+    debug_line_start := "(lldb)"; #const
+    if starts_with(text, debug_line_start) {
+        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
+            return true;
         }
-        text.length -= i;
-        text.data += i;
+
+        text.length -= debug_line_start.length;
+        text.data += debug_line_start.length;
+
+        clear_start_of_line(&text);
     }
 
-    if starts_with(text, "(lldb)") || text.length == 0 return true;
+    if text.length == 0 return true;
 
     switch workspace.debugger_data.parse_status {
         case DebuggerParseStatus.Source; {
@@ -1097,11 +1104,12 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             parsing_name, parsing_value, parse_value_to_eol, in_string, escape, reset := false;
             struct_depth := 0;
             variable: LocalVariable;
-            each i in text.length {
-                char := text[i];
+            i := 0;
+            while i < text.length {
+                char := text[i++];
                 if parsing_type {
                     if char == '(' {
-                        variable.type.data = text.data + i + 1;
+                        variable.type.data = text.data + i;
                     }
                     else if char == ')' {
                         parsing_type = false;
@@ -1118,7 +1126,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             parsing_value = true;
                         }
                         else {
-                            variable.name.data = text.data + i + 1;
+                            variable.name.data = text.data + i;
                         }
                     }
                     else {
@@ -1126,80 +1134,18 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     }
                 }
                 else if parsing_value {
-                    if char == ' ' && variable.value.length == 0 {
-                        variable.value.data = text.data + i + 1;
-                    }
-                    else if variable.value.data {
-                        if variable.value.length == 0 {
-                            if char == '{' {
-                                struct_depth++;
-                            }
-                            else {
-                                parse_value_to_eol = true;
-                            }
-                            variable.value.length++;
-                        }
-                        else if parse_value_to_eol {
-                            if char == '\n' {
-                                reset = true;
-                            }
-                            else {
-                                variable.value.length++;
-                            }
-                        }
-                        else {
-                            variable.value.length++;
-                            if char == '\"' {
-                                if !in_string {
-                                    in_string = true;
-                                }
-                                else if !escape {
-                                    in_string = false;
-                                }
-                                escape = false;
-                            }
-                            else if !in_string {
-                                if char == '{' {
-                                    struct_depth++;
-                                }
-                                else if char == '}' {
-                                    struct_depth--;
-                                    if struct_depth == 0 {
-                                        reset = true;
-                                    }
-                                }
-                            }
-                            else if escape {
-                                escape = false;
-                            }
-                            else if char == '\\' {
-                                escape = true;
-                            }
-                        }
+                    i++;
+                    variable.value = parse_debug_value(text, &i);
 
-                        if reset {
-                            parsing_value = false;
-                            parse_value_to_eol = false;
-                            in_string = false;
-                            parsing_type = true;
-                            reset = false;
+                    parsing_value = false;
+                    parsing_type = true;
+                    add_to_array(&workspace.debugger_data.local_variables, variable);
 
-                            trim_whitespace_from_end(&variable.value);
-                            add_to_array(&workspace.debugger_data.local_variables, variable);
-
-                            variable = {
-                                name = { length = 0; data = null; }
-                                type = { length = 0; data = null; }
-                                value = { length = 0; data = null; }
-                            }
-                        }
+                    variable = {
+                        name = { length = 0; data = null; }
+                        type = { length = 0; data = null; }
                     }
                 }
-            }
-
-            if parsing_value {
-                trim_whitespace_from_end(&variable.value);
-                add_to_array(&workspace.debugger_data.local_variables, variable);
             }
 
             workspace.debugger_data.parse_status = DebuggerParseStatus.StackTrace;
@@ -1540,31 +1486,26 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 watch.error = false;
                 if !string_is_empty(watch.data) {
                     watch.type = { length = 0; data = null; }
-                    watch.value = { length = 0; data = null; }
                     free_allocation(watch.data.data);
                 }
                 allocate_strings(&text);
                 watch.data = text;
 
-                each i in text.length {
-                    char := text[i];
+                i := 0;
+                while i < text.length {
+                    char := text[i++];
                     if char == '(' {
-                        watch.type.data = text.data + i + 1;
+                        watch.type.data = text.data + i;
                     }
                     else if char == ')' {
-                        start := i + 2;
-                        watch.value = {
-                            length = text.length - start;
-                            data = text.data + start;
-                        }
+                        i++;
+                        watch.value = parse_debug_value(text, &i);
                         break;
                     }
                     else {
                         watch.type.length++;
                     }
                 }
-
-                trim_whitespace_from_end(&watch.value);
             }
 
             watch.parsing = false;
@@ -1573,6 +1514,18 @@ bool parse_debugger_output(Workspace* workspace, string text) {
     }
 
     return true;
+}
+
+clear_start_of_line(string* text) {
+    i := 0;
+    while i < text.length {
+        if !is_whitespace(text.data[i]) {
+            break;
+        }
+        i++;
+    }
+    text.length -= i;
+    text.data += i;
 }
 
 move_to_next_line(string* value) {
@@ -1586,6 +1539,79 @@ move_to_next_line(string* value) {
 
     value.length -= i;
     value.data += i;
+}
+
+DebugValue parse_debug_value(string text, int* index) {
+    // TODO Implement
+    value: DebugValue;
+
+    first := true;
+    parse_value_to_eol, in_string, escape, reset := false;
+    struct_depth := 0;
+
+    i := *index;
+
+    while i < text.length {
+        char := text[i++];
+        if first {
+            if char == '{' {
+                struct_depth++;
+            }
+            else {
+                parse_value_to_eol = true;
+            }
+
+            value.value.length++;
+            value.value.data = text.data + i - 1;
+            first = false;
+        }
+        else if parse_value_to_eol {
+            if char == '\n' {
+                reset = true;
+            }
+            else {
+                value.value.length++;
+            }
+        }
+        else {
+            value.value.length++;
+            if char == '\"' {
+                if !in_string {
+                    in_string = true;
+                }
+                else if !escape {
+                    in_string = false;
+                }
+                escape = false;
+            }
+            else if !in_string {
+                if char == '{' {
+                    struct_depth++;
+                }
+                else if char == '}' {
+                    struct_depth--;
+                    if struct_depth == 0 {
+                        reset = true;
+                    }
+                }
+            }
+            else if escape {
+                escape = false;
+            }
+            else if char == '\\' {
+                escape = true;
+            }
+        }
+
+        if reset {
+            trim_whitespace_from_end(&value.value);
+            break;
+        }
+    }
+
+    *index = i;
+
+    return value;
 }
 
 trim_whitespace_from_end(string* value) {
