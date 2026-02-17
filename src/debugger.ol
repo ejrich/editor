@@ -106,7 +106,7 @@ struct DebugValue {
 
 struct StructFieldDebugValue {
     name: string;
-    value: DebugValue*;
+    value: DebugValue;
 }
 
 struct DynamicArray<T> {
@@ -1544,67 +1544,68 @@ move_to_next_line(string* value) {
 DebugValue parse_debug_value(string text, int* index) {
     // TODO Implement
     value: DebugValue;
+    struct_field_value: StructFieldDebugValue;
 
     first := true;
-    parse_value_to_eol, in_string, escape, reset := false;
-    struct_depth := 0;
+    reset := false;
 
     i := *index;
 
     while i < text.length {
-        char := text[i++];
+        char := text[i];
         if first {
             if char == '{' {
-                struct_depth++;
+                value.is_struct = true;
             }
             else {
-                parse_value_to_eol = true;
+                value.value = {
+                    length = 1;
+                    data = text.data + i;
+                }
             }
 
-            value.value.length++;
-            value.value.data = text.data + i - 1;
             first = false;
         }
-        else if parse_value_to_eol {
+        else if !value.is_struct {
             if char == '\n' {
                 reset = true;
+                trim_whitespace_from_end(&value.value);
             }
             else {
                 value.value.length++;
+
+                if value.value == "0x" {
+                    value.is_pointer = true;
+                }
             }
         }
         else {
-            value.value.length++;
-            if char == '\"' {
-                if !in_string {
-                    in_string = true;
+            if struct_field_value.name.length == 0 {
+                if char == '}' {
+                    reset = true;
                 }
-                else if !escape {
-                    in_string = false;
-                }
-                escape = false;
-            }
-            else if !in_string {
-                if char == '{' {
-                    struct_depth++;
-                }
-                else if char == '}' {
-                    struct_depth--;
-                    if struct_depth == 0 {
-                        reset = true;
+                else if !is_whitespace(char) {
+                    struct_field_value.name = {
+                        length = 1;
+                        data = text.data + i;
                     }
                 }
             }
-            else if escape {
-                escape = false;
+            else if char == ' ' {
+                i += 3;
+                struct_field_value.value = parse_debug_value(text, &i);
+                array_insert(&value.struct_field_values, struct_field_value, allocate, reallocate);
+
+                struct_field_value.name = empty_string;
             }
-            else if char == '\\' {
-                escape = true;
+            else {
+                struct_field_value.name.length++;
             }
         }
 
+        i++;
+
         if reset {
-            trim_whitespace_from_end(&value.value);
             break;
         }
     }
