@@ -432,11 +432,17 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                 watch_cursor = clamp(watch_cursor - 1, 0, watch_length);
                 return true;
             }
+            else {
+                // TODO Collapse struct if on the locals/watch window and the current value is a struct
+            }
         }
         case KeyCode.Right; {
             if workspace.debugger_data.editing_watch {
                 watch_cursor = clamp(watch_cursor + 1, 0, watch_length);
                 return true;
+            }
+            else {
+                // TODO Expand struct if on the locals/watch window and the current value is a struct
             }
         }
         default; {
