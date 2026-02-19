@@ -101,7 +101,6 @@ struct DebugValue {
     // For memory management
     parent: DebugValue*;
     data: string;
-    data_freed: bool;
 }
 
 struct StructFieldDebugValue {
@@ -1097,6 +1096,9 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             if !string_is_empty(workspace.debugger_data.local_variables_data) {
                 free_allocation(workspace.debugger_data.local_variables_data.data);
             }
+            each i in workspace.debugger_data.local_variables.length {
+                clear_debug_value(&workspace.debugger_data.local_variables.array[i].value);
+            }
             workspace.debugger_data.local_variables_data = text;
             workspace.debugger_data.local_variables.length = 0;
 
@@ -1115,7 +1117,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         parsing_type = false;
                         parsing_name = true;
                     }
-                    else {
+                    else if variable.type.data {
                         variable.type.length++;
                     }
                 }
@@ -1478,6 +1480,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // error: Couldn't apply expression side effects : Couldn't dematerialize a result variable: couldn't read its memory
             watch := &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
             watch.parsing = true;
+            clear_debug_value(&watch.value);
 
             if text.length == 0 || text[0] != '(' {
                 watch.error = true;
@@ -1541,14 +1544,27 @@ move_to_next_line(string* value) {
     value.data += i;
 }
 
+clear_debug_value(DebugValue* value) {
+    if value.is_struct {
+        each struct_field_value in value.struct_field_values {
+            clear_debug_value(&struct_field_value.value);
+        }
+
+        free_allocation(value.struct_field_values.data);
+        value.struct_field_values.length = 0;
+    }
+
+    if value.parent != null && value.parent.data.length > 0 {
+        free_allocation(value.parent.data.data);
+        value.parent.data = { length = 0; data = null; }
+    }
+}
+
 DebugValue parse_debug_value(string text, int* index) {
-    // TODO Implement
     value: DebugValue;
     struct_field_value: StructFieldDebugValue;
 
     first := true;
-    reset := false;
-
     i := *index;
 
     while i < text.length {
@@ -1568,8 +1584,8 @@ DebugValue parse_debug_value(string text, int* index) {
         }
         else if !value.is_struct {
             if char == '\n' {
-                reset = true;
                 trim_whitespace_from_end(&value.value);
+                break;
             }
             else {
                 value.value.length++;
@@ -1582,7 +1598,7 @@ DebugValue parse_debug_value(string text, int* index) {
         else {
             if struct_field_value.name.length == 0 {
                 if char == '}' {
-                    reset = true;
+                    break;
                 }
                 else if !is_whitespace(char) {
                     struct_field_value.name = {
@@ -1604,10 +1620,6 @@ DebugValue parse_debug_value(string text, int* index) {
         }
 
         i++;
-
-        if reset {
-            break;
-        }
     }
 
     *index = i;
