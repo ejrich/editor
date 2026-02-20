@@ -94,7 +94,7 @@ struct DebugValue {
     error: bool;
     is_pointer: bool;
     is_struct: bool;
-    struct_expanded: bool;
+    expanded: bool;
     value: string;
     struct_field_values: Array<StructFieldDebugValue>;
 
@@ -173,7 +173,7 @@ draw_debugger_views(Workspace* workspace) {
                     render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
                     x += 4 * global_font_config.quad_advance;
-                    render_text(local.value.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                    available_lines, x, y = draw_debug_value(&local.value, x, y, available_lines);
 
                     draw_list_line(y);
                     available_lines--;
@@ -217,7 +217,7 @@ draw_debugger_views(Workspace* workspace) {
                             render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
                             x += 4 * global_font_config.quad_advance;
-                            render_text(watch.value.value, settings.font_size, x, y, appearance.font_color, blank_background);
+                            available_lines, x, y = draw_debug_value(&watch.value, x, y, available_lines);
                         }
                     }
                 }
@@ -835,6 +835,59 @@ draw_selected_line(float y, bool highlight = false) {
     }
 
     draw_quad(&line_quad, 1);
+}
+
+int, float, float draw_debug_value(DebugValue* value, float x, float y, int available_lines, int depth = 1) {
+    blank_background: Vector4;
+
+    if value.is_struct {
+        value_separation := 2;
+        if !value.expanded {
+            render_text("{", settings.font_size, x, y, appearance.font_color, blank_background);
+            x += 2 * global_font_config.quad_advance;
+            value_separation = 1;
+        }
+
+        each struct_field_value in value.struct_field_values {
+            if value.expanded {
+                if available_lines <= 0 break;
+
+                draw_list_line(y);
+                available_lines--;
+                x = depth * 2 * global_font_config.quad_advance;
+                y -= global_font_config.line_height;
+            }
+            else if x >= 1.0 {
+                break;
+            }
+
+            render_text(struct_field_value.name, settings.font_size, x, y, appearance.font_color, blank_background);
+
+            x += (struct_field_value.name.length + value_separation - 1) * global_font_config.quad_advance;
+            render_text("=", settings.font_size, x, y, appearance.font_color, blank_background);
+
+            x += value_separation * global_font_config.quad_advance;
+            available_lines, x, y = draw_debug_value(&struct_field_value.value, x, y, available_lines, depth + 1);
+
+            if !value.expanded {
+                x += global_font_config.quad_advance;
+            }
+        }
+
+        if !value.expanded && x < 1.0 {
+            render_text("}", settings.font_size, x, y, appearance.font_color, blank_background);
+        }
+    }
+    else {
+        render_text(value.value, settings.font_size, x, y, appearance.font_color, blank_background);
+        x += value.value.length * global_font_config.quad_advance;
+
+        if value.is_pointer && value.expanded {
+            // TODO Get this value
+        }
+    }
+
+    return available_lines, x, y;
 }
 
 debugger_thread(int thread, JobData data) {
