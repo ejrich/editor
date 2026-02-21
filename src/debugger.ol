@@ -599,64 +599,7 @@ bool change_debugger_index(int change) {
         return false;
     }
 
-    available_lines := global_font_config.bottom_window_max_lines - 1;
-
-    new_index := workspace.debugger_data.view_index + change;
-    if new_index <= 0 {
-        workspace.debugger_data = {
-            view_start_index = 0;
-            view_index = 0;
-        }
-    }
-    else {
-        max := 0;
-        switch workspace.debugger_data.view {
-            case DebuggerView.Locals; {
-                if workspace.debugger_data.local_variables.length {
-                    each i in workspace.debugger_data.local_variables.length {
-                        local := &workspace.debugger_data.local_variables.array[i];
-                        max += get_debug_value_lines(&local.value);
-                    }
-                    max--;
-                }
-            }
-            case DebuggerView.Watches; {
-                each i in workspace.debugger_data.watches.length {
-                    watch := &workspace.debugger_data.watches.array[i];
-                    max += get_debug_value_lines(&watch.value);
-                }
-            }
-            case DebuggerView.Stack; {
-                available_lines--;
-                max = workspace.debugger_data.stack_frames.length - 1;
-            }
-            case DebuggerView.Threads; {
-                available_lines--;
-                max = workspace.debugger_data.threads.length - 1;
-            }
-            case DebuggerView.Registers; {
-                available_lines--;
-                max = workspace.debugger_data.registers.length - 1;
-            }
-        }
-
-        if max == 0 {
-            workspace.debugger_data = {
-                view_start_index = 0;
-                view_index = 0;
-            }
-        }
-        else {
-            new_index = clamp(new_index, 0, max);
-            if new_index < workspace.debugger_data.view_start_index {
-                workspace.debugger_data.view_start_index = new_index;
-            }
-            else if new_index - workspace.debugger_data.view_start_index >= available_lines {
-                workspace.debugger_data.view_start_index = new_index - available_lines + 1;
-            }
-            workspace.debugger_data.view_index = new_index;
-        }
-    }
+    adjust_view_index(workspace, change);
 
     return true;
 }
@@ -851,6 +794,67 @@ skip_to() {
 }
 
 #private
+
+adjust_view_index(Workspace* workspace, int change = 0) {
+    available_lines := global_font_config.bottom_window_max_lines - 1;
+
+    new_index := workspace.debugger_data.view_index + change;
+    if new_index <= 0 {
+        workspace.debugger_data = {
+            view_start_index = 0;
+            view_index = 0;
+        }
+    }
+    else {
+        max := 0;
+        switch workspace.debugger_data.view {
+            case DebuggerView.Locals; {
+                if workspace.debugger_data.local_variables.length {
+                    each i in workspace.debugger_data.local_variables.length {
+                        local := &workspace.debugger_data.local_variables.array[i];
+                        max += get_debug_value_lines(&local.value);
+                    }
+                    max--;
+                }
+            }
+            case DebuggerView.Watches; {
+                each i in workspace.debugger_data.watches.length {
+                    watch := &workspace.debugger_data.watches.array[i];
+                    max += get_debug_value_lines(&watch.value);
+                }
+            }
+            case DebuggerView.Stack; {
+                available_lines--;
+                max = workspace.debugger_data.stack_frames.length - 1;
+            }
+            case DebuggerView.Threads; {
+                available_lines--;
+                max = workspace.debugger_data.threads.length - 1;
+            }
+            case DebuggerView.Registers; {
+                available_lines--;
+                max = workspace.debugger_data.registers.length - 1;
+            }
+        }
+
+        if max == 0 {
+            workspace.debugger_data = {
+                view_start_index = 0;
+                view_index = 0;
+            }
+        }
+        else {
+            new_index = clamp(new_index, 0, max);
+            if new_index < workspace.debugger_data.view_start_index {
+                workspace.debugger_data.view_start_index = new_index;
+            }
+            else if new_index - workspace.debugger_data.view_start_index >= available_lines {
+                workspace.debugger_data.view_start_index = new_index - available_lines + 1;
+            }
+            workspace.debugger_data.view_index = new_index;
+        }
+    }
+}
 
 delete_watch_at_current_index(Workspace* workspace) {
     line_index := 0;
@@ -1936,6 +1940,8 @@ load_watches(int thread, JobData data) {
     each i in workspace.debugger_data.watches.length {
         evaluate_watch(workspace, i);
     }
+
+    adjust_view_index(workspace);
 }
 
 evaluate_watch(Workspace* workspace, int index) {
