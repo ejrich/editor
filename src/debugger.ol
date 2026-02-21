@@ -154,36 +154,47 @@ draw_debugger_views(Workspace* workspace) {
     switch workspace.debugger_data.view {
         case DebuggerView.Locals; {
             if !workspace.debugger_data.command_executing {
-                while available_lines > 0 && i < workspace.debugger_data.local_variables.length {
+                variable_index, line_index := 0;
+                while available_lines > 0 && variable_index < workspace.debugger_data.local_variables.length {
                     if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
                     }
 
-                    local := &workspace.debugger_data.local_variables.array[i++];
+                    local := &workspace.debugger_data.local_variables.array[variable_index++];
 
-                    render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
+                    if line_index < i {
+                        x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                    }
+                    else {
+                        render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
 
-                    x += (local.name.length + 1) * global_font_config.quad_advance;
-                    render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
+                        x += (local.name.length + 1) * global_font_config.quad_advance;
+                        render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
 
-                    x += global_font_config.quad_advance;
-                    render_text(local.type, settings.font_size, x, y, appearance.font_color, blank_background);
+                        x += global_font_config.quad_advance;
+                        render_text(local.type, settings.font_size, x, y, appearance.font_color, blank_background);
 
-                    x += local.type.length * global_font_config.quad_advance;
-                    render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+                        x += local.type.length * global_font_config.quad_advance;
+                        render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
-                    x += 4 * global_font_config.quad_advance;
-                    available_lines, x, y = draw_debug_value(&local.value, x, y, available_lines);
+                        x += 4 * global_font_config.quad_advance;
+                        x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                    }
 
-                    draw_list_line(y);
-                    available_lines--;
+                    if line_index >= i {
+                        i++;
+                        draw_list_line(y);
+                        available_lines--;
+                        y -= global_font_config.line_height;
+                    }
+                    line_index++;
                     x = 0.0;
-                    y -= global_font_config.line_height;
                 }
             }
         }
         case DebuggerView.Watches; {
-            while available_lines > 0 && i < workspace.debugger_data.watches.length {
+            watch_index, line_index := 0;
+            while available_lines > 0 && watch_index < workspace.debugger_data.watches.length {
                 if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                     draw_selected_line(y, workspace.debugger_data.editing_watch);
                 }
@@ -197,7 +208,7 @@ draw_debugger_views(Workspace* workspace) {
                     render_highlighted_line_with_cursor(watch_string, x, y, watch_cursor, 1.0);
                 }
                 else {
-                    watch := &workspace.debugger_data.watches.array[i];
+                    watch := &workspace.debugger_data.watches.array[watch_index++];
 
                     render_text(watch.expression, settings.font_size, x, y, appearance.font_color, blank_background);
 
@@ -217,7 +228,7 @@ draw_debugger_views(Workspace* workspace) {
                             render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
                             x += 4 * global_font_config.quad_advance;
-                            available_lines, x, y = draw_debug_value(&watch.value, x, y, available_lines);
+                            x, y, line_index, available_lines, i = draw_debug_value(workspace, &watch.value, x, y, line_index, available_lines, i);
                         }
                     }
                 }
@@ -343,7 +354,9 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
     workspace := get_workspace();
 
     if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused || workspace.debugger_data.view != DebuggerView.Watches {
-        return false;
+        if workspace.debugger_data.view != DebuggerView.Locals || (code != KeyCode.Left && code != KeyCode.Right) {
+            return false;
+        }
     }
 
     switch code {
@@ -377,6 +390,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                 workspace.debugger_data.editing_watch = false;
             }
             else {
+                // TODO Set this correctly given expanding structs
                 watch_cursor = 0;
                 watch_length = 0;
                 if workspace.debugger_data.view_index < workspace.debugger_data.watches.length {
@@ -432,8 +446,33 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                 watch_cursor = clamp(watch_cursor - 1, 0, watch_length);
                 return true;
             }
-            else {
-                // TODO Collapse struct if on the locals/watch window and the current value is a struct
+            else if !workspace.debugger_data.command_executing {
+                line_index := 0;
+                current_line := workspace.debugger_data.view_index;
+                finished := false;
+
+                switch workspace.debugger_data.view {
+                    case DebuggerView.Locals; {
+                        each i in workspace.debugger_data.local_variables.length {
+                            local := &workspace.debugger_data.local_variables.array[i];
+                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, false);
+
+                            if finished break;
+                        }
+
+                        return true;
+                    }
+                    case DebuggerView.Watches; {
+                        each i in workspace.debugger_data.watches.length {
+                            watch := &workspace.debugger_data.watches.array[i];
+                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, false);
+
+                            if finished break;
+                        }
+
+                        return true;
+                    }
+                }
             }
         }
         case KeyCode.Right; {
@@ -441,8 +480,33 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                 watch_cursor = clamp(watch_cursor + 1, 0, watch_length);
                 return true;
             }
-            else {
-                // TODO Expand struct if on the locals/watch window and the current value is a struct
+            else if !workspace.debugger_data.command_executing {
+                line_index := 0;
+                current_line := workspace.debugger_data.view_index;
+                finished := false;
+
+                switch workspace.debugger_data.view {
+                    case DebuggerView.Locals; {
+                        each i in workspace.debugger_data.local_variables.length {
+                            local := &workspace.debugger_data.local_variables.array[i];
+                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, true);
+
+                            if finished break;
+                        }
+
+                        return true;
+                    }
+                    case DebuggerView.Watches; {
+                        each i in workspace.debugger_data.watches.length {
+                            watch := &workspace.debugger_data.watches.array[i];
+                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, true);
+
+                            if finished break;
+                        }
+
+                        return true;
+                    }
+                }
             }
         }
         default; {
@@ -519,11 +583,18 @@ bool change_debugger_index(int change) {
         switch workspace.debugger_data.view {
             case DebuggerView.Locals; {
                 if workspace.debugger_data.local_variables.length {
-                    max = workspace.debugger_data.local_variables.length - 1;
+                    each i in workspace.debugger_data.local_variables.length {
+                        local := &workspace.debugger_data.local_variables.array[i];
+                        max += get_debug_value_lines(&local.value);
+                    }
+                    max--;
                 }
             }
             case DebuggerView.Watches; {
-                max = workspace.debugger_data.watches.length;
+                each i in workspace.debugger_data.watches.length {
+                    watch := &workspace.debugger_data.watches.array[i];
+                    max += get_debug_value_lines(&watch.value);
+                }
             }
             case DebuggerView.Stack; {
                 available_lines--;
@@ -837,12 +908,72 @@ draw_selected_line(float y, bool highlight = false) {
     draw_quad(&line_quad, 1);
 }
 
-int, float, float draw_debug_value(DebugValue* value, float x, float y, int available_lines, int depth = 1) {
+int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line, bool expand) {
+    toggled := false;
+    if value.is_struct {
+        if value.expanded {
+            if !expand && line_index == current_line {
+                value.expanded = false;
+                collapse_struct_fields(value);
+                toggled = true;
+            }
+            else {
+                line_index++;
+                each struct_field_value in value.struct_field_values {
+                    lines, finished := toggle_debug_value(&struct_field_value.value, line_index, current_line, expand);
+                    line_index += lines;
+                    if finished {
+                        toggled = true;
+                        break;
+                    }
+                }
+            }
+        }
+        else if expand && line_index == current_line {
+            value.expanded = true;
+            toggled = true;
+        }
+    }
+    else {
+        // TODO Handle expanded pointers
+        line_index++;
+    }
+
+    return line_index, toggled;
+}
+
+int get_debug_value_lines(DebugValue* value) {
+    line_count := 1;
+
+    if value.is_struct {
+        if value.expanded {
+            each struct_field_value in value.struct_field_values {
+                line_count += get_debug_value_lines(&struct_field_value.value);
+            }
+        }
+    }
+    else {
+        // TODO Handle expanded pointers
+    }
+
+    return line_count;
+}
+
+collapse_struct_fields(DebugValue* value) {
+    each struct_field_value in value.struct_field_values {
+        if struct_field_value.value.expanded {
+            struct_field_value.value.expanded = false;
+            collapse_struct_fields(&struct_field_value.value);
+        }
+    }
+}
+
+float, float, int, int, u16 draw_debug_value(Workspace* workspace, DebugValue* value, float x, float y, int line_index, int available_lines, u16 i, int depth = 1) {
     blank_background: Vector4;
 
     if value.is_struct {
         value_separation := 2;
-        if !value.expanded {
+        if !value.expanded && line_index >= i {
             render_text("{", settings.font_size, x, y, appearance.font_color, blank_background);
             x += 2 * global_font_config.quad_advance;
             value_separation = 1;
@@ -852,33 +983,50 @@ int, float, float draw_debug_value(DebugValue* value, float x, float y, int avai
             if value.expanded {
                 if available_lines <= 0 break;
 
-                draw_list_line(y);
-                available_lines--;
-                x = depth * 2 * global_font_config.quad_advance;
-                y -= global_font_config.line_height;
+                line_index++;
+                if line_index >= i {
+                    draw_list_line(y);
+                    available_lines--;
+                    x = depth * 2 * global_font_config.quad_advance;
+                    y -= global_font_config.line_height;
+                }
             }
             else if x >= 1.0 {
                 break;
             }
 
-            render_text(struct_field_value.name, settings.font_size, x, y, appearance.font_color, blank_background);
+            if line_index >= i {
+                if value.expanded {
+                    i++;
 
-            x += (struct_field_value.name.length + value_separation - 1) * global_font_config.quad_advance;
-            render_text("=", settings.font_size, x, y, appearance.font_color, blank_background);
+                    if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
+                        draw_selected_line(y);
+                    }
+                }
+
+                render_text(struct_field_value.name, settings.font_size, x, y, appearance.font_color, blank_background);
+
+                x += (struct_field_value.name.length + value_separation - 1) * global_font_config.quad_advance;
+                render_text("=", settings.font_size, x, y, appearance.font_color, blank_background);
+            }
 
             x += value_separation * global_font_config.quad_advance;
-            available_lines, x, y = draw_debug_value(&struct_field_value.value, x, y, available_lines, depth + 1);
+            x, y, line_index, available_lines, i = draw_debug_value(workspace, &struct_field_value.value, x, y, line_index, available_lines, i, depth + 1);
 
             if !value.expanded {
                 x += global_font_config.quad_advance;
             }
         }
 
-        if !value.expanded && x < 1.0 {
+        if !value.expanded && line_index >= i && x < 1.0 {
             render_text("}", settings.font_size, x, y, appearance.font_color, blank_background);
         }
     }
-    else {
+    else if line_index >= i {
+        if depth > 1 && workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
+            draw_selected_line(y);
+        }
+
         render_text(value.value, settings.font_size, x, y, appearance.font_color, blank_background);
         x += value.value.length * global_font_config.quad_advance;
 
@@ -887,7 +1035,7 @@ int, float, float draw_debug_value(DebugValue* value, float x, float y, int avai
         }
     }
 
-    return available_lines, x, y;
+    return x, y, line_index, available_lines, i;
 }
 
 debugger_thread(int thread, JobData data) {
