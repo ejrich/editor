@@ -4271,6 +4271,17 @@ bool is_whitespace(u8 char) {
     return false;
 }
 
+trim_whitespace_from_end(string* value) {
+    while value.length {
+        if is_whitespace(value.data[value.length - 1]) {
+            value.length--;
+        }
+        else {
+            break;
+        }
+    }
+}
+
 #private
 
 // Buffer list functions

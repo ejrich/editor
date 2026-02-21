@@ -20,6 +20,8 @@ Syntax* get_syntax_for_file(string file_path) {
 }
 
 Syntax* get_syntax_for_extension(string extension) {
+    trim_whitespace_from_end(&extension);
+
     each syntax in syntax_configurations {
         if syntax.extension == extension {
             return &syntax;
