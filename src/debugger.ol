@@ -84,10 +84,11 @@ struct Thread {
 
 struct WatchExpression {
     expression: string;
+    error: bool;
     parsing: bool;
     parsing_type: bool;
     parsing_value: bool;
-    error: bool;
+    set_is_struct: bool;
     type: string;
     data: string;
     value: DebugValue;
@@ -151,14 +152,14 @@ draw_debugger_views(Workspace* workspace) {
     x = 0.0;
     y -= global_font_config.line_height;
 
-    available_lines := global_font_config.bottom_window_max_lines - 1;
+    available_lines := global_font_config.bottom_window_max_lines;
     i := workspace.debugger_data.view_start_index;
     blank_background: Vector4;
 
     switch workspace.debugger_data.view {
         case DebuggerView.Locals; {
             if !workspace.debugger_data.command_executing {
-                variable_index, line_index := 0;
+                variable_index, line_index: u32;
                 while available_lines > 0 && variable_index < workspace.debugger_data.local_variables.length {
                     if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                         draw_selected_line(y);
@@ -197,7 +198,7 @@ draw_debugger_views(Workspace* workspace) {
             }
         }
         case DebuggerView.Watches; {
-            watch_index, line_index := 0;
+            watch_index, line_index: u32;
             while available_lines > 0 && watch_index < workspace.debugger_data.watches.length {
                 if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
                     draw_selected_line(y, workspace.debugger_data.editing_watch);
@@ -279,6 +280,7 @@ draw_debugger_views(Workspace* workspace) {
                 x += workspace.debugger_data.max_location_length * global_font_config.quad_advance;
                 render_text("Address", settings.font_size, x, y, appearance.font_color, blank_background);
                 draw_list_line(y);
+                available_lines--;
 
                 while available_lines > 0 && i < workspace.debugger_data.stack_frames.length {
                     x = 0.0;
@@ -313,6 +315,7 @@ draw_debugger_views(Workspace* workspace) {
             if !workspace.debugger_data.command_executing {
                 render_text("  #     Id", settings.font_size, x, y, appearance.font_color, blank_background);
                 draw_list_line(y);
+                available_lines--;
 
                 while available_lines > 0 && i < workspace.debugger_data.threads.length {
                     x = 0.0;
@@ -341,6 +344,7 @@ draw_debugger_views(Workspace* workspace) {
             if !workspace.debugger_data.command_executing {
                 render_text("Name      Value", settings.font_size, x, y, appearance.font_color, blank_background);
                 draw_list_line(y);
+                available_lines--;
 
                 while available_lines > 0 && i < workspace.debugger_data.registers.length {
                     x = 0.0;
@@ -796,7 +800,7 @@ skip_to() {
 #private
 
 adjust_view_index(Workspace* workspace, int change = 0) {
-    available_lines := global_font_config.bottom_window_max_lines - 1;
+    available_lines := global_font_config.bottom_window_max_lines;
 
     new_index := workspace.debugger_data.view_index + change;
     if new_index <= 0 {
@@ -1018,7 +1022,7 @@ collapse_struct_fields(DebugValue* value) {
     }
 }
 
-float, float, int, int, u16 draw_debug_value(Workspace* workspace, DebugValue* value, float x, float y, int line_index, int available_lines, u16 i, int depth = 1) {
+float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* value, float x, float y, u32 line_index, u32 available_lines, u16 i, u32 depth = 1) {
     blank_background: Vector4;
 
     if value.is_struct {
@@ -1175,6 +1179,7 @@ debugger_thread(int thread, JobData data) {
 
         if !success break;
 
+        log("'%'\n", text);
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
         }
@@ -1232,6 +1237,8 @@ send_command_to_debugger(Workspace* workspace, string command) {
 
 bool parse_debugger_output(Workspace* workspace, string text) {
     if workspace.debugger_data.parse_status == DebuggerParseStatus.None {
+        clear_start_of_line(&text);
+
         source_info_start := "Lines found in module "; #const
         if starts_with(text, source_info_start) {
             // Execution is paused, start parsing the program state
@@ -1239,6 +1246,8 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             workspace.debugger_data.parse_status = DebuggerParseStatus.Source;
         }
         else {
+            clear_lldb_from_line(&text);
+
             process := "Process "; #const
             if starts_with(text, process) {
                 i := process.length;
@@ -1278,18 +1287,11 @@ bool parse_debugger_output(Workspace* workspace, string text) {
         }
     }
 
-    clear_start_of_line(&text);
-
-    debug_line_start := "(lldb)"; #const
-    if starts_with(text, debug_line_start) {
-        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
-            return true;
-        }
-
-        text.length -= debug_line_start.length;
-        text.data += debug_line_start.length;
-
-        clear_start_of_line(&text);
+    if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
+        while clear_lldb_line(&text) {}
+    }
+    else {
+        clear_lldb_from_line(&text);
     }
 
     if text.length == 0 return true;
@@ -1751,6 +1753,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 watch.parsing = true;
                 watch.parsing_type = true;
                 watch.parsing_value = false;
+                watch.set_is_struct = false;
                 clear_debug_value(&watch.value);
             }
 
@@ -1792,8 +1795,14 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         }
                     }
                     else if watch.parsing_value {
-                        watch.value = parse_debug_value(text, &i);
-                        watch.parsing_value = false;
+                        char := text[i];
+                        if char == '{' && i == text.length - 1 {
+                            watch.set_is_struct = true;
+                        }
+                        else {
+                            watch.value = parse_debug_value(text, &i, watch.set_is_struct);
+                            watch.parsing_value = false;
+                        }
                         break;
                     }
                 }
@@ -1807,6 +1816,28 @@ bool parse_debugger_output(Workspace* workspace, string text) {
     }
 
     return true;
+}
+
+debug_line_start := "(lldb)"; #const
+
+bool clear_lldb_line(string* text) {
+    clear_start_of_line(text);
+    if starts_with(*text, debug_line_start) {
+        move_to_next_line(text);
+        return true;
+    }
+
+    return false;
+}
+
+clear_lldb_from_line(string* text) {
+    clear_start_of_line(text);
+    if starts_with(*text, debug_line_start) {
+        text.length -= debug_line_start.length;
+        text.data += debug_line_start.length;
+
+        clear_start_of_line(text);
+    }
 }
 
 clear_start_of_line(string* text) {
@@ -1850,12 +1881,17 @@ clear_debug_value(DebugValue* value) {
     }
 }
 
-DebugValue parse_debug_value(string text, int* index) {
+DebugValue parse_debug_value(string text, int* index, bool set_is_struct = false) {
     value: DebugValue;
     struct_field_value: StructFieldDebugValue;
 
     first := true;
     i := *index;
+
+    if set_is_struct {
+        value.is_struct = true;
+        first = false;
+    }
 
     while i < text.length {
         char := text[i];

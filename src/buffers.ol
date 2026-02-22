@@ -1,5 +1,6 @@
 // Buffer rendering
 draw_buffers() {
+    b: Buffer;
     if !is_font_ready(settings.font_size) return;
 
     workspace := get_workspace();
