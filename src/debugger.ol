@@ -20,7 +20,12 @@ struct DebuggerData {
     local_variables: DynamicArray<LocalVariable>;
     local_variables_data: string;
     watches: DynamicArray<WatchExpression>;
-    watch_index: int;
+    evaluating_watch: bool;
+    watch_index: u16;
+    parsing_type: bool;
+    parsing_value: bool;
+    set_is_struct: bool;
+    target_debug_value: DebugValue**;
     editing_watch: bool;
     editing_watch_index: u16;
     stack_frames: DynamicArray<StackFrame>;
@@ -86,9 +91,6 @@ struct WatchExpression {
     expression: string;
     error: bool;
     parsing: bool;
-    parsing_type: bool;
-    parsing_value: bool;
-    set_is_struct: bool;
     type: string;
     data: string;
     value: DebugValue;
@@ -102,6 +104,7 @@ struct DebugValue {
     expanded: bool;
     value: string;
     struct_field_values: Array<StructFieldDebugValue>;
+    pointer_value: DebugValue*;
 
     // For memory management
     parent: DebugValue*;
@@ -988,8 +991,32 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
             toggled = true;
         }
     }
+    else if value.is_pointer {
+        if value.expanded {
+            if !expand && line_index == current_line {
+                value.expanded = false;
+                toggled = true;
+                if value.pointer_value != null {
+                    collapse_struct_fields(value.pointer_value);
+                }
+            }
+            else if value.pointer_value != null && !value.pointer_value.error {
+                line_index++;
+                line_index, toggled = toggle_debug_value(value.pointer_value, line_index, current_line, expand);
+            }
+        }
+        else if expand && line_index == current_line {
+            value.expanded = true;
+            toggled = true;
+            if value.pointer_value == null {
+                // TODO Trigger this to load
+            }
+        }
+        else {
+            line_index++;
+        }
+    }
     else {
-        // TODO Handle expanded pointers
         line_index++;
     }
 
@@ -1006,8 +1033,8 @@ int get_debug_value_lines(DebugValue* value) {
             }
         }
     }
-    else {
-        // TODO Handle expanded pointers
+    else if value.is_pointer && value.expanded && value.pointer_value != null && !value.pointer_value.error {
+        line_count += get_debug_value_lines(value.pointer_value);
     }
 
     return line_count;
@@ -1094,9 +1121,25 @@ float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* v
 
         render_text(value.value, settings.font_size, x, y, appearance.font_color, blank_background);
         x += value.value.length * global_font_config.quad_advance;
+    }
 
-        if value.is_pointer && value.expanded {
-            // TODO Get this value
+    if value.is_pointer && value.expanded && value.pointer_value != null {
+        if value.pointer_value.error {
+            if line_index >= i {
+                render_text(" -> ??", settings.font_size, x, y, appearance.font_color, blank_background);
+            }
+        }
+        else if available_lines > 0 {
+            if line_index >= i {
+                i++;
+                draw_list_line(y);
+                available_lines--;
+                y -= global_font_config.line_height;
+            }
+            line_index++;
+            x = (depth + 1) * 2 * global_font_config.quad_advance;
+
+            x, y, line_index, available_lines, i = draw_debug_value(workspace, value.pointer_value, x, y, line_index, available_lines, i, depth + 1);
         }
     }
 
@@ -1179,7 +1222,6 @@ debugger_thread(int thread, JobData data) {
 
         if !success break;
 
-        log("'%'\n", text);
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
         }
@@ -1748,23 +1790,24 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // (BufferWindow *) 0x00000000004795e0
             // Ex 4 (Error case):
             // error: Couldn't apply expression side effects : Couldn't dematerialize a result variable: couldn't read its memory
+            // TODO Handle when workspace.debugger_data.evaluating_watch == false
             watch := &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
             if !watch.parsing {
                 watch.parsing = true;
-                watch.parsing_type = true;
-                watch.parsing_value = false;
-                watch.set_is_struct = false;
+                workspace.debugger_data.parsing_type = true;
+                workspace.debugger_data.parsing_value = false;
+                workspace.debugger_data.set_is_struct = false;
                 clear_debug_value(&watch.value);
             }
 
-            if watch.parsing_type && (text.length == 0 || text[0] != '(') {
+            if workspace.debugger_data.parsing_type && (text.length == 0 || text[0] != '(') {
                 watch.error = true;
-                watch.parsing_type = false;
+                workspace.debugger_data.parsing_type = false;
             }
             else {
                 watch.error = false;
                 allocate_strings(&text);
-                if watch.parsing_type {
+                if workspace.debugger_data.parsing_type {
                     if !string_is_empty(watch.data) {
                         watch.type = { length = 0; data = null; }
                         free_allocation(watch.data.data);
@@ -1774,41 +1817,41 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     }
                     watch.data = text;
                 }
-                else if watch.parsing_value {
+                else if workspace.debugger_data.parsing_value {
                     watch.value_data = text;
                 }
 
                 i := 0;
                 while i < text.length {
-                    if watch.parsing_type {
+                    if workspace.debugger_data.parsing_type {
                         char := text[i++];
                         if char == '(' {
                             watch.type.data = text.data + i;
                         }
                         else if char == ')' {
                             i++;
-                            watch.parsing_type = false;
-                            watch.parsing_value = true;
+                            workspace.debugger_data.parsing_type = false;
+                            workspace.debugger_data.parsing_value = true;
                         }
                         else {
                             watch.type.length++;
                         }
                     }
-                    else if watch.parsing_value {
+                    else if workspace.debugger_data.parsing_value {
                         char := text[i];
                         if char == '{' && i == text.length - 1 {
-                            watch.set_is_struct = true;
+                            workspace.debugger_data.set_is_struct = true;
                         }
                         else {
-                            watch.value = parse_debug_value(text, &i, watch.set_is_struct);
-                            watch.parsing_value = false;
+                            watch.value = parse_debug_value(text, &i, workspace.debugger_data.set_is_struct);
+                            workspace.debugger_data.parsing_value = false;
                         }
                         break;
                     }
                 }
             }
 
-            if !watch.parsing_type && !watch.parsing_value {
+            if !workspace.debugger_data.parsing_type && !workspace.debugger_data.parsing_value {
                 watch.parsing = false;
                 workspace.debugger_data.parse_status = DebuggerParseStatus.None;
             }
@@ -1873,6 +1916,12 @@ clear_debug_value(DebugValue* value) {
 
         free_allocation(value.struct_field_values.data);
         value.struct_field_values.length = 0;
+    }
+
+    if value.pointer_value {
+        clear_debug_value(value.pointer_value);
+        free_allocation(value.pointer_value);
+        value.pointer_value = null;
     }
 
     if value.parent != null && value.parent.data.length > 0 {
