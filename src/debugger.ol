@@ -107,7 +107,6 @@ struct DebugValue {
     pointer_value: DebugValue*;
 
     // For memory management
-    parent: DebugValue*;
     data: string;
 }
 
@@ -492,7 +491,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Locals; {
                         each i in workspace.debugger_data.local_variables.length {
                             local := &workspace.debugger_data.local_variables.array[i];
-                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, false);
+                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, false, empty_string);
 
                             if finished break;
                         }
@@ -502,7 +501,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Watches; {
                         each i in workspace.debugger_data.watches.length {
                             watch := &workspace.debugger_data.watches.array[i];
-                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, false);
+                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, false, empty_string);
 
                             if finished break;
                         }
@@ -526,7 +525,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Locals; {
                         each i in workspace.debugger_data.local_variables.length {
                             local := &workspace.debugger_data.local_variables.array[i];
-                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, true);
+                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, true, local.name);
 
                             if finished break;
                         }
@@ -536,7 +535,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Watches; {
                         each i in workspace.debugger_data.watches.length {
                             watch := &workspace.debugger_data.watches.array[i];
-                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, true);
+                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, true, watch.expression);
 
                             if finished break;
                         }
@@ -965,7 +964,7 @@ draw_selected_line(float y, bool highlight = false) {
     draw_quad(&line_quad, 1);
 }
 
-int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line, bool expand) {
+int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line, bool expand, string expression) {
     toggled := false;
     if value.is_struct {
         if value.expanded {
@@ -977,7 +976,11 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
             else {
                 line_index++;
                 each struct_field_value in value.struct_field_values {
-                    lines, finished := toggle_debug_value(&struct_field_value.value, line_index, current_line, expand);
+                    sub_expression: string;
+                    if expand {
+                        sub_expression = temp_string(expression, ".", struct_field_value.name);
+                    }
+                    lines, finished := toggle_debug_value(&struct_field_value.value, line_index, current_line, expand, sub_expression);
                     line_index = lines;
                     if finished {
                         toggled = true;
@@ -1002,14 +1005,22 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
             }
             else if value.pointer_value != null && !value.pointer_value.error {
                 line_index++;
-                line_index, toggled = toggle_debug_value(value.pointer_value, line_index, current_line, expand);
+                sub_expression: string;
+                if expand {
+                    sub_expression = temp_string(expression, "[0]");
+                }
+                line_index, toggled = toggle_debug_value(value.pointer_value, line_index, current_line, expand, sub_expression);
             }
         }
         else if expand && line_index == current_line {
             value.expanded = true;
             toggled = true;
             if value.pointer_value == null {
-                // TODO Trigger this to load
+                expression = temp_string(expression, "[0]");
+                log("'%'\n", expression);
+                if !workspace.debugger_data.command_executing {
+                    // TODO Trigger this to load
+                }
             }
         }
         else {
@@ -1790,35 +1801,41 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // (BufferWindow *) 0x00000000004795e0
             // Ex 4 (Error case):
             // error: Couldn't apply expression side effects : Couldn't dematerialize a result variable: couldn't read its memory
-            // TODO Handle when workspace.debugger_data.evaluating_watch == false
-            watch := &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
-            if !watch.parsing {
-                watch.parsing = true;
-                workspace.debugger_data.parsing_type = true;
-                workspace.debugger_data.parsing_value = false;
-                workspace.debugger_data.set_is_struct = false;
-                clear_debug_value(&watch.value);
+            watch: WatchExpression*;
+            if workspace.debugger_data.evaluating_watch {
+                watch = &workspace.debugger_data.watches.array[workspace.debugger_data.watch_index];
+                if !watch.parsing {
+                    watch.parsing = true;
+                    watch.error = false;
+                    workspace.debugger_data.parsing_type = true;
+                    workspace.debugger_data.parsing_value = false;
+                    workspace.debugger_data.set_is_struct = false;
+                    clear_debug_value(&watch.value);
+                }
             }
 
             if workspace.debugger_data.parsing_type && (text.length == 0 || text[0] != '(') {
-                watch.error = true;
+                if workspace.debugger_data.evaluating_watch {
+                    watch.error = true;
+                }
                 workspace.debugger_data.parsing_type = false;
             }
             else {
-                watch.error = false;
-                allocate_strings(&text);
-                if workspace.debugger_data.parsing_type {
-                    if !string_is_empty(watch.data) {
-                        watch.type = { length = 0; data = null; }
-                        free_allocation(watch.data.data);
+                if workspace.debugger_data.evaluating_watch {
+                    allocate_strings(&text);
+                    if workspace.debugger_data.parsing_type {
+                        if !string_is_empty(watch.data) {
+                            watch.type = { length = 0; data = null; }
+                            free_allocation(watch.data.data);
+                        }
+                        if !string_is_empty(watch.value_data) {
+                            free_allocation(watch.value_data.data);
+                        }
+                        watch.data = text;
                     }
-                    if !string_is_empty(watch.value_data) {
-                        free_allocation(watch.value_data.data);
+                    else if workspace.debugger_data.parsing_value {
+                        watch.value_data = text;
                     }
-                    watch.data = text;
-                }
-                else if workspace.debugger_data.parsing_value {
-                    watch.value_data = text;
                 }
 
                 i := 0;
@@ -1826,14 +1843,16 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     if workspace.debugger_data.parsing_type {
                         char := text[i++];
                         if char == '(' {
-                            watch.type.data = text.data + i;
+                            if workspace.debugger_data.evaluating_watch {
+                                watch.type.data = text.data + i;
+                            }
                         }
                         else if char == ')' {
                             i++;
                             workspace.debugger_data.parsing_type = false;
                             workspace.debugger_data.parsing_value = true;
                         }
-                        else {
+                        else if workspace.debugger_data.evaluating_watch {
                             watch.type.length++;
                         }
                     }
@@ -1843,7 +1862,18 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             workspace.debugger_data.set_is_struct = true;
                         }
                         else {
-                            watch.value = parse_debug_value(text, &i, workspace.debugger_data.set_is_struct);
+                            value := parse_debug_value(text, &i, workspace.debugger_data.set_is_struct);
+
+                            if workspace.debugger_data.evaluating_watch {
+                                watch.value = value;
+                            }
+                            else {
+                                allocate_strings(&text);
+                                allocated_value := new<DebugValue>();
+                                *allocated_value = value;
+                                allocated_value.data = text;
+                                *workspace.debugger_data.target_debug_value = allocated_value;
+                            }
                             workspace.debugger_data.parsing_value = false;
                         }
                         break;
@@ -1924,9 +1954,9 @@ clear_debug_value(DebugValue* value) {
         value.pointer_value = null;
     }
 
-    if value.parent != null && value.parent.data.length > 0 {
-        free_allocation(value.parent.data.data);
-        value.parent.data = { length = 0; data = null; }
+    if value.data.length > 0 {
+        free_allocation(value.data.data);
+        value.data = { length = 0; data = null; }
     }
 }
 
@@ -2034,10 +2064,15 @@ evaluate_watch(Workspace* workspace, int index) {
 
     workspace.debugger_data = {
         parse_status = DebuggerParseStatus.Expression;
+        evaluating_watch = true;
         watch_index = index;
     }
 
-    command := temp_string("p ", watch.expression, "\n");
+    evaluate_expression(workspace, watch.expression);
+}
+
+evaluate_expression(Workspace* workspace, string expression) {
+    command := temp_string("p ", expression, "\n");
     send_command_to_debugger(workspace, command);
 
     while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
