@@ -491,7 +491,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Locals; {
                         each i in workspace.debugger_data.local_variables.length {
                             local := &workspace.debugger_data.local_variables.array[i];
-                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, false, empty_string);
+                            line_index, finished = toggle_debug_value(workspace, &local.value, line_index, current_line, false, empty_string);
 
                             if finished break;
                         }
@@ -501,7 +501,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Watches; {
                         each i in workspace.debugger_data.watches.length {
                             watch := &workspace.debugger_data.watches.array[i];
-                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, false, empty_string);
+                            line_index, finished = toggle_debug_value(workspace, &watch.value, line_index, current_line, false, empty_string);
 
                             if finished break;
                         }
@@ -525,7 +525,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Locals; {
                         each i in workspace.debugger_data.local_variables.length {
                             local := &workspace.debugger_data.local_variables.array[i];
-                            line_index, finished = toggle_debug_value(&local.value, line_index, current_line, true, local.name);
+                            line_index, finished = toggle_debug_value(workspace, &local.value, line_index, current_line, true, local.name);
 
                             if finished break;
                         }
@@ -535,7 +535,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     case DebuggerView.Watches; {
                         each i in workspace.debugger_data.watches.length {
                             watch := &workspace.debugger_data.watches.array[i];
-                            line_index, finished = toggle_debug_value(&watch.value, line_index, current_line, true, watch.expression);
+                            line_index, finished = toggle_debug_value(workspace, &watch.value, line_index, current_line, true, watch.expression);
 
                             if finished break;
                         }
@@ -964,23 +964,25 @@ draw_selected_line(float y, bool highlight = false) {
     draw_quad(&line_quad, 1);
 }
 
-int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line, bool expand, string expression) {
+int, bool toggle_debug_value(Workspace* workspace, DebugValue* value, int line_index, int current_line, bool expand, string expression, bool from_pointer = false) {
     toggled := false;
     if value.is_struct {
         if value.expanded {
-            if !expand && line_index == current_line {
+            if !expand && line_index == current_line && !from_pointer {
                 value.expanded = false;
                 collapse_struct_fields(value);
                 toggled = true;
             }
             else {
-                line_index++;
+                if !from_pointer {
+                    line_index++;
+                }
                 each struct_field_value in value.struct_field_values {
                     sub_expression: string;
                     if expand {
                         sub_expression = temp_string(expression, ".", struct_field_value.name);
                     }
-                    lines, finished := toggle_debug_value(&struct_field_value.value, line_index, current_line, expand, sub_expression);
+                    lines, finished := toggle_debug_value(workspace, &struct_field_value.value, line_index, current_line, expand, sub_expression);
                     line_index = lines;
                     if finished {
                         toggled = true;
@@ -992,6 +994,9 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
         else if expand && line_index == current_line {
             value.expanded = true;
             toggled = true;
+        }
+        else {
+            line_index++;
         }
     }
     else if value.is_pointer {
@@ -1009,7 +1014,7 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
                 if expand {
                     sub_expression = temp_string(expression, "[0]");
                 }
-                line_index, toggled = toggle_debug_value(value.pointer_value, line_index, current_line, expand, sub_expression);
+                line_index, toggled = toggle_debug_value(workspace, value.pointer_value, line_index, current_line, expand, sub_expression, true);
             }
         }
         else if expand && line_index == current_line {
@@ -1017,9 +1022,17 @@ int, bool toggle_debug_value(DebugValue* value, int line_index, int current_line
             toggled = true;
             if value.pointer_value == null {
                 expression = temp_string(expression, "[0]");
-                log("'%'\n", expression);
                 if !workspace.debugger_data.command_executing {
-                    // TODO Trigger this to load
+                    workspace.debugger_data = {
+                        parse_status = DebuggerParseStatus.Expression;
+                        evaluating_watch = false;
+                        target_debug_value = &value.pointer_value;
+                    }
+
+                    evaluate_expression(workspace, expression);
+                    if value.pointer_value != null && value.pointer_value.is_struct {
+                        value.pointer_value.expanded = true;
+                    }
                 }
             }
         }
@@ -1060,7 +1073,7 @@ collapse_struct_fields(DebugValue* value) {
     }
 }
 
-float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* value, float x, float y, u32 line_index, u32 available_lines, u16 i, u32 depth = 1) {
+float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* value, float x, float y, u32 line_index, u32 available_lines, u16 i, u32 depth = 1, bool from_pointer = false) {
     blank_background: Vector4;
 
     if value.is_struct {
@@ -1071,7 +1084,7 @@ float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* v
             value_separation = 1;
         }
 
-        if value.expanded && available_lines > 0 {
+        if value.expanded && available_lines > 0 && !from_pointer {
             if line_index >= i {
                 draw_list_line(y);
                 available_lines--;
@@ -1148,9 +1161,9 @@ float, float, u32, u32, u16 draw_debug_value(Workspace* workspace, DebugValue* v
                 y -= global_font_config.line_height;
             }
             line_index++;
-            x = (depth + 1) * 2 * global_font_config.quad_advance;
+            x = depth * 2 * global_font_config.quad_advance;
 
-            x, y, line_index, available_lines, i = draw_debug_value(workspace, value.pointer_value, x, y, line_index, available_lines, i, depth + 1);
+            x, y, line_index, available_lines, i = draw_debug_value(workspace, value.pointer_value, x, y, line_index, available_lines, i, depth, true);
         }
     }
 
@@ -1321,7 +1334,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         status: string = { length = text.length - i; data = text.data + i; }
                         if starts_with(status, "stopped") {
                             workspace.debugger_data.command_executing = false;
-                            if !workspace.debugger_data.skip_next_stop {
+                            if !workspace.debugger_data.skip_next_stop && workspace.debugger_data.watches.length > 0 {
                                 trigger_load_watches(workspace);
                             }
 
@@ -1813,6 +1826,9 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     clear_debug_value(&watch.value);
                 }
             }
+            else if !workspace.debugger_data.parsing_type && !workspace.debugger_data.parsing_value {
+                workspace.debugger_data.parsing_type = true;
+            }
 
             if workspace.debugger_data.parsing_type && (text.length == 0 || text[0] != '(') {
                 if workspace.debugger_data.evaluating_watch {
@@ -1862,13 +1878,16 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             workspace.debugger_data.set_is_struct = true;
                         }
                         else {
+                            if !workspace.debugger_data.evaluating_watch {
+                                allocate_strings(&text);
+                            }
+
                             value := parse_debug_value(text, &i, workspace.debugger_data.set_is_struct);
 
                             if workspace.debugger_data.evaluating_watch {
                                 watch.value = value;
                             }
                             else {
-                                allocate_strings(&text);
                                 allocated_value := new<DebugValue>();
                                 *allocated_value = value;
                                 allocated_value.data = text;
@@ -1882,12 +1901,15 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             }
 
             if !workspace.debugger_data.parsing_type && !workspace.debugger_data.parsing_value {
-                watch.parsing = false;
+                if watch {
+                    watch.parsing = false;
+                }
                 workspace.debugger_data.parse_status = DebuggerParseStatus.None;
             }
         }
     }
 
+    trigger_window_update();
     return true;
 }
 
@@ -2057,10 +2079,11 @@ load_watches(int thread, JobData data) {
     }
 
     adjust_view_index(workspace);
+    trigger_window_update();
 }
 
 evaluate_watch(Workspace* workspace, int index) {
-    watch := workspace.debugger_data.watches.array[index];
+    watch := &workspace.debugger_data.watches.array[index];
 
     workspace.debugger_data = {
         parse_status = DebuggerParseStatus.Expression;
