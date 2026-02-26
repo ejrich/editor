@@ -9,6 +9,7 @@ struct DebuggerData {
     buffer_window: BufferWindow;
     send_mutex: Semaphore;
     command_executing: bool;
+    command_exited: bool;
     skip_next_stop: bool;
     parse_status: DebuggerParseStatus;
     paused_file_index: s32;
@@ -621,7 +622,12 @@ BufferWindow* get_debugger_window(Workspace* workspace) {
 start_or_continue_debugger() {
     workspace := get_workspace();
     if workspace.debugger_data.running {
-        continue_debugger(workspace);
+        if workspace.debugger_data.command_exited {
+            start_debugger_command(workspace);
+        }
+        else {
+            continue_debugger(workspace);
+        }
     }
     else if !string_is_empty(workspace.local_settings.debug_command) {
         force_command_to_stop();
@@ -1238,8 +1244,7 @@ debugger_thread(int thread, JobData data) {
     send_command_to_debugger(workspace, "thread list\n");
     send_command_to_debugger(workspace, "DONE\n");
 
-    send_command_to_debugger(workspace, "r\n");
-    workspace.debugger_data.command_executing = true;
+    start_debugger_command(workspace);
 
     while workspace.debugger_data.running {
         success, text = read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
@@ -1280,6 +1285,14 @@ escape_debugger(Workspace* workspace) {
 
     sleep(200);
     workspace.debugger_data.command_executing = false;
+}
+
+start_debugger_command(Workspace* workspace) {
+    send_command_to_debugger(workspace, "r\n");
+    workspace.debugger_data = {
+        command_executing = true;
+        command_exited = false;
+    }
 }
 
 continue_debugger(Workspace* workspace) {
@@ -1340,6 +1353,10 @@ bool parse_debugger_output(Workspace* workspace, string text) {
 
                             workspace.debugger_data.skip_next_stop = false;
                             return true;
+                        }
+                        else if starts_with(status, "exited") {
+                            workspace.debugger_data.command_executing = false;
+                            workspace.debugger_data.command_exited = true;
                         }
 
                         break;
