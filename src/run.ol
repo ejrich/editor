@@ -214,31 +214,55 @@ bool start_command(string command, string directory, ProcessData* process_data, 
     return true;
 }
 
-bool, string read_from_output_pipe(ProcessData* process, u8* buffer, int buffer_length) {
+bool, string read_from_output_pipe(ProcessData* process, u8* buffer, int buffer_length, int cursor = 0) {
     success := true;
     value: string;
 
     #if os == OS.Windows {
         read: int;
-        success = ReadFile(process.output_pipe, buffer, buffer_length, &read, null);
+        success = ReadFile(process.output_pipe, buffer + cursor, buffer_length - cursor, &read, null);
 
         if read == 0 {
             success = false;
         }
 
-        value = { length = read; data = buffer; }
+        value = { length = read + cursor; data = buffer; }
     }
     else {
-        length := read(process.output_pipe, buffer, buffer_length);
+        length := read(process.output_pipe, buffer + cursor, buffer_length - cursor);
 
         if length <= 0 {
             success = false;
         }
 
-        value = { length = length; data = buffer; }
+        value = { length = length + cursor; data = buffer; }
     }
 
     return success, value;
+}
+
+bool output_pipe_has_pending_data(ProcessData* process_data) {
+    pending_output := false;
+
+    #if os == OS.Windows {
+        bytes_available: int;
+        success := PeekNamedPipe(process_data.output_pipe, null, 0, null, &bytes_available, null);
+
+        pending_output = success && bytes_available > 0;
+    }
+    else {
+        fd_set: Fd_Set;
+        clear_fd_set(&fd_set);
+
+        set_fd_set(&fd_set, process_data.output_pipe);
+
+        timeout: Timeval;
+        select(process_data.output_pipe + 1, &fd_set, null, null, &timeout);
+
+        pending_output = is_fd_set(&fd_set, process_data.output_pipe);
+    }
+
+    return pending_output;
 }
 
 close_process_and_get_exit_code(ProcessData* process_data, int* exit_code) {

@@ -1220,7 +1220,7 @@ debugger_thread(int thread, JobData data) {
         return;
     }
 
-    buf: CArray<u8>[10000];
+    buf: CArray<u8>[16000];
     success, text := read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
     add_to_debugger_buffer(workspace, text);
 
@@ -1246,14 +1246,26 @@ debugger_thread(int thread, JobData data) {
 
     start_debugger_command(workspace);
 
+    cursor := 0;
     while workspace.debugger_data.running {
-        success, text = read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length);
+        success, text = read_from_output_pipe(&workspace.debugger_data.process, &buf, buf.length, cursor);
 
         if !success break;
+
+        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
+            sleep(50);
+            pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
+            cursor = text.length;
+            if pending && cursor < buf.length {
+                continue;
+            }
+        }
 
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
         }
+
+        cursor = 0;
     }
 
     close_process_and_get_exit_code(&workspace.debugger_data.process, &workspace.debugger_data.exit_code);
