@@ -48,10 +48,10 @@ enum DebuggerView : u8 {
 enum DebuggerParseStatus : u8 {
     None;
     Source;
-    Variables;
     StackTrace;
     Registers;
     Threads;
+    Variables;
     Expression;
 }
 
@@ -1238,10 +1238,10 @@ debugger_thread(int thread, JobData data) {
 
     send_command_to_debugger(workspace, "target stop-hook add\n");
     send_command_to_debugger(workspace, "source info\n");
-    send_command_to_debugger(workspace, "v\n");
     send_command_to_debugger(workspace, "bt\n");
     send_command_to_debugger(workspace, "register read\n");
     send_command_to_debugger(workspace, "thread list\n");
+    send_command_to_debugger(workspace, "v\n");
     send_command_to_debugger(workspace, "DONE\n");
 
     start_debugger_command(workspace);
@@ -1448,70 +1448,6 @@ bool parse_debugger_output(Workspace* workspace, string text) {
 
                     buffer_window.line = line - 1;
                     adjust_start_line(buffer_window);
-                }
-            }
-
-            workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
-        }
-        case DebuggerParseStatus.Variables; {
-            // (Workspace *) workspace = 0xff0000000000000a
-            // (BufferWindow *) bottom_window = 0x00000000004795e0
-            // (bool) bottom_focused = true
-            allocate_strings(&text);
-            if !string_is_empty(workspace.debugger_data.local_variables_data) {
-                free_allocation(workspace.debugger_data.local_variables_data.data);
-            }
-            each i in workspace.debugger_data.local_variables.length {
-                clear_debug_value(&workspace.debugger_data.local_variables.array[i].value);
-            }
-            workspace.debugger_data.local_variables_data = text;
-            workspace.debugger_data.local_variables.length = 0;
-
-            parsing_type := true;
-            parsing_name, parsing_value, parse_value_to_eol, in_string, escape, reset := false;
-            struct_depth := 0;
-            variable: LocalVariable;
-            i := 0;
-            while i < text.length {
-                char := text[i++];
-                if parsing_type {
-                    if char == '(' {
-                        variable.type.data = text.data + i;
-                    }
-                    else if char == ')' {
-                        parsing_type = false;
-                        parsing_name = true;
-                    }
-                    else if variable.type.data {
-                        variable.type.length++;
-                    }
-                }
-                else if parsing_name {
-                    if char == ' ' {
-                        if variable.name.length {
-                            parsing_name = false;
-                            parsing_value = true;
-                        }
-                        else {
-                            variable.name.data = text.data + i;
-                        }
-                    }
-                    else {
-                        variable.name.length++;
-                    }
-                }
-                else if parsing_value {
-                    i++;
-                    variable.value = parse_debug_value(text, &i);
-
-                    parsing_value = false;
-                    parsing_type = true;
-                    add_to_array(&workspace.debugger_data.local_variables, variable);
-
-                    variable = {
-                        name = { length = 0; data = null; }
-                        type = { length = 0; data = null; }
-                    }
                 }
             }
 
@@ -1822,6 +1758,70 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                     }
 
                     add_to_array(&workspace.debugger_data.threads, thread);
+                }
+            }
+
+            workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+        }
+        case DebuggerParseStatus.Variables; {
+            // (Workspace *) workspace = 0xff0000000000000a
+            // (BufferWindow *) bottom_window = 0x00000000004795e0
+            // (bool) bottom_focused = true
+            allocate_strings(&text);
+            if !string_is_empty(workspace.debugger_data.local_variables_data) {
+                free_allocation(workspace.debugger_data.local_variables_data.data);
+            }
+            each i in workspace.debugger_data.local_variables.length {
+                clear_debug_value(&workspace.debugger_data.local_variables.array[i].value);
+            }
+            workspace.debugger_data.local_variables_data = text;
+            workspace.debugger_data.local_variables.length = 0;
+
+            parsing_type := true;
+            parsing_name, parsing_value, parse_value_to_eol, in_string, escape, reset := false;
+            struct_depth := 0;
+            variable: LocalVariable;
+            i := 0;
+            while i < text.length {
+                char := text[i++];
+                if parsing_type {
+                    if char == '(' {
+                        variable.type.data = text.data + i;
+                    }
+                    else if char == ')' {
+                        parsing_type = false;
+                        parsing_name = true;
+                    }
+                    else if variable.type.data {
+                        variable.type.length++;
+                    }
+                }
+                else if parsing_name {
+                    if char == ' ' {
+                        if variable.name.length {
+                            parsing_name = false;
+                            parsing_value = true;
+                        }
+                        else {
+                            variable.name.data = text.data + i;
+                        }
+                    }
+                    else {
+                        variable.name.length++;
+                    }
+                }
+                else if parsing_value {
+                    i++;
+                    variable.value = parse_debug_value(text, &i);
+
+                    parsing_value = false;
+                    parsing_type = true;
+                    add_to_array(&workspace.debugger_data.local_variables, variable);
+
+                    variable = {
+                        name = { length = 0; data = null; }
+                        type = { length = 0; data = null; }
+                    }
                 }
             }
 
