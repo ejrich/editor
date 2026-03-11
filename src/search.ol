@@ -335,6 +335,7 @@ search_results: Array<ListEntry>;
 
 search_results_allocated := 0;
 search_results_block_size := 100; #const
+max_search_results := 5000; #const
 
 running_search := false;
 cancel_search := false;
@@ -485,6 +486,8 @@ bool ignore_file(string file) {
 }
 
 search_file(string path, string filter) {
+    if search_results.length == max_search_results return;
+
     found, file := read_file(path, allocate);
     if !found return;
 
@@ -531,7 +534,7 @@ search_file(string path, string filter) {
                             }
                             line.length++;
                         }
-                        add_search_result(path, line_number, column, line);
+                        if !add_search_result(path, line_number, column, line) return;
                         skip_until_next_line = true;
                     }
                 }
@@ -548,7 +551,9 @@ search_file(string path, string filter) {
     }
 }
 
-add_search_result(string file, int line, int column, string line_text) {
+bool add_search_result(string file, int line, int column, string line_text) {
+    if search_results.length == max_search_results return false;
+
     if search_results.length == search_results_allocated {
         old_data := search_results.data;
         old_size := search_results_allocated * size_of(ListEntry);
@@ -565,6 +570,8 @@ add_search_result(string file, int line, int column, string line_text) {
         key = format_string("%:%-%", allocate_for_search_result, line, column, file);
         display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_text);
     }
+
+    return true;
 }
 
 struct SearchResultsStrings {
