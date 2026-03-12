@@ -60,7 +60,7 @@ load_directory(string path, string display_path, bool counting) {
                 name := convert_c_string(&dirent.d_name);
 
                 if !array_contains(directories_to_ignore, name) {
-                    if dirent.d_type == DirentType.DT_REG {
+                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) {
                         file_path := name;
                         if !string_is_empty(display_path) {
                             file_path = temp_string(display_path, "/", name);
@@ -116,7 +116,7 @@ load_directory(string path, string display_path, bool counting) {
                     }
                     load_directory(sub_path, sub_display_path, counting);
                 }
-                else {
+                else if !ignore_file(name) {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -477,7 +477,7 @@ search_directory(string path, string display_path, string filter) {
     }
 }
 
-file_types_to_ignore: Array<string> = [".exe", ".pdb", ".dll", ".so"]
+file_types_to_ignore: Array<string> = [".exe", ".pdb", ".dll", ".so", ".a"]
 
 bool ignore_file(string file) {
     each file_type in file_types_to_ignore {
@@ -492,6 +492,7 @@ bool ignore_file(string file) {
 search_file(string path, string filter) {
     if search_results.length == max_search_results return;
 
+    // TODO Check if the file is binary before searching
     found, file := read_file(path, allocate);
     if !found return;
 
