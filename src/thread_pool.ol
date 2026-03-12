@@ -20,10 +20,10 @@ init_thread_pool() {
 }
 
 struct WorkQueue {
-    start: int;
-    end: int;
-    count: int;
-    completed: int;
+    start: u64;
+    end: u64;
+    count: u64;
+    completed: u64;
     semaphore: Semaphore;
     entries: Array<QueueItem>[queue_size];
 }

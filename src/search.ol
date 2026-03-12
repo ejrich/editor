@@ -5,7 +5,7 @@ open_files_list() {
 
 open_search_list(string initial_search = empty_string) {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, initial_value = initial_search);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search);
 }
 
 #private
@@ -303,10 +303,7 @@ get_file_at_line(int thread, JobData data) {
 }
 
 change_search_filter(string filter) {
-    if running_search {
-        cancel_search = true;
-        while running_search {}
-    }
+    cancel_current_search();
 
     search_results.length = 0;
     each results_string in search_results_strings {
@@ -326,6 +323,13 @@ open_file_at_line(string search_result) {
     buffer_window.line = line;
     buffer_window.cursor = column;
     adjust_start_line(buffer_window);
+}
+
+cancel_current_search() {
+    if running_search {
+        cancel_search = true;
+        while running_search {}
+    }
 }
 
 // Search results entries are stored in the following format
@@ -395,7 +399,7 @@ search_directory(string path, string display_path, string filter) {
         }
 
         buffer: CArray<u8>[5600];
-        while !cancel_search {
+        while !cancel_search && search_results.length < max_search_results {
             bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
 
             if bytes == 0 break;
@@ -444,7 +448,7 @@ search_directory(string path, string display_path, string filter) {
             return;
         }
 
-        while !cancel_search {
+        while !cancel_search && search_results.length < max_search_results {
             name := convert_c_string(&find_data.cFileName);
 
             if !array_contains(directories_to_ignore, name) {
