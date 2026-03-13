@@ -60,7 +60,7 @@ load_directory(string path, string display_path, bool counting) {
                 name := convert_c_string(&dirent.d_name);
 
                 if !array_contains(directories_to_ignore, name) {
-                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) {
+                    if dirent.d_type == DirentType.DT_REG {
                         file_path := name;
                         if !string_is_empty(display_path) {
                             file_path = temp_string(display_path, "/", name);
@@ -116,7 +116,7 @@ load_directory(string path, string display_path, bool counting) {
                     }
                     load_directory(sub_path, sub_display_path, counting);
                 }
-                else if !ignore_file(name) {
+                else {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -185,23 +185,23 @@ Buffer* read_file_into_buffer(string file_path) {
     buffer.lines = allocate_line();
     buffer.syntax = get_syntax_for_file(file_path);
 
-    buf: CArray<u8>[1000];
-    while true {
-        #if os == OS.Linux {
-            length := read(file.handle, &buf, buf.length);
-        }
-        #if os == OS.Windows {
-            length: int;
-            ReadFile(file.handle, &buf, buf.length, &length, null);
-        }
+    if is_file_binary(file) {
+        add_text_to_end_of_buffer(buffer, "======== Binary File ========", false);
+    }
+    else if move_to_start_of_file(file) {
+        length: int;
+        buf: CArray<u8>[1000];
+        while true {
+            success, length = read_file_into_buffer(file, &buf, buf.length);
+            if !success || length <= 0 break;
 
-        if length <= 0 break;
-
-        text: string = { length = length; data = &buf; }
-        add_text_to_end_of_buffer(buffer, text, false);
+            text: string = { length = length; data = &buf; }
+            add_text_to_end_of_buffer(buffer, text, false);
+        }
     }
 
     close_file(file);
+
     return buffer;
 }
 
@@ -218,7 +218,7 @@ change_file_filter(string filter) {
     else {
         filtered_file_entries.length = 0;
         each file in file_entries {
-            if string_contains(file, filter) {
+            if string_contains(file, filter, false) {
                 filtered_file_entries[filtered_file_entries.length++] = {
                     key = file;
                     display = file;
@@ -489,10 +489,10 @@ bool ignore_file(string file) {
     return false;
 }
 
-binary_file_buffer_size := 500; #const
-binary_file_buffer: CArray<u8>[binary_file_buffer_size];
-
 bool is_file_binary(File file) {
+    binary_file_buffer_size := 500; #const
+    binary_file_buffer: CArray<u8>[binary_file_buffer_size];
+
     success, read := read_file_into_buffer(file, &binary_file_buffer, binary_file_buffer_size);
     if !success return true;
 

@@ -174,24 +174,34 @@ allocate_strings(bool null_terminate = false, Params<string*> strings) {
     }
 }
 
-bool string_contains(string value, string sub_value) {
+bool string_contains(string value, string sub_value, bool case_sensitive = true) {
     if sub_value.length == 0 return true;
     if sub_value.length > value.length return false;
     if sub_value.length == value.length return value == sub_value;
 
     each i in value.length - sub_value.length + 1 {
-        if value[i] == sub_value[0] {
-            test_value: string = {
-                length = sub_value.length;
-                data = value.data + i;
-            }
-            if test_value == sub_value {
-                return true;
+        matched := true;
+        each j in sub_value.length {
+            a := value[i + j];
+            b := sub_value[j];
+
+            if a != b {
+                if case_sensitive || to_lowercase(a) != to_lowercase(b) {
+                    matched = false;
+                    break;
+                }
             }
         }
+
+        if matched return true;
     }
 
     return false;
+}
+
+u8 to_lowercase(u8 char) {
+    if char >= 'A' && char <= 'Z' return char + 0x20;
+    return char;
 }
 
 Array<string> split_string(string value, u8 delimeter = '\n') #inline {
