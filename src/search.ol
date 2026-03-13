@@ -489,11 +489,32 @@ bool ignore_file(string file) {
     return false;
 }
 
+binary_file_buffer_size := 500; #const
+binary_file_buffer: CArray<u8>[binary_file_buffer_size];
+
+bool is_file_binary(File file) {
+    success, read := read_file_into_buffer(file, &binary_file_buffer, binary_file_buffer_size);
+    if !success return true;
+
+    each i in read {
+        if binary_file_buffer[i] == 0 {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 search_file(string path, string filter) {
     if search_results.length == max_search_results return;
 
-    // TODO Check if the file is binary before searching
-    found, file := read_file(path, allocate);
+    success, file_handle := open_file(path);
+    if !success || is_file_binary(file_handle) {
+        close_file(file_handle);
+        return;
+    }
+
+    found, file := read_file(file_handle, allocate);
     if !found return;
 
     defer free_allocation(file.data);
