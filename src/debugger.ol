@@ -29,6 +29,7 @@ struct DebuggerData {
     target_debug_value: DebugValue**;
     editing_watch: bool;
     editing_variable: bool;
+    set_variable_error: bool;
     editing_index: u16;
     stack_frames: DynamicArray<StackFrame>;
     max_function_length: int;
@@ -166,7 +167,7 @@ draw_debugger_views(Workspace* workspace) {
                 variable_index, line_index: u32;
                 while available_lines > 0 && variable_index < workspace.debugger_data.local_variables.length {
                     if workspace.debugger_data.views_focused && i == workspace.debugger_data.view_index {
-                        draw_selected_line(y);
+                        draw_selected_line(y, workspace.debugger_data.editing_variable);
                     }
 
                     local := &workspace.debugger_data.local_variables.array[variable_index];
@@ -385,10 +386,12 @@ draw_debugger_views(Workspace* workspace) {
 bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string char) {
     workspace := get_workspace();
 
-    if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused || workspace.debugger_data.view != DebuggerView.Watches {
-        if workspace.debugger_data.view != DebuggerView.Locals {
-            return false;
-        }
+    if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused {
+        return false;
+    }
+
+    if workspace.debugger_data.view != DebuggerView.Watches && workspace.debugger_data.view != DebuggerView.Locals {
+        return false;
     }
 
     switch code {
@@ -433,8 +436,13 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     send_command_to_debugger(workspace, command);
 
                     while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
-                    workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
-                    send_command_to_debugger(workspace, "v\n");
+                    if workspace.debugger_data.set_variable_error {
+                        workspace.debugger_data.set_variable_error = false;
+                    }
+                    else {
+                        workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+                        send_command_to_debugger(workspace, "v\n");
+                    }
                 }
 
                 workspace.debugger_data.editing_variable = false;
@@ -495,7 +503,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
             return true;
         }
         case KeyCode.Backspace; {
-            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_watch {
+            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_variable {
                 if edit_length {
                     if edit_cursor < edit_length {
                         memory_copy(edit_buffer.data + edit_cursor - 1, edit_buffer.data + edit_cursor, edit_length - edit_cursor);
@@ -505,8 +513,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     edit_length--;
                 }
             }
-            else {
-                // TODO Only do this for watches
+            else if workspace.debugger_data.view == DebuggerView.Watches {
                 delete_watch_at_current_index(workspace);
             }
 
@@ -520,8 +527,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     edit_length--;
                 }
             }
-            else {
-                // TODO Only do this for watches
+            else if workspace.debugger_data.view == DebuggerView.Watches {
                 delete_watch_at_current_index(workspace);
             }
 
@@ -596,7 +602,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
             }
         }
         default; {
-            if char.length > 0 && (mod & ModCode.Control) != ModCode.Control && (workspace.debugger_data.editing_watch || workspace.debugger_data.editing_watch) {
+            if char.length > 0 && (mod & ModCode.Control) != ModCode.Control && (workspace.debugger_data.editing_watch || workspace.debugger_data.editing_variable) {
                 if edit_length + char.length <= edit_buffer_length {
                     if edit_cursor < edit_length {
                         each i in edit_length - edit_cursor {
@@ -1301,7 +1307,8 @@ debugger_thread(int thread, JobData data) {
         if !success break;
 
         if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
-            workspace.debugger_data.parse_status == DebuggerParseStatus.Variables {
+            workspace.debugger_data.parse_status == DebuggerParseStatus.Variables ||
+            workspace.debugger_data.parse_status == DebuggerParseStatus.SetValue {
             sleep(20);
             pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
             cursor = text.length;
@@ -1309,8 +1316,6 @@ debugger_thread(int thread, JobData data) {
                 continue;
             }
         }
-
-        log("% %\n", workspace.debugger_data.parse_status, text);
 
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
@@ -1435,7 +1440,8 @@ bool parse_debugger_output(Workspace* workspace, string text) {
     }
 
     if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
-        workspace.debugger_data.parse_status == DebuggerParseStatus.Variables {
+        workspace.debugger_data.parse_status == DebuggerParseStatus.Variables ||
+        workspace.debugger_data.parse_status == DebuggerParseStatus.SetValue {
         while clear_lldb_line(&text) {}
     }
     else {
@@ -1993,7 +1999,11 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             }
         }
         case DebuggerParseStatus.SetValue; {
-            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+            workspace.debugger_data = {
+                set_variable_error = starts_with(text, "error:");
+                parse_status = DebuggerParseStatus.None;
+            }
+            return false;
         }
     }
 
