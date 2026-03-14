@@ -55,7 +55,6 @@ enum DebuggerParseStatus : u8 {
     Expression;
 }
 
-// TODO Move breakpoint lines when deleting/adding lines
 struct Breakpoint {
     line: u32;
     active: bool;
@@ -1241,7 +1240,6 @@ debugger_thread(int thread, JobData data) {
     send_command_to_debugger(workspace, "bt\n");
     send_command_to_debugger(workspace, "register read\n");
     send_command_to_debugger(workspace, "thread list\n");
-    send_command_to_debugger(workspace, "v\n");
     send_command_to_debugger(workspace, "DONE\n");
 
     start_debugger_command(workspace);
@@ -1252,8 +1250,9 @@ debugger_thread(int thread, JobData data) {
 
         if !success break;
 
-        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
-            sleep(50);
+        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
+            workspace.debugger_data.parse_status == DebuggerParseStatus.Variables {
+            sleep(20);
             pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
             cursor = text.length;
             if pending && cursor < buf.length {
@@ -1359,8 +1358,9 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         status: string = { length = text.length - i; data = text.data + i; }
                         if starts_with(status, "stopped") {
                             workspace.debugger_data.command_executing = false;
-                            if !workspace.debugger_data.skip_next_stop && workspace.debugger_data.watches.length > 0 {
-                                trigger_load_watches(workspace);
+                            if !workspace.debugger_data.skip_next_stop {
+                                send_command_to_debugger(workspace, "v\n");
+                                workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
                             }
 
                             workspace.debugger_data.skip_next_stop = false;
@@ -1382,7 +1382,8 @@ bool parse_debugger_output(Workspace* workspace, string text) {
         }
     }
 
-    if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression {
+    if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
+        workspace.debugger_data.parse_status == DebuggerParseStatus.Variables {
         while clear_lldb_line(&text) {}
     }
     else {
@@ -1761,7 +1762,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 }
             }
 
-            workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
         case DebuggerParseStatus.Variables; {
             // (Workspace *) workspace = 0xff0000000000000a
@@ -1826,6 +1827,9 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             }
 
             workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+            if workspace.debugger_data.watches.length > 0 {
+                trigger_load_watches(workspace);
+            }
         }
         case DebuggerParseStatus.Expression; {
             // Ex 1:
