@@ -28,7 +28,8 @@ struct DebuggerData {
     set_is_struct: bool;
     target_debug_value: DebugValue**;
     editing_watch: bool;
-    editing_watch_index: u16;
+    editing_variable: bool;
+    editing_index: u16;
     stack_frames: DynamicArray<StackFrame>;
     max_function_length: int;
     max_location_length: int;
@@ -53,6 +54,7 @@ enum DebuggerParseStatus : u8 {
     Threads;
     Variables;
     Expression;
+    SetValue;
 }
 
 struct Breakpoint {
@@ -167,25 +169,35 @@ draw_debugger_views(Workspace* workspace) {
                         draw_selected_line(y);
                     }
 
-                    local := &workspace.debugger_data.local_variables.array[variable_index++];
+                    local := &workspace.debugger_data.local_variables.array[variable_index];
 
-                    if line_index < i {
-                        x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                    if workspace.debugger_data.editing_variable && workspace.debugger_data.views_focused && variable_index == workspace.debugger_data.editing_index {
+                        value_string: string = {
+                            length = edit_length;
+                            data = edit_buffer.data;
+                        }
+
+                        render_highlighted_line_with_cursor(value_string, x, y, edit_cursor, 1.0);
                     }
                     else {
-                        render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
+                        if line_index < i {
+                            x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                        }
+                        else {
+                            render_text(local.name, settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += (local.name.length + 1) * global_font_config.quad_advance;
-                        render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
+                            x += (local.name.length + 1) * global_font_config.quad_advance;
+                            render_text("(", settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += global_font_config.quad_advance;
-                        render_text(local.type, settings.font_size, x, y, appearance.font_color, blank_background);
+                            x += global_font_config.quad_advance;
+                            render_text(local.type, settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += local.type.length * global_font_config.quad_advance;
-                        render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
+                            x += local.type.length * global_font_config.quad_advance;
+                            render_text(") =", settings.font_size, x, y, appearance.font_color, blank_background);
 
-                        x += 4 * global_font_config.quad_advance;
-                        x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                            x += 4 * global_font_config.quad_advance;
+                            x, y, line_index, available_lines, i = draw_debug_value(workspace, &local.value, x, y, line_index, available_lines, i);
+                        }
                     }
 
                     if line_index >= i && available_lines > 0 {
@@ -195,6 +207,7 @@ draw_debugger_views(Workspace* workspace) {
                         y -= global_font_config.line_height;
                     }
                     line_index++;
+                    variable_index++;
                     x = 0.0;
                 }
             }
@@ -206,13 +219,13 @@ draw_debugger_views(Workspace* workspace) {
                     draw_selected_line(y, workspace.debugger_data.editing_watch);
                 }
 
-                if workspace.debugger_data.editing_watch && workspace.debugger_data.views_focused && watch_index == workspace.debugger_data.editing_watch_index {
+                if workspace.debugger_data.editing_watch && workspace.debugger_data.views_focused && watch_index == workspace.debugger_data.editing_index {
                     watch_string: string = {
-                        length = watch_length;
-                        data = watch_buffer.data;
+                        length = edit_length;
+                        data = edit_buffer.data;
                     }
 
-                    render_highlighted_line_with_cursor(watch_string, x, y, watch_cursor, 1.0);
+                    render_highlighted_line_with_cursor(watch_string, x, y, edit_cursor, 1.0);
                     watch_index++;
                 }
                 else {
@@ -260,11 +273,11 @@ draw_debugger_views(Workspace* workspace) {
                 draw_selected_line(y, workspace.debugger_data.editing_watch);
                 if workspace.debugger_data.editing_watch {
                     watch_string: string = {
-                        length = watch_length;
-                        data = watch_buffer.data;
+                        length = edit_length;
+                        data = edit_buffer.data;
                     }
 
-                    render_highlighted_line_with_cursor(watch_string, x, y, watch_cursor, 1.0);
+                    render_highlighted_line_with_cursor(watch_string, x, y, edit_cursor, 1.0);
                 }
             }
         }
@@ -373,7 +386,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
     workspace := get_workspace();
 
     if !workspace.debugger_data.running || !workspace.bottom_window_selected || !workspace.debugger_data.views_focused || workspace.debugger_data.view != DebuggerView.Watches {
-        if workspace.debugger_data.view != DebuggerView.Locals || (code != KeyCode.Left && code != KeyCode.Right) {
+        if workspace.debugger_data.view != DebuggerView.Locals {
             return false;
         }
     }
@@ -381,19 +394,20 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
     switch code {
         case KeyCode.Enter; {
             if workspace.debugger_data.editing_watch {
-                expression := get_watch_string();
+                expression := get_edit_string();
 
-                if workspace.debugger_data.editing_watch_index < workspace.debugger_data.watches.length {
+                if workspace.debugger_data.editing_index < workspace.debugger_data.watches.length {
                     if expression.length {
-                        watch := &workspace.debugger_data.watches.array[workspace.debugger_data.editing_watch_index];
+                        watch := &workspace.debugger_data.watches.array[workspace.debugger_data.editing_index];
                         if watch.expression != expression {
+                            // TODO Figure out why this is not freeing correctly
                             clear_watch(watch);
                             watch.expression = expression;
                             trigger_load_watches(workspace);
                         }
                     }
                     else {
-                        delete_watch(workspace, workspace.debugger_data.editing_watch_index);
+                        delete_watch(workspace, workspace.debugger_data.editing_index);
                     }
                 }
                 else if expression.length {
@@ -408,78 +422,114 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
 
                 workspace.debugger_data.editing_watch = false;
             }
-            else {
-                watch_cursor = 0;
-                watch_length = 0;
+            else if workspace.debugger_data.editing_variable {
+                value := get_edit_string();
 
-                line_index := 0;
-                add_watch := true;
-                each i in workspace.debugger_data.watches.length {
-                    watch := &workspace.debugger_data.watches.array[i];
-                    if line_index == workspace.debugger_data.view_index {
-                        memory_copy(watch_buffer.data, watch.expression.data, watch.expression.length);
+                if value.length {
+                    variable := &workspace.debugger_data.local_variables.array[workspace.debugger_data.editing_index];
 
-                        watch_cursor = watch.expression.length;
-                        watch_length = watch.expression.length;
-                        workspace.debugger_data.editing_watch = true;
-                        add_watch = false;
-                        workspace.debugger_data.editing_watch_index = i;
-                        break;
-                    }
-                    else if line_index > workspace.debugger_data.view_index {
-                        add_watch = false;
-                        break;
-                    }
+                    command := temp_string("expr ", variable.name, " = ", value, "\n");
+                    workspace.debugger_data.parse_status = DebuggerParseStatus.SetValue;
+                    send_command_to_debugger(workspace, command);
 
-                    line_index += get_debug_value_lines(&watch.value);
+                    while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
+                    workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+                    send_command_to_debugger(workspace, "v\n");
                 }
 
-                if add_watch {
-                    workspace.debugger_data.editing_watch_index = workspace.debugger_data.watches.length;
-                    workspace.debugger_data.editing_watch = true;
+                workspace.debugger_data.editing_variable = false;
+            }
+            else {
+                edit_cursor = 0;
+                edit_length = 0;
+
+                line_index := 0;
+                if workspace.debugger_data.view == DebuggerView.Locals {
+                    each i in workspace.debugger_data.local_variables.length {
+                        variable := &workspace.debugger_data.local_variables.array[i];
+                        if line_index == workspace.debugger_data.view_index {
+                            workspace.debugger_data.editing_variable = true;
+                            workspace.debugger_data.editing_index = i;
+                            break;
+                        }
+
+                        line_index += get_debug_value_lines(&variable.value);
+                    }
+                }
+                else if workspace.debugger_data.view == DebuggerView.Watches {
+                    add_watch := true;
+                    each i in workspace.debugger_data.watches.length {
+                        watch := &workspace.debugger_data.watches.array[i];
+                        if line_index == workspace.debugger_data.view_index {
+                            memory_copy(edit_buffer.data, watch.expression.data, watch.expression.length);
+
+                            edit_cursor = watch.expression.length;
+                            edit_length = watch.expression.length;
+                            workspace.debugger_data.editing_watch = true;
+                            add_watch = false;
+                            workspace.debugger_data.editing_index = i;
+                            break;
+                        }
+                        else if line_index > workspace.debugger_data.view_index {
+                            add_watch = false;
+                            break;
+                        }
+
+                        line_index += get_debug_value_lines(&watch.value);
+                    }
+
+                    if add_watch {
+                        workspace.debugger_data.editing_index = workspace.debugger_data.watches.length;
+                        workspace.debugger_data.editing_watch = true;
+                    }
                 }
             }
 
             return true;
         }
         case KeyCode.Escape; {
-            workspace.debugger_data.editing_watch = false;
+            workspace.debugger_data = {
+                editing_watch = false;
+                editing_variable = false;
+            }
             return true;
         }
         case KeyCode.Backspace; {
-            if workspace.debugger_data.editing_watch {
-                if watch_length {
-                    if watch_cursor < watch_length {
-                        memory_copy(watch_buffer.data + watch_cursor - 1, watch_buffer.data + watch_cursor, watch_length - watch_cursor);
+            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_watch {
+                if edit_length {
+                    if edit_cursor < edit_length {
+                        memory_copy(edit_buffer.data + edit_cursor - 1, edit_buffer.data + edit_cursor, edit_length - edit_cursor);
                     }
 
-                    watch_cursor--;
-                    watch_length--;
+                    edit_cursor--;
+                    edit_length--;
                 }
             }
             else {
+                // TODO Only do this for watches
                 delete_watch_at_current_index(workspace);
             }
 
             return true;
         }
         case KeyCode.Delete; {
-            if workspace.debugger_data.editing_watch {
-                if watch_cursor < watch_length {
-                    memory_copy(watch_buffer.data + watch_cursor, watch_buffer.data + watch_cursor + 1, watch_length - watch_cursor);
+            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_variable {
+                if edit_cursor < edit_length {
+                    memory_copy(edit_buffer.data + edit_cursor, edit_buffer.data + edit_cursor + 1, edit_length - edit_cursor);
 
-                    watch_length--;
+                    edit_length--;
                 }
             }
             else {
+                // TODO Only do this for watches
                 delete_watch_at_current_index(workspace);
             }
 
             return true;
         }
         case KeyCode.Left; {
-            if workspace.debugger_data.editing_watch {
-                watch_cursor = clamp(watch_cursor - 1, 0, watch_length);
+            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_variable {
+                edit_cursor = clamp(edit_cursor - 1, 0, edit_length);
                 return true;
             }
             else if !workspace.debugger_data.command_executing {
@@ -512,8 +562,8 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
             }
         }
         case KeyCode.Right; {
-            if workspace.debugger_data.editing_watch {
-                watch_cursor = clamp(watch_cursor + 1, 0, watch_length);
+            if workspace.debugger_data.editing_watch || workspace.debugger_data.editing_variable {
+                edit_cursor = clamp(edit_cursor + 1, 0, edit_length);
                 return true;
             }
             else if !workspace.debugger_data.command_executing {
@@ -546,19 +596,19 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
             }
         }
         default; {
-            if char.length > 0 && (mod & ModCode.Control) != ModCode.Control && workspace.debugger_data.editing_watch {
-                if watch_length + char.length <= watch_buffer_length {
-                    if watch_cursor < watch_length {
-                        each i in watch_length - watch_cursor {
-                            index := watch_length - i - 1;
-                            watch_buffer[index + char.length] = watch_buffer[index];
+            if char.length > 0 && (mod & ModCode.Control) != ModCode.Control && (workspace.debugger_data.editing_watch || workspace.debugger_data.editing_watch) {
+                if edit_length + char.length <= edit_buffer_length {
+                    if edit_cursor < edit_length {
+                        each i in edit_length - edit_cursor {
+                            index := edit_length - i - 1;
+                            edit_buffer[index + char.length] = edit_buffer[index];
                         }
                     }
 
-                    memory_copy(watch_buffer.data + watch_cursor, char.data, char.length);
+                    memory_copy(edit_buffer.data + edit_cursor, char.data, char.length);
 
-                    watch_cursor += char.length;
-                    watch_length += char.length;
+                    edit_cursor += char.length;
+                    edit_length += char.length;
                 }
 
                 return true;
@@ -906,33 +956,33 @@ clear_watch(WatchExpression* watch) {
     watch.data = { length = 0; data = null; }
 }
 
-string get_watch_string() {
-    expression: string;
+string get_edit_string() {
+    value: string;
     start := 0;
 
-    each i in watch_length {
-        char := watch_buffer[i];
+    each i in edit_length {
+        char := edit_buffer[i];
         if !is_whitespace(char) {
-            if expression.data == null {
-                expression = {
+            if value.data == null {
+                value = {
                     length = 1;
-                    data = watch_buffer.data + i;
+                    data = edit_buffer.data + i;
                 }
                 start = i;
             }
             else {
-                expression.length = i - start + 1;
+                value.length = i - start + 1;
             }
         }
     }
 
-    return expression;
+    return value;
 }
 
-watch_buffer_length := 100; #const
-watch_buffer: Array<u8>[watch_buffer_length];
-watch_cursor: int;
-watch_length: int;
+edit_buffer_length := 100; #const
+edit_buffer: Array<u8>[edit_buffer_length];
+edit_cursor: int;
+edit_length: int;
 
 draw_list_line(float y) {
     line_quad: QuadInstanceData = {
@@ -1259,6 +1309,8 @@ debugger_thread(int thread, JobData data) {
                 continue;
             }
         }
+
+        log("% %\n", workspace.debugger_data.parse_status, text);
 
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
@@ -1939,6 +1991,9 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 }
                 workspace.debugger_data.parse_status = DebuggerParseStatus.None;
             }
+        }
+        case DebuggerParseStatus.SetValue; {
+            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
         }
     }
 
