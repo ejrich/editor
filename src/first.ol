@@ -6,11 +6,13 @@ DEVELOPER := true; #const
 SHADER_HOT_RELOADING := true; #const
 BUNDLED_SHADERS := !DEVELOPER; #const
 PROFILE := false; #const
+INSTALL := false; #const
 
 application_name := "Editor";
+executable_name := "editor";
 
 #run {
-    set_executable_name("editor");
+    set_executable_name(executable_name);
     set_output_directory("../run_tree");
     set_output_type_table(OutputTypeTableConfiguration.Used);
 
@@ -266,7 +268,26 @@ application_name := "Editor";
                     }
                 }
                 case CompilerMessageType.CodeGenerated; {}
-                case CompilerMessageType.ExecutableLinked; {}
+                case CompilerMessageType.ExecutableLinked; {
+                    if INSTALL {
+                        home_directory := get_environment_variable(home_environment_variable);
+                        target_directory: string;
+                        if os == OS.Linux {
+                            target_directory = temp_string(home_directory, "/.local/share/", application_name);
+                        }
+                        if os == OS.Windows {
+                            target_directory = temp_string(home_directory, "/AppData/Roaming/", application_name);
+                        }
+
+                        create_directory(target_directory);
+
+                        compiler_directory := get_compiler_working_directory();
+                        source_directory := temp_string(compiler_directory, "/../run_tree");
+
+                        copy_directory(source_directory, target_directory);
+                        print("Installed files to '%'\n\n", target_directory);
+                    }
+                }
             }
         }
     }
@@ -584,5 +605,27 @@ create_directories_recursively(string file) {
             create_directory(sub_path);
         }
         i++;
+    }
+}
+
+copy_directory(string source_directory, string target_directory) {
+    success, files := get_files_in_directory(source_directory);
+    if !success return;
+
+    each file in files {
+        if file.name == "." || file.name == ".." continue;
+
+        source_name := temp_string(source_directory, "/", file.name);
+        target_name := temp_string(target_directory, "/", file.name);
+
+        switch file.type {
+            case FileType.File; {
+                copy_file(source_name, target_name);
+            }
+            case FileType.Directory; {
+                create_directory(target_name);
+                copy_directory(source_name, target_name);
+            }
+        }
     }
 }

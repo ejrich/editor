@@ -403,7 +403,6 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     if expression.length {
                         watch := &workspace.debugger_data.watches.array[workspace.debugger_data.editing_index];
                         if watch.expression != expression {
-                            // TODO Figure out why this is not freeing correctly
                             clear_watch(watch);
                             watch.expression = expression;
                             trigger_load_watches(workspace);
