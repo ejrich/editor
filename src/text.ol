@@ -50,17 +50,17 @@ bool is_font_ready(u32 size) {
     return font_texture != null;
 }
 
-render_text(u32 size, float x, float y, Vector4 color, Vector4 background_color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
+float render_text(u32 size, float x, float y, Vector4 color, Vector4 background_color, string format, TextAlignment alignment = TextAlignment.Left, Params args) {
     text := format_string(format, temp_allocate, args);
-    render_text(text, size, x, y, color, background_color, alignment);
+    return render_text(text, size, x, y, color, background_color, alignment);
 }
 
-render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 background_color, TextAlignment alignment = TextAlignment.Left) {
-    if text.length == 0 return;
+float render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 background_color, TextAlignment alignment = TextAlignment.Left) {
+    if text.length == 0 return x;
 
     // Load the font and texture
     font_texture := load_font_texture(size);
-    if font_texture == null return;
+    if font_texture == null return x;
 
     // Create the glyphs for the text string
     quad_data := temp_allocate_array<QuadInstanceData>(text.length);
@@ -99,12 +99,14 @@ render_text(string text, u32 size, float x, float y, Vector4 color, Vector4 back
         x += font_texture.quad_advance;
     }
 
-    if length == 0 return;
+    if length == 0 return x;
 
     adjust_line_and_draw_background(font_texture, quad_data, line_start, line_length, alignment, x_start, x, y, background_color);
 
     // Issue the draw call(s) for the characters
     draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+
+    return x;
 }
 
 struct RenderLineState {

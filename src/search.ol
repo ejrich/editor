@@ -1,25 +1,35 @@
 open_files_list() {
-    load_files();
-    start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files);
+    free_allocation(file_entries_string_pointer);
+    file_entries.length = 0;
+    change_file_filter(empty_string);
+
+    queue_work(&low_priority_queue, load_files);
+
+    start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files, loading = &loading_files);
 }
 
 open_search_list(string initial_search = empty_string) {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search, loading = &running_search);
 }
 
 #private
 
 // File finder functions
-load_files() {
-    free_allocation(file_entries_string_pointer);
-    file_entries.length = 0;
+load_files(int thread, JobData data) {
+    loading_files = true;
+    defer {
+        loading_files = false;
+        cancel_loading_files = false;
+    }
 
     file_entry_index = 0;
     length_to_allocate = 0;
 
     workspace := get_workspace();
     load_directory(workspace.directory, empty_string, true);
+
+    if cancel_loading_files return;
 
     if file_entry_index > file_entries_reserved {
         while file_entries_reserved < file_entry_index {
@@ -34,9 +44,13 @@ load_files() {
     file_entry_index = 0;
     file_entries_string_pointer = allocate(length_to_allocate);
     file_entries_string_index = 0;
+
+    if cancel_loading_files return;
+
     load_directory(workspace.directory, empty_string, false);
 
     change_file_filter(empty_string);
+    trigger_window_update();
 }
 
 load_directory(string path, string display_path, bool counting) {
@@ -49,13 +63,13 @@ load_directory(string path, string display_path, bool counting) {
         }
 
         buffer: CArray<u8>[5600];
-        while true {
+        while !cancel_loading_files {
             bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
 
             if bytes == 0 break;
 
             position := 0;
-            while position < bytes {
+            while position < bytes && !cancel_loading_files {
                 dirent := cast(Dirent*, &buffer + position);
                 name := convert_c_string(&dirent.d_name);
 
@@ -104,7 +118,7 @@ load_directory(string path, string display_path, bool counting) {
             return;
         }
 
-        while true {
+        while !cancel_loading_files {
             name := convert_c_string(&find_data.cFileName);
 
             if !array_contains(directories_to_ignore, name) {
@@ -229,6 +243,11 @@ change_file_filter(string filter) {
 }
 
 cleanup_files() {
+    if loading_files {
+        cancel_loading_files = true;
+    }
+    while loading_files {}
+
     free_allocation(file_entries_string_pointer);
     file_entries_string_pointer = null;
 }
@@ -236,6 +255,9 @@ cleanup_files() {
 open_file_to_buffer(string file) {
     open_file_buffer(file, true);
 }
+
+loading_files := false;
+cancel_loading_files := false;
 
 file_entries: Array<string>;
 filtered_file_entries: Array<ListEntry>;

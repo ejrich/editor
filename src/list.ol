@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null, string initial_value = empty_string) {
+start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null, string initial_value = empty_string, bool* loading = null) {
     list = {
         displaying = true;
         browsing = false;
@@ -11,6 +11,7 @@ start_list_mode(string title, ListEntries entries, ListTotal total, Callback loa
         select = select;
         action = action;
         cleanup = cleanup;
+        loading = loading;
     }
     start_list_command_mode(initial_value);
 }
@@ -196,12 +197,17 @@ draw_list_entries() {
 
     x := -1.0 + global_font_config.quad_advance * 2;
     if total_entries == 0 {
-        render_text("0 / 0 Results", settings.font_size, x, initial_y, appearance.font_color, vec4());
+        x = render_text("0 / 0 Results", settings.font_size, x, initial_y, appearance.font_color, vec4());
     }
     else {
-        render_text(settings.font_size, x, initial_y, appearance.font_color, vec4(), "% / % Results", entries.length, total_entries);
+        x = render_text(settings.font_size, x, initial_y, appearance.font_color, vec4(), "% / % Results", entries.length, total_entries);
     }
 
+    if list.loading != null && *list.loading {
+        render_text(" - Loading...", settings.font_size, x, initial_y, appearance.font_color, vec4());
+    }
+
+    x = -1.0 + global_font_config.quad_advance * 2;
     initial_y += global_font_config.line_height;
 
     if entries.length == 0 {
@@ -304,6 +310,7 @@ struct ListData {
     select: ListEntrySelect;
     action: ListEntryAction;
     cleanup: ListCleanup;
+    loading: bool*;
 }
 
 interface Array<ListEntry> ListEntries()
