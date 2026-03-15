@@ -286,6 +286,13 @@ executable_name := "editor";
 
                         copy_directory(source_directory, target_directory);
                         print("Installed files to '%'\n\n", target_directory);
+
+
+                        #if os == OS.Linux {
+                            source_program := temp_string(target_directory, "/", executable_name);
+                            symlink_location := temp_string(home_directory, "/.local/bin/", executable_name);
+                            symlink(source_program.data, symlink_location.data);
+                        }
                     }
                 }
             }

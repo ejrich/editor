@@ -42,7 +42,7 @@ load_files() {
 load_directory(string path, string display_path, bool counting) {
     #if os == OS.Linux {
         open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-        directory := open(path.data, open_flags, OpenMode.S_RWALL);
+        directory := open(path.data, open_flags, FileMode.S_RWALL);
 
         if directory < 0 {
             return;
@@ -392,7 +392,7 @@ search_directory(string path, string display_path, string filter) {
 
     #if os == OS.Linux {
         open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-        directory := open(path.data, open_flags, OpenMode.S_RWALL);
+        directory := open(path.data, open_flags, FileMode.S_RWALL);
 
         if directory < 0 {
             return;
