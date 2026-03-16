@@ -246,7 +246,10 @@ cleanup_files() {
     if loading_files {
         cancel_loading_files = true;
     }
-    while loading_files {}
+
+    while loading_files {
+        sleep(1);
+    }
 
     free_allocation(file_entries_string_pointer);
     file_entries_string_pointer = null;
@@ -350,7 +353,9 @@ open_file_at_line(string search_result) {
 cancel_current_search() {
     if running_search {
         cancel_search = true;
-        while running_search {}
+        while running_search {
+            sleep(1);
+        }
     }
 }
 

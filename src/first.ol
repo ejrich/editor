@@ -627,7 +627,10 @@ copy_directory(string source_directory, string target_directory) {
 
         switch file.type {
             case FileType.File; {
-                copy_file(source_name, target_name);
+                success = copy_file(source_name, target_name);
+                if !success {
+                    print("Unable to copy '%' to '%'\n", source_name, target_name);
+                }
             }
             case FileType.Directory; {
                 create_directory(target_name);
