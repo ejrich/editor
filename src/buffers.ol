@@ -368,21 +368,25 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
     }
 
     if buffer_index < 0 {
+        if is_directory(path) {
+            return null;
+        }
+
         if allocate_path {
             allocate_strings(&path);
         }
 
+        line := allocate_line();
         buffer: Buffer = {
             path_allocated = allocate_path;
             relative_path = path;
             syntax = get_syntax_for_file(path);
+            line_count = 1;
+            lines = line;
         }
 
         found, file := read_file(path, temp_allocate);
         if found {
-            line := allocate_line();
-            buffer = { line_count = 1; lines = line; }
-
             tab := create_empty_string(settings.tab_size);
 
             add_new_line := false;
@@ -408,10 +412,9 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
                     add_text_to_line(line, char_string, line.length);
                 }
             }
-
-            calculate_line_digits(&buffer);
         }
 
+        calculate_line_digits(&buffer);
         array_insert(&workspace.buffers, buffer, allocate, reallocate);
         buffer_index = workspace.buffers.length - 1;
     }

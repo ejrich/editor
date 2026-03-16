@@ -8,7 +8,13 @@
 [command, e]
 string, bool open_file_command(string path) {
     edit_mode = EditMode.Normal;
-    open_file_buffer(path, true);
+    opened := open_file_buffer(path, true) != null;
+
+    if !opened {
+        command_result := format_string("Unable to open file \"%\"", path);
+        return command_result, true;
+    }
+
     return empty_string, false;
 }
 
@@ -431,10 +437,19 @@ call_command(string command, bool allocated) {
     // Parse the command arguments
     i := name_end + 1;
     argument_count := 0;
+    parsing_string := false;
+    parsing_value := false;
     while i < command.length {
-        if command[i++] != ' ' {
+        char := command[i++];
+        if char != ' ' {
             argument_count++;
-            while i < command.length && command[i++] != ' ' {}
+
+            end_char := ' ';
+            if char == '\"' {
+                end_char = '\"';
+            }
+
+            while i < command.length && command[i++] != end_char {}
         }
     }
 
@@ -443,11 +458,18 @@ call_command(string command, bool allocated) {
         i = name_end + 1;
         current_argument := 0;
         while i < command.length {
-            if command[i++] != ' ' {
+            char := command[i++];
+            if char != ' ' {
                 arg_start := i - 1;
                 arg_end := i;
 
-                while i < command.length && command[i++] != ' ' {
+                end_char := ' ';
+                if char == '\"' {
+                    arg_start++;
+                    end_char = '\"';
+                }
+
+                while i < command.length && command[i++] != end_char {
                     arg_end++;
                 }
 
