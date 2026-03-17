@@ -93,6 +93,19 @@ string, bool close_current_workspace() {
 }
 
 [command, reload]
+string, bool reload_file() {
+    buffer_window, buffer := get_current_window_and_buffer();
+    if buffer {
+        open_file_buffer(buffer.relative_path, false, true);
+
+        command_result := format_string("Reloaded file \"%\"", buffer.relative_path);
+        return command_result, true;
+    }
+
+    return empty_string, false;
+}
+
+[command, reload_settings]
 string, bool reload_configurations() {
     load_settings_file();
     reload_keybinds();

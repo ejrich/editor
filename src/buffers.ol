@@ -356,7 +356,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 }
 
 // Opening buffers with files
-BufferWindow* open_file_buffer(string path, bool allocate_path) {
+BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = false) {
     buffer_index := -1;
     workspace := get_workspace();
 
@@ -367,7 +367,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
         }
     }
 
-    if buffer_index < 0 {
+    if buffer_index < 0 || reload {
         if is_directory(path) {
             return null;
         }
@@ -378,7 +378,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
 
         line := allocate_line();
         buffer: Buffer = {
-            path_allocated = allocate_path;
+            path_allocated = allocate_path || reload;
             relative_path = path;
             syntax = get_syntax_for_file(path);
             line_count = 1;
@@ -415,8 +415,21 @@ BufferWindow* open_file_buffer(string path, bool allocate_path) {
         }
 
         calculate_line_digits(&buffer);
-        array_insert(&workspace.buffers, buffer, allocate, reallocate);
-        buffer_index = workspace.buffers.length - 1;
+
+        if reload && buffer_index >= 0 {
+            old_buffer := workspace.buffers[buffer_index];
+            buffer = {
+                last_change = old_buffer.last_change;
+                next_change = old_buffer.next_change;
+            }
+            workspace.buffers[buffer_index] = buffer;
+
+            free_lines(old_buffer.lines);
+        }
+        else {
+            array_insert(&workspace.buffers, buffer, allocate, reallocate);
+            buffer_index = workspace.buffers.length - 1;
+        }
     }
 
     return open_buffer_index(workspace, buffer_index);
@@ -3873,12 +3886,7 @@ interface string GetBufferTitle()
 free_buffer(Buffer* buffer, bool free_pointer = true, bool free_path = false) {
     if buffer == null return;
 
-    line := buffer.lines;
-    while line {
-        next := line.next;
-        free_line_and_children(line);
-        line = next;
-    }
+    free_lines(buffer.lines);
 
     last := buffer.last_change;
     while last {

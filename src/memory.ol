@@ -209,6 +209,14 @@ BufferLine* allocate_line(BufferLine* parent = null, BufferLine* previous = null
     return null;
 }
 
+free_lines(BufferLine* line) {
+    while line {
+        next := line.next;
+        free_line_and_children(line);
+        line = next;
+    }
+}
+
 free_line(BufferLine* line) {
     line_arena := &line_arenas[line.arena_index];
     line.allocated = false;
