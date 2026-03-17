@@ -349,7 +349,6 @@ init_subsystems() {
     init_clipboard();
     init_graphics();
     init_text();
-    init_shell();
 }
 
 deinit_subsystems() {

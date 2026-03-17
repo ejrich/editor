@@ -321,7 +321,7 @@ apply_status_filter() {
     else {
         filtered_status_entries.length = 0;
         each entry in status_entries {
-            if string_contains(entry.key, status_filter) {
+            if string_contains(entry.key, status_filter, false) {
                 filtered_status_entries[filtered_status_entries.length++] = entry;
             }
         }

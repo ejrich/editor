@@ -4343,7 +4343,7 @@ change_buffer_filter(string filter) {
     else {
         buffer_entries.length = 0;
         each buffer in workspace.buffers {
-            if string_contains(buffer.relative_path, filter) {
+            if string_contains(buffer.relative_path, filter, false) {
                 buffer_entries[buffer_entries.length++] = {
                     key = buffer.relative_path;
                     display = buffer.relative_path;

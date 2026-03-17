@@ -1,12 +1,3 @@
-init_shell() {
-    #if os == OS.Linux {
-        shell = get_environment_variable("SHELL", allocate);
-        if string_is_empty(shell) {
-            shell = "/bin/sh";
-        }
-    }
-}
-
 queue_command_to_run(string command) {
     params := new<RunCommandParams>();
     params.command = command;
@@ -299,7 +290,7 @@ else {
         output_pipe: int;
     }
 
-    shell: string;
+    shell := "/bin/sh";
 }
 
 struct RunCommandParams {
