@@ -629,7 +629,7 @@ bool, u32, u32, string save_buffer(int buffer_index) {
     buffer.has_changes = false;
 
     create_directories_recursively(buffer.relative_path);
-    opened, file := open_file(buffer.relative_path, FileFlags.Create);
+    opened, file := open_file(buffer.relative_path, FileFlags.Create | FileFlags.Truncate);
     if !opened return false, 0, 0, buffer.relative_path;
 
     defer close_file(file);
