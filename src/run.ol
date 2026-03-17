@@ -168,6 +168,7 @@ bool start_command(string command, string directory, ProcessData* process_data, 
         if pid == 0 {
             close(stdout_pipe_files[read_pipe]);
             dup2(stdout_pipe_files[write_pipe], stdout);
+            dup2(stdout_pipe_files[write_pipe], stderr);
 
             if handle_stdin {
                 close(stdin_pipe_files[write_pipe]);
