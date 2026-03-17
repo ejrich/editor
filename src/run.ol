@@ -372,6 +372,10 @@ clear_run_buffer_window(string command, Workspace* workspace) {
 }
 
 add_to_buffer(BufferWindow* buffer_window, Buffer* buffer, string text) {
+    if buffer == null {
+        return;
+    }
+
     change_line := false;
     if buffer_window {
         change_line = buffer_window.line == buffer.line_count - 1;
