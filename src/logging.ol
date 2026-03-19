@@ -5,7 +5,7 @@ init_logging() {
     create_directories_recursively(log_file_path);
 
     opened: bool;
-    opened, log_file = open_file(log_file_path, FileFlags.Create);
+    opened, log_file = open_file(log_file_path, FileFlags.Create | FileFlags.Truncate);
     if !opened {
         print("Unable to write to log file: '%'\n", log_file_path);
     }

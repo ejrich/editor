@@ -457,7 +457,7 @@ write_settings() {
         create_directories_recursively(settings_file_path);
     }
 
-    opened, settings_file := open_file(settings_file_path, FileFlags.Create);
+    opened, settings_file := open_file(settings_file_path, FileFlags.Create | FileFlags.Truncate);
     if !opened {
         log("Unable to write to settings file: '%'\n", settings_file_path);
         return;

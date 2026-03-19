@@ -22,7 +22,7 @@ bool compile_shader(string name, string input_file_name, string file_path, strin
     defer allocator_free(file.data);
 
     shader_file_name := temp_string(shader_output_directory, "/", name, ".shader");
-    opened, shader_file := open_file(shader_file_name, FileFlags.Create);
+    opened, shader_file := open_file(shader_file_name, FileFlags.Create | FileFlags.Truncate);
     if !opened {
         log("Failed to open file handle for shader file '%'\n", shader_file_name);
         return false;

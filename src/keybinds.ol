@@ -32,7 +32,7 @@ reload_keybinds() {
 }
 
 write_keybinds() {
-    opened, keybinds_file := open_file(keybinds_file_path, FileFlags.Create);
+    opened, keybinds_file := open_file(keybinds_file_path, FileFlags.Create | FileFlags.Truncate);
     if !opened {
         log("Unable to write to keybinds file: '%'\n", keybinds_file_path);
         return;
