@@ -141,6 +141,12 @@ string, bool toggle_hex_view() {
     return empty_string, false;
 }
 
+[command, pwd]
+string, bool print_working_directory() {
+    workspace := get_workspace();
+    return workspace.directory, false;
+}
+
 start_command_mode() {
     clear_buffer(CommandMode.Command);
 }
