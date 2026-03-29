@@ -68,7 +68,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
         directory := open(path.data, open_flags, FileMode.S_RWALL);
 
         if directory < 0 {
-            return;
+            return false;
         }
 
         buffer: CArray<u8>[5600];
@@ -461,7 +461,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
         directory := open(path.data, open_flags, FileMode.S_RWALL);
 
         if directory < 0 {
-            return;
+            return false;
         }
 
         buffer: CArray<u8>[5600];
