@@ -54,6 +54,15 @@ load_files(int thread, JobData data) {
 }
 
 load_directory(string path, string display_path, bool counting) {
+    load_sub_directories := load_directory_files(path, display_path, counting, false);
+    if load_sub_directories {
+        load_directory_files(path, display_path, counting, true);
+    }
+}
+
+bool load_directory_files(string path, string display_path, bool counting, bool load_sub_directories) {
+    found_sub_directory := false;
+
     #if os == OS.Linux {
         open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
         directory := open(path.data, open_flags, FileMode.S_RWALL);
@@ -66,7 +75,7 @@ load_directory(string path, string display_path, bool counting) {
         while !cancel_loading_files {
             bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
 
-            if bytes == 0 break;
+            if bytes <= 0 break;
 
             position := 0;
             while position < bytes && !cancel_loading_files {
@@ -75,26 +84,33 @@ load_directory(string path, string display_path, bool counting) {
 
                 if !array_contains(directories_to_ignore, name) {
                     if dirent.d_type == DirentType.DT_REG {
-                        file_path := name;
-                        if !string_is_empty(display_path) {
-                            file_path = temp_string(display_path, "/", name);
-                        }
+                        if !load_sub_directories {
+                            file_path := name;
+                            if !string_is_empty(display_path) {
+                                file_path = temp_string(display_path, "/", name);
+                            }
 
-                        if counting {
-                            file_entry_index++;
-                            length_to_allocate += file_path.length;
-                        }
-                        else {
-                            file_entries[file_entry_index++] = copy_path(file_path);
+                            if counting {
+                                file_entry_index++;
+                                length_to_allocate += file_path.length;
+                            }
+                            else {
+                                file_entries[file_entry_index++] = copy_path(file_path);
+                            }
                         }
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
-                        sub_path := temp_string(path, "/", name);
-                        sub_display_path := name;
-                        if !string_is_empty(display_path) {
-                            sub_display_path = temp_string(display_path, "/", name);
+                        if load_sub_directories {
+                            sub_path := temp_string(path, "/", name);
+                            sub_display_path := name;
+                            if !string_is_empty(display_path) {
+                                sub_display_path = temp_string(display_path, "/", name);
+                            }
+                            load_directory(sub_path, sub_display_path, counting);
                         }
-                        load_directory(sub_path, sub_display_path, counting);
+                        else {
+                            found_sub_directory = true;
+                        }
                     }
                 }
 
@@ -112,10 +128,17 @@ load_directory(string path, string display_path, bool counting) {
         path_with_wildcard[path.length + wildcard.length] = 0;
 
         find_data: WIN32_FIND_DATAA;
-        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
+        find_handle: Handle*;
+
+        if load_sub_directories {
+            find_handle = FindFirstFileExA(path_with_wildcard.data, FINDEX_INFO_LEVELS.FindExInfoStandard, &find_data, FINDEX_SEARCH_OPS.FindExSearchLimitToDirectories, null, 0);
+        }
+        else {
+            find_handle = FindFirstFileA(path_with_wildcard.data, &find_data);
+        }
 
         if cast(s64, find_handle) == -1 {
-            return;
+            return false;
         }
 
         while !cancel_loading_files {
@@ -123,14 +146,19 @@ load_directory(string path, string display_path, bool counting) {
 
             if !array_contains(directories_to_ignore, name) {
                 if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                    sub_path := temp_string(path, "/", name);
-                    sub_display_path := name;
-                    if !string_is_empty(display_path) {
-                        sub_display_path = temp_string(display_path, "/", name);
+                    if load_sub_directories {
+                        sub_path := temp_string(path, "/", name);
+                        sub_display_path := name;
+                        if !string_is_empty(display_path) {
+                            sub_display_path = temp_string(display_path, "/", name);
+                        }
+                        load_directory(sub_path, sub_display_path, counting);
                     }
-                    load_directory(sub_path, sub_display_path, counting);
+                    else {
+                        found_sub_directory = true;
+                    }
                 }
-                else {
+                else if !load_sub_directories {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -151,6 +179,8 @@ load_directory(string path, string display_path, bool counting) {
 
         FindClose(find_handle);
     }
+
+    return found_sub_directory;
 }
 
 directories_to_ignore: Array<string> = [".", "..", "bin", "obj", ".git"]
@@ -415,7 +445,16 @@ search_text_in_files(int thread, JobData data) {
 }
 
 search_directory(string path, string display_path, string filter) {
+    search_sub_directories := search_directory_files(path, display_path, filter, false);
+    if search_sub_directories {
+        search_directory_files(path, display_path, filter, true);
+    }
+}
+
+bool search_directory_files(string path, string display_path, string filter, bool search_sub_directories) {
     defer trigger_window_update();
+
+    found_sub_directory := false;
 
     #if os == OS.Linux {
         open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
@@ -429,7 +468,7 @@ search_directory(string path, string display_path, string filter) {
         while !cancel_search && search_results.length < max_search_results {
             bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
 
-            if bytes == 0 break;
+            if bytes <= 0 break;
 
             position := 0;
             while position < bytes {
@@ -437,7 +476,7 @@ search_directory(string path, string display_path, string filter) {
                 name := convert_c_string(&dirent.d_name);
 
                 if !array_contains(directories_to_ignore, name) {
-                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) {
+                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) && !search_sub_directories {
                         file_path := name;
                         if !string_is_empty(display_path) {
                             file_path = temp_string(display_path, "/", name);
@@ -446,12 +485,17 @@ search_directory(string path, string display_path, string filter) {
                         search_file(file_path, filter);
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
-                        sub_path := temp_string(path, "/", name);
-                        sub_display_path := name;
-                        if !string_is_empty(display_path) {
-                            sub_display_path = temp_string(display_path, "/", name);
+                        if search_sub_directories {
+                            sub_path := temp_string(path, "/", name);
+                            sub_display_path := name;
+                            if !string_is_empty(display_path) {
+                                sub_display_path = temp_string(display_path, "/", name);
+                            }
+                            search_directory(sub_path, sub_display_path, filter);
                         }
-                        search_directory(sub_path, sub_display_path, filter);
+                        else {
+                            found_sub_directory = true;
+                        }
                     }
                 }
 
@@ -469,10 +513,17 @@ search_directory(string path, string display_path, string filter) {
         path_with_wildcard[path.length + wildcard.length] = 0;
 
         find_data: WIN32_FIND_DATAA;
-        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
+        find_handle: Handle*;
+
+        if search_sub_directories {
+            find_handle = FindFirstFileExA(path_with_wildcard.data, FINDEX_INFO_LEVELS.FindExInfoStandard, &find_data, FINDEX_SEARCH_OPS.FindExSearchLimitToDirectories, null, 0);
+        }
+        else {
+            find_handle = FindFirstFileA(path_with_wildcard.data, &find_data);
+        }
 
         if cast(s64, find_handle) == -1 {
-            return;
+            return false;
         }
 
         while !cancel_search && search_results.length < max_search_results {
@@ -480,14 +531,19 @@ search_directory(string path, string display_path, string filter) {
 
             if !array_contains(directories_to_ignore, name) {
                 if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                    sub_path := temp_string(path, "/", name);
-                    sub_display_path := name;
-                    if !string_is_empty(display_path) {
-                        sub_display_path = temp_string(display_path, "/", name);
+                    if search_sub_directories {
+                        sub_path := temp_string(path, "/", name);
+                        sub_display_path := name;
+                        if !string_is_empty(display_path) {
+                            sub_display_path = temp_string(display_path, "/", name);
+                        }
+                        search_directory(sub_path, sub_display_path, filter);
                     }
-                    search_directory(sub_path, sub_display_path, filter);
+                    else {
+                        found_sub_directory = true;
+                    }
                 }
-                else if !ignore_file(name) {
+                else if !ignore_file(name) && !search_sub_directories {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -502,6 +558,8 @@ search_directory(string path, string display_path, string filter) {
 
         FindClose(find_handle);
     }
+
+    return found_sub_directory;
 }
 
 file_types_to_ignore: Array<string> = [".exe", ".pdb", ".dll", ".so", ".a"]
