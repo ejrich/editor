@@ -3714,27 +3714,34 @@ change_selected_line_commenting() {
         line := starting_line;
         line_number := start_line;
         while line != null && line_number <= end_line {
-            each i in line.length {
-                if get_char(line, i) != ' ' {
-                    has_comment := true;
-                    if comment_string.length <= line.length - i {
-                        each j in comment_string.length {
-                            if get_char(line, i + j) != comment_string[j] {
-                                has_comment = false;
-                                break;
+            if line.length < comment_string.length {
+                all_lines_commented = false;
+                comment_cursor = 0;
+            }
+            else {
+                each i in line.length {
+                    if get_char(line, i) != ' ' {
+                        has_comment := false;
+                        if comment_string.length <= line.length - i {
+                            has_comment = true;
+                            each j in comment_string.length {
+                                if get_char(line, i + j) != comment_string[j] {
+                                    has_comment = false;
+                                    break;
+                                }
                             }
                         }
-                    }
 
-                    if i < comment_cursor {
-                        comment_cursor = i;
-                    }
+                        if i < comment_cursor {
+                            comment_cursor = i;
+                        }
 
-                    if !has_comment {
-                        all_lines_commented = false;
-                    }
+                        if !has_comment {
+                            all_lines_commented = false;
+                        }
 
-                    break;
+                        break;
+                    }
                 }
             }
 
