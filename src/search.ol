@@ -13,7 +13,39 @@ open_search_list(string initial_search = empty_string) {
     start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search, loading = &running_search);
 }
 
+struct Directory {
+    parent: Directory*;
+    name: string;
+    sub_directories: Array<Directory*>;
+}
+
+free_directory(Directory* directory) {
+    each sub_directory in directory.sub_directories {
+        free_directory(sub_directory);
+    }
+
+    free_allocation(directory.name.data);
+    free_allocation(directory);
+}
+
 #private
+
+Directory* get_or_create_directory(string name, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    each sub_directory in *sub_directories {
+        if sub_directory.name == name {
+            return sub_directory;
+        }
+    }
+
+    allocate_strings(&name);
+    directory := new<Directory>();
+    directory.parent = parent_directory;
+    directory.name = name;
+
+    array_insert(sub_directories, directory, allocate, reallocate);
+
+    return directory;
+}
 
 // File finder functions
 load_files(int thread, JobData data) {
@@ -27,7 +59,7 @@ load_files(int thread, JobData data) {
     length_to_allocate = 0;
 
     workspace := get_workspace();
-    load_directory(workspace.directory, empty_string, true);
+    load_directory(workspace.directory, empty_string, true, null, &workspace.sub_directories);
 
     if cancel_loading_files return;
 
@@ -47,20 +79,20 @@ load_files(int thread, JobData data) {
 
     if cancel_loading_files return;
 
-    load_directory(workspace.directory, empty_string, false);
+    load_directory(workspace.directory, empty_string, false, null, &workspace.sub_directories);
 
     change_file_filter(empty_string);
     trigger_window_update();
 }
 
-load_directory(string path, string display_path, bool counting) {
-    load_sub_directories := load_directory_files(path, display_path, counting, false);
+load_directory(string path, string display_path, bool counting, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    load_sub_directories := load_directory_files(path, display_path, counting, false, parent_directory, sub_directories);
     if load_sub_directories {
-        load_directory_files(path, display_path, counting, true);
+        load_directory_files(path, display_path, counting, true, parent_directory, sub_directories);
     }
 }
 
-bool load_directory_files(string path, string display_path, bool counting, bool load_sub_directories) {
+bool load_directory_files(string path, string display_path, bool counting, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     found_sub_directory := false;
 
     #if os == OS.Linux {
@@ -106,7 +138,8 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                             if !string_is_empty(display_path) {
                                 sub_display_path = temp_string(display_path, "/", name);
                             }
-                            load_directory(sub_path, sub_display_path, counting);
+                            directory := get_or_create_directory(name, parent_directory, sub_directories);
+                            load_directory(sub_path, sub_display_path, counting, directory, &directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -152,7 +185,8 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                         if !string_is_empty(display_path) {
                             sub_display_path = temp_string(display_path, "/", name);
                         }
-                        load_directory(sub_path, sub_display_path, counting);
+                        directory := get_or_create_directory(name, parent_directory, sub_directories);
+                        load_directory(sub_path, sub_display_path, counting, directory, &directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;
@@ -441,17 +475,17 @@ search_text_in_files(int thread, JobData data) {
     }
 
     workspace := get_workspace();
-    search_directory(workspace.directory, empty_string, filter);
+    search_directory(workspace.directory, empty_string, filter, null, &workspace.sub_directories);
 }
 
-search_directory(string path, string display_path, string filter) {
-    search_sub_directories := search_directory_files(path, display_path, filter, false);
+search_directory(string path, string display_path, string filter, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    search_sub_directories := search_directory_files(path, display_path, filter, false, parent_directory, sub_directories);
     if search_sub_directories {
-        search_directory_files(path, display_path, filter, true);
+        search_directory_files(path, display_path, filter, true, parent_directory, sub_directories);
     }
 }
 
-bool search_directory_files(string path, string display_path, string filter, bool search_sub_directories) {
+bool search_directory_files(string path, string display_path, string filter, bool search_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     defer trigger_window_update();
 
     found_sub_directory := false;
@@ -491,7 +525,8 @@ bool search_directory_files(string path, string display_path, string filter, boo
                             if !string_is_empty(display_path) {
                                 sub_display_path = temp_string(display_path, "/", name);
                             }
-                            search_directory(sub_path, sub_display_path, filter);
+                            directory := get_or_create_directory(name, parent_directory, sub_directories);
+                            search_directory(sub_path, sub_display_path, filter, directory, &directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -537,7 +572,8 @@ bool search_directory_files(string path, string display_path, string filter, boo
                         if !string_is_empty(display_path) {
                             sub_display_path = temp_string(display_path, "/", name);
                         }
-                        search_directory(sub_path, sub_display_path, filter);
+                        directory := get_or_create_directory(name, parent_directory, sub_directories);
+                        search_directory(sub_path, sub_display_path, filter, directory, &directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;

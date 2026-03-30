@@ -13,6 +13,7 @@ struct Workspace {
     debugger_data: DebuggerData;
     local_settings: LocalSettings;
     command_keybinds: Array<CommandKeybind>;
+    sub_directories: Array<Directory*>;
 }
 
 init_workspaces() {
@@ -169,6 +170,15 @@ CloseWorkspaceResult close_current_workspace(bool change_to_next_active, bool fo
     if workspace.command_keybinds.length {
         workspace.command_keybinds.length = 0;
         free_allocation(workspace.command_keybinds.data);
+    }
+
+    if workspace.sub_directories.length {
+        each sub_directory in workspace.sub_directories {
+            free_directory(sub_directory);
+        }
+
+        workspace.sub_directories.length = 0;
+        free_allocation(workspace.sub_directories.data);
     }
 
     workspace.current_window = SelectedWindow.Left;
