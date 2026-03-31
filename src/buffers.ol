@@ -3714,7 +3714,7 @@ change_selected_line_commenting() {
         line := starting_line;
         line_number := start_line;
         while line != null && line_number <= end_line {
-            if line.length < comment_string.length {
+            if line.length > 0 && line.length < comment_string.length {
                 all_lines_commented = false;
                 comment_cursor = 0;
             }
@@ -3991,7 +3991,7 @@ struct EscapeCodeParseState {
 
 open_buffers_list() {
     change_buffer_filter(empty_string);
-    start_list_mode("Buffers", get_open_buffers, get_open_buffer_count, get_buffer, change_buffer_filter, open_buffer);
+    start_list_mode("Buffers", get_open_buffers, get_open_buffer_count, get_buffer, change_buffer_filter, null, open_buffer);
 }
 
 search_for_value_in_buffer() {
@@ -4318,11 +4318,8 @@ get_buffer(int thread, JobData data) {
     entry.can_free_buffer = false;
 
     workspace := get_workspace();
-    each buffer in workspace.buffers {
-        if buffer.relative_path == key {
-            entry.buffer = &buffer;
-            break;
-        }
+    if key >= 0 && key < workspace.buffers.length {
+        entry.buffer = &workspace.buffers[key];
     }
 
     trigger_window_update();
@@ -4342,26 +4339,27 @@ change_buffer_filter(string filter) {
         buffer_entries.length = workspace.buffers.length;
         each buffer, i in workspace.buffers {
             buffer_entries[i] = {
-                key = buffer.relative_path;
-                display = buffer.relative_path;
+                key = i;
+                name = buffer.relative_path;
             }
         }
     }
     else {
         buffer_entries.length = 0;
-        each buffer in workspace.buffers {
+        each buffer, i in workspace.buffers {
             if string_contains(buffer.relative_path, filter, false) {
                 buffer_entries[buffer_entries.length++] = {
-                    key = buffer.relative_path;
-                    display = buffer.relative_path;
+                    key = i;
+                    name = buffer.relative_path;
                 }
             }
         }
     }
 }
 
-open_buffer(string file) {
-    open_file_buffer(file, false);
+open_buffer(int key) {
+    workspace := get_workspace();
+    open_buffer_index(workspace, key);
 }
 
 buffer_entries: Array<ListEntry>;

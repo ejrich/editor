@@ -1,4 +1,4 @@
-start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null, string initial_value = empty_string, bool* loading = null) {
+start_list_mode(string title, ListEntries entries, ListTotal total, Callback load_entry, ListFilter filter, ListDrawEntry draw = null, ListEntrySelect select = null, ListEntryAction action = null, ListCleanup cleanup = null, string initial_value = empty_string, bool* loading = null) {
     list = {
         displaying = true;
         browsing = false;
@@ -8,6 +8,7 @@ start_list_mode(string title, ListEntries entries, ListTotal total, Callback loa
         total = total;
         load_entry = load_entry;
         filter = filter;
+        draw = draw;
         select = select;
         action = action;
         cleanup = cleanup;
@@ -48,7 +49,7 @@ bool handle_list_press(PressState state, KeyCode code, ModCode mod, string char)
             select_list_entry();
         }
         case KeyCode.Tab; {
-            if list.action != null && !string_is_empty(selected_entry.key) {
+            if list.action != null && selected_entry.key >= 0 {
                 list.action(selected_entry.key);
             }
         }
@@ -76,7 +77,7 @@ bool exit_list_mode() {
         free_buffer(selected_entry.buffer);
     }
     selected_entry = {
-        key = empty_string;
+        key = -1;
         buffer = null;
         can_free_buffer = true;
         start_line = 0;
@@ -93,7 +94,7 @@ bool exit_list_mode() {
 select_list_entry() {
     if !list.displaying return;
 
-    if list.select != null && !string_is_empty(selected_entry.key) {
+    if list.select != null && selected_entry.key >= 0 {
         list.select(selected_entry.key);
         list = {
             displaying = false;
@@ -105,7 +106,7 @@ select_list_entry() {
         }
 
         selected_entry = {
-            key = empty_string;
+            key = -1;
             buffer = null;
             can_free_buffer = true;
             start_line = 0;
@@ -152,12 +153,16 @@ bool change_selected_entry_start_line(int change) {
 }
 
 struct ListEntry {
-    key: string;
-    display: string;
+    key: u32;
+    name: string;
+    directory: Directory*;
+    value1: u32;
+    value2: u32;
+    value3: string;
 }
 
 struct SelectedEntry {
-    key: string;
+    key := -1;
     buffer: Buffer*;
     can_free_buffer: bool;
     start_line: int;
@@ -215,7 +220,7 @@ draw_list_entries() {
             free_buffer(selected_entry.buffer);
         }
         selected_entry = {
-            key = empty_string;
+            key = -1;
             buffer = null;
             can_free_buffer = true;
             start_line = 0;
@@ -261,15 +266,22 @@ draw_list_entries() {
     each i in entries_to_display {
         index := i + start_index;
         entry := entries[index];
-        if entry.display.length > max_chars_per_line {
-            entry.display.length = max_chars_per_line;
-        }
 
         y := initial_y + global_font_config.line_height * i;
         if index == list.selected_index {
             draw_line_background(-1.0, y, 0.0);
         }
-        render_text(entry.display, settings.font_size, x, y, appearance.font_color, vec4());
+
+        if list.draw != null {
+            list.draw(entry, x, y, max_chars_per_line);
+        }
+        else {
+            if entry.name.length > max_chars_per_line {
+                entry.name.length = max_chars_per_line;
+            }
+
+            render_text(entry.name, settings.font_size, x, y, appearance.font_color, vec4());
+        }
     }
 }
 
@@ -307,6 +319,7 @@ struct ListData {
     total: ListTotal;
     load_entry: Callback;
     filter: ListFilter;
+    draw: ListDrawEntry;
     select: ListEntrySelect;
     action: ListEntryAction;
     cleanup: ListCleanup;
@@ -316,8 +329,9 @@ struct ListData {
 interface Array<ListEntry> ListEntries()
 interface int ListTotal()
 interface ListFilter(string filter)
-interface ListEntrySelect(string key)
-interface ListEntryAction(string key)
+interface ListDrawEntry(ListEntry entry, float x, float y, u32 max_chars_per_line)
+interface ListEntrySelect(int key)
+interface ListEntryAction(int key)
 interface ListCleanup()
 
 list: ListData;

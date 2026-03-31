@@ -4,12 +4,12 @@ open_files_list() {
 
     queue_work(&low_priority_queue, load_files);
 
-    start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, open_file_to_buffer, cleanup = cleanup_files, loading = &loading_files);
+    start_list_mode("Find Files", get_files, get_total_files, get_file, change_file_filter, draw_file_entry, open_file_to_buffer, cleanup = cleanup_files, loading = &loading_files);
 }
 
 open_search_list(string initial_search = empty_string) {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search, loading = &running_search);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, draw_search_result, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search, loading = &running_search);
 }
 
 struct Directory {
@@ -142,14 +142,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
         path_with_wildcard[path.length + wildcard.length] = 0;
 
         find_data: WIN32_FIND_DATAA;
-        find_handle: Handle*;
-
-        if load_sub_directories {
-            find_handle = FindFirstFileExA(path_with_wildcard.data, FINDEX_INFO_LEVELS.FindExInfoStandard, &find_data, FINDEX_SEARCH_OPS.FindExSearchLimitToDirectories, null, 0);
-        }
-        else {
-            find_handle = FindFirstFileA(path_with_wildcard.data, &find_data);
-        }
+        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
 
         if cast(s64, find_handle) == -1 {
             return false;
@@ -208,6 +201,8 @@ get_file(int thread, JobData data) {
 
     defer trigger_window_update();
 
+    // TODO Get the full path name
+    /*
     workspace := get_workspace();
     each buffer in workspace.buffers {
         if buffer.relative_path == file {
@@ -225,6 +220,7 @@ get_file(int thread, JobData data) {
     else {
         free_buffer(file_buffer);
     }
+    */
 }
 
 Buffer* read_file_into_buffer(string file_path) {
@@ -262,24 +258,44 @@ change_file_filter(string filter) {
     if string_is_empty(filter) {
         filtered_file_entries.length = file_entries.length;
         each file, i in file_entries {
-            filtered_file_entries[i] = {
-                key = file;
-                display = file;
-            }
+            filtered_file_entries[i] = file;
         }
     }
     else {
         // TODO Use the full path
         filtered_file_entries.length = 0;
         each file in file_entries {
-            if string_contains(file, filter, false) {
-                filtered_file_entries[filtered_file_entries.length++] = {
-                    key = file;
-                    display = file;
-                }
+            if string_contains(file.name, filter, false) {
+                filtered_file_entries[filtered_file_entries.length++] = file;
             }
         }
     }
+}
+
+draw_file_entry(ListEntry entry, float x, float y, u32 max_chars_per_line) {
+    if entry.directory {
+        draw_directory(entry.directory, &x, &y, &max_chars_per_line);
+    }
+
+    if entry.name.length > max_chars_per_line {
+        entry.name.length = max_chars_per_line;
+    }
+
+    render_text(entry.name, settings.font_size, x, y, appearance.font_color, vec4());
+}
+
+draw_directory(Directory* directory, float* x, float* y, u32* max_chars_per_line) {
+    if directory.parent {
+        draw_directory(directory.parent, x, y, max_chars_per_line);
+    }
+
+    path := temp_string(directory.name, "/");
+    if path.length > *max_chars_per_line {
+        path.length = *max_chars_per_line;
+    }
+
+    *x = render_text(path, settings.font_size, *x, *y, appearance.font_color, vec4());
+    *max_chars_per_line = *max_chars_per_line - path.length;
 }
 
 cleanup_files() {
@@ -296,14 +312,16 @@ cleanup_files() {
     }
 }
 
-open_file_to_buffer(string file) {
-    open_file_buffer(file, true);
+open_file_to_buffer(int key) {
+    file_entry := file_entries[key];
+    // TODO Get the full path
+    // open_file_buffer(file, true);
 }
 
 loading_files := false;
 cancel_loading_files := false;
 
-file_entries: Array<string>;
+file_entries: Array<ListEntry>;
 filtered_file_entries: Array<ListEntry>;
 
 file_entries_allocated := 0;
@@ -322,6 +340,8 @@ get_file_at_line(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
     search_result := entry.key;
 
+    // TODO Get the Full path
+    /*
     workspace := get_workspace();
     line, column, file := parse_search_key(search_result);
     start_line_adjust := global_font_config.max_lines_without_bottom_window / 2;
@@ -350,6 +370,7 @@ get_file_at_line(int thread, JobData data) {
     else {
         free_buffer(file_buffer);
     }
+    */
 }
 
 change_search_filter(string filter) {
@@ -367,12 +388,42 @@ change_search_filter(string filter) {
     }
 }
 
-open_file_at_line(string search_result) {
+draw_search_result(ListEntry entry, float x, float y, u32 max_chars_per_line) {
+    if entry.directory {
+        draw_directory(entry.directory, &x, &y, &max_chars_per_line);
+    }
+
+    if entry.name.length > max_chars_per_line {
+        entry.name.length = max_chars_per_line;
+    }
+
+    x = render_text(entry.name, settings.font_size, x, y, appearance.font_color, vec4());
+    max_chars_per_line -= entry.name.length;
+
+    if max_chars_per_line {
+        prev_x := x;
+        x = render_text(settings.font_size, x, y, appearance.font_color, vec4(), ":%:%:", entry.value1, entry.value2);
+
+        max_chars_per_line -= cast(u32, (x - prev_x) / global_font_config.quad_advance);
+
+        if entry.value3.length > max_chars_per_line {
+            entry.value3.length = max_chars_per_line;
+        }
+
+        render_text(entry.value3, settings.font_size, x, y, appearance.font_color, vec4());
+    }
+}
+
+open_file_at_line(int key) {
+    search_result := search_results[key];
+    // TODO Get the full path
+    /*
     line, column, file := parse_search_key(search_result);
     buffer_window := open_file_buffer(file, true);
     buffer_window.line = line;
     buffer_window.cursor = column;
     adjust_start_line(buffer_window);
+    */
 }
 
 cancel_current_search() {
@@ -477,7 +528,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
                             file_path = temp_string(display_path, "/", name);
                         }
 
-                        search_file(file_path, filter);
+                        search_file(file_path, name, parent_directory, filter);
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
                         if search_sub_directories {
@@ -509,14 +560,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
         path_with_wildcard[path.length + wildcard.length] = 0;
 
         find_data: WIN32_FIND_DATAA;
-        find_handle: Handle*;
-
-        if search_sub_directories {
-            find_handle = FindFirstFileExA(path_with_wildcard.data, FINDEX_INFO_LEVELS.FindExInfoStandard, &find_data, FINDEX_SEARCH_OPS.FindExSearchLimitToDirectories, null, 0);
-        }
-        else {
-            find_handle = FindFirstFileA(path_with_wildcard.data, &find_data);
-        }
+        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
 
         if cast(s64, find_handle) == -1 {
             return false;
@@ -546,7 +590,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
                         file_path = temp_string(display_path, "/", name);
                     }
 
-                    search_file(file_path, filter);
+                    search_file(file_path, name, parent_directory, filter);
                 }
             }
 
@@ -587,7 +631,7 @@ bool is_file_binary(File file) {
     return false;
 }
 
-search_file(string path, string filter) {
+search_file(string path, string file_name, Directory* parent_directory, string filter) {
     if search_results.length == max_search_results return;
 
     success, file_handle := open_file(path);
@@ -642,7 +686,7 @@ search_file(string path, string filter) {
                             }
                             line.length++;
                         }
-                        if !add_search_result(path, line_number, column, line) return;
+                        if !add_search_result(file_name, parent_directory, line_number, column, line) return;
                         skip_until_next_line = true;
                     }
                 }
@@ -672,11 +716,18 @@ add_file_entry(string name, Directory* parent_directory) {
         free_allocation(old_data);
     }
 
-    name = format_string("%", allocate_for_search_result, name);
-    file_entries[file_entries.length++] = name;
+    allocate_string_for_search_result(&name);
+
+    file_entries[file_entries.length] = {
+        key = file_entries.length;
+        name = name;
+        directory = parent_directory;
+    }
+
+    file_entries.length++;
 }
 
-bool add_search_result(string file, int line, int column, string line_text) {
+bool add_search_result(string file, Directory* parent_directory, int line, int column, string line_text) {
     if search_results.length == max_search_results return false;
 
     if search_results.length == search_results_allocated {
@@ -691,10 +742,21 @@ bool add_search_result(string file, int line, int column, string line_text) {
         free_allocation(old_data);
     }
 
-    search_results[search_results.length++] = {
-        key = format_string("%:%-%", allocate_for_search_result, line, column, file);
-        display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_text);
+    allocate_string_for_search_result(&file);
+    allocate_string_for_search_result(&line_text);
+    // key := format_string("%:%-%", allocate_for_search_result, line, column, file);
+    // display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_text);
+
+    search_results[search_results.length] = {
+        key = search_results.length;
+        name = file;
+        directory = parent_directory;
+        value1 = line;
+        value2 = column;
+        value3 = line_text;
     }
+
+    search_results.length++;
 
     return true;
 }
@@ -705,6 +767,12 @@ struct SearchResultsStrings {
 }
 search_results_strings_size := 50000; #const
 search_results_strings: Array<SearchResultsStrings>;
+
+void allocate_string_for_search_result(string* value) {
+    old_data := value.data;
+    value.data = allocate_for_search_result(value.length);
+    memory_copy(value.data, old_data, value.length);
+}
 
 void* allocate_for_search_result(u64 length) {
     each results_string in search_results_strings {

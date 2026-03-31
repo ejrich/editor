@@ -24,22 +24,14 @@ source_control_status() {
     if !string_is_empty(list_title) {
         // Free the existing entries before loading
         each entry in status_entries {
-            switch workspace.local_settings.source_control {
-                case SourceControl.Git; {
-                    free_allocation(entry.key.data);
-                    free_allocation(entry.display.data);
-                }
-                case SourceControl.Perforce;
-                case SourceControl.Svn;
-                    free_allocation(entry.display.data);
-            }
+            free_allocation(entry.name.data);
         }
+
         status_entries.length = 0;
-        git_status_entries.length = 0;
         filtered_status_entries.length = 0;
 
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, get_total_status_entries, load_diff, change_filter, open_status_file, change_status);
+        start_list_mode(list_title, get_status_entries, get_total_status_entries, load_diff, change_filter, draw_status, open_status_file, change_status);
     }
 }
 
@@ -142,11 +134,13 @@ load_status(int index, JobData data) {
     line := status_buffer.lines;
     while line {
         if line.length {
-            file, display := line_to_entry(line, i);
-            status_entries[i++] = {
-                key = file;
-                display = display;
+            file, status := line_to_entry(line, i);
+            status_entries[i] = {
+                key = i;
+                name = file;
+                value1 = status;
             }
+            i++;
         }
         line = line.next;
     }
@@ -156,7 +150,6 @@ load_status(int index, JobData data) {
 }
 
 status_entries: Array<ListEntry>;
-git_status_entries: Array<GitStatus>;
 
 enum GitStatus {
     None          = 0x0;
@@ -194,7 +187,6 @@ prepare_status_entries(int count) {
         }
 
         reallocate_array(&status_entries, entries_reserved);
-        reallocate_array(&git_status_entries, entries_reserved);
         reallocate_array(&filtered_status_entries, entries_reserved);
     }
 
@@ -202,24 +194,23 @@ prepare_status_entries(int count) {
     filtered_status_entries.length = count;
 }
 
-string, string line_to_entry(BufferLine* line, int status_index) {
+string, u32 line_to_entry(BufferLine* line, int status_index) {
     value: string = {
         length = clamp(line.length, 0, line_buffer_length);
         data = line.data.data;
     }
 
-    file, display: string;
+    file: string;
+    status: u32;
     workspace := get_workspace();
     switch workspace.local_settings.source_control {
         case SourceControl.Git; {
-            status := char_to_git_status(value[0], true) | char_to_git_status(value[1]);
+            status = cast(u32, char_to_git_status(value[0], true) | char_to_git_status(value[1]));
             file = {
                 length = value.length - 3;
                 data = value.data + 3;
             }
             allocate_strings(&file);
-            display = build_git_entry_display(file, status);
-            git_status_entries[status_index] = status;
         }
         case SourceControl.Perforce; {
             if starts_with(value, workspace.directory) {
@@ -245,19 +236,18 @@ string, string line_to_entry(BufferLine* line, int status_index) {
                 allocate_strings(&value);
             }
             file = value;
-            display = value;
         }
         case SourceControl.Svn; {
-            allocate_strings(&value);
+            // TODO Save the status
             file = {
                 length = value.length - 8;
                 data = value.data + 8;
             }
-            display = value;
+            allocate_strings(&file);
         }
     }
 
-    return file, display;
+    return file, status;
 }
 
 Array<ListEntry> get_status_entries() {
@@ -270,7 +260,8 @@ int get_total_status_entries() {
 
 load_diff(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
-    file := entry.key;
+    key := entry.key;
+    file := status_entries[key].name;
 
     command: string;
     workspace := get_workspace();
@@ -291,7 +282,7 @@ load_diff(int thread, JobData data) {
     diff_buffer := run_command_and_save_to_buffer(command);
     diff_buffer.syntax = get_syntax_for_extension("diff");
 
-    if file == entry.key {
+    if key == entry.key {
         entry.buffer = diff_buffer;
     }
     else {
@@ -321,66 +312,106 @@ apply_status_filter() {
     else {
         filtered_status_entries.length = 0;
         each entry in status_entries {
-            if string_contains(entry.key, status_filter, false) {
+            if string_contains(entry.name, status_filter, false) {
                 filtered_status_entries[filtered_status_entries.length++] = entry;
             }
         }
     }
 }
 
-open_status_file(string file) {
-    open_file_buffer(file, true);
-}
-
-change_status(string file) {
+draw_status(ListEntry entry, float x, float y, u32 max_chars_per_line) {
     workspace := get_workspace();
     switch workspace.local_settings.source_control {
         case SourceControl.Git; {
-            each entry, i in status_entries {
-                if file == entry.key {
-                    status := git_status_entries[i];
-                    add, reset := false;
-                    add_status, reset_status := GitStatus.None;
+            status := cast(GitStatus, entry.value1);
+            status1, status2: string = " ";
 
-                    if status == GitStatus.Untracked {
-                        add = true;
-                        add_status = GitStatus.Added;
-                    }
-                    if status & GitStatus.Added {
-                        reset = true;
-                        reset_status = GitStatus.Untracked;
-                    }
-                    if status & GitStatus.Changed {
-                        add = true;
-                        add_status = GitStatus.ChangedStaged;
-                    }
-                    if status & GitStatus.ChangedStaged {
-                        reset = true;
-                        reset_status = GitStatus.Changed;
-                    }
-                    if status & GitStatus.Deleted {
-                        add = true;
-                        add_status = GitStatus.DeletedStaged;
-                    }
-                    if status & GitStatus.DeletedStaged {
-                        reset = true;
-                        reset_status = GitStatus.Deleted;
-                    }
-
-                    if add {
-                        command := temp_string("git add ", entry.key);
-                        run_command_silent(command);
-                        git_status_entries[i] = add_status;
-                        set_git_status_display(entry.display, add_status);
-                    }
-                    else if reset {
-                        command := temp_string("git restore --staged ", entry.key);
-                        run_command_silent(command);
-                        git_status_entries[i] = reset_status;
-                        set_git_status_display(entry.display, reset_status);
-                    }
-                    break;
+            if status == GitStatus.Untracked {
+                status1 = "?";
+            }
+            else {
+                if status & GitStatus.Added {
+                    status1 = "+";
                 }
+                if status & GitStatus.Changed {
+                    status2 = "~";
+                }
+                if status & GitStatus.ChangedStaged {
+                    status1 = "~";
+                }
+                if status & GitStatus.Deleted {
+                    status2 = "-";
+                }
+                if status & GitStatus.DeletedStaged {
+                    status1 = "-";
+                }
+            }
+
+            if entry.name.length + 4 > max_chars_per_line {
+                entry.name.length = max_chars_per_line - 4;
+            }
+
+            render_text(settings.font_size, x, y, appearance.font_color, vec4(), "% % %", status1, status2, entry.name);
+        }
+        case SourceControl.Perforce;
+        case SourceControl.Svn; {
+            if entry.name.length > max_chars_per_line {
+                entry.name.length = max_chars_per_line;
+            }
+
+            render_text(entry.name, settings.font_size, x, y, appearance.font_color, vec4());
+        }
+    }
+}
+
+open_status_file(int key) {
+    file := status_entries[key].name;
+    open_file_buffer(file, true);
+}
+
+change_status(int key) {
+    workspace := get_workspace();
+    switch workspace.local_settings.source_control {
+        case SourceControl.Git; {
+            entry := &status_entries[key];
+            status := cast(GitStatus, entry.value1);
+            add, reset := false;
+            add_status, reset_status := GitStatus.None;
+
+            if status == GitStatus.Untracked {
+                add = true;
+                add_status = GitStatus.Added;
+            }
+            if status & GitStatus.Added {
+                reset = true;
+                reset_status = GitStatus.Untracked;
+            }
+            if status & GitStatus.Changed {
+                add = true;
+                add_status = GitStatus.ChangedStaged;
+            }
+            if status & GitStatus.ChangedStaged {
+                reset = true;
+                reset_status = GitStatus.Changed;
+            }
+            if status & GitStatus.Deleted {
+                add = true;
+                add_status = GitStatus.DeletedStaged;
+            }
+            if status & GitStatus.DeletedStaged {
+                reset = true;
+                reset_status = GitStatus.Deleted;
+            }
+
+            if add {
+                command := temp_string("git add ", entry.name);
+                run_command_silent(command);
+                entry.value1 = cast(u32, add_status);
+            }
+            else if reset {
+                command := temp_string("git restore --staged ", entry.name);
+                run_command_silent(command);
+                entry.value1 = cast(u32, reset_status);
             }
 
             apply_status_filter();
