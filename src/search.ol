@@ -1,5 +1,4 @@
 open_files_list() {
-    free_allocation(file_entries_string_pointer);
     file_entries.length = 0;
     change_file_filter(empty_string);
 
@@ -53,36 +52,24 @@ load_files(int thread, JobData data) {
     defer {
         loading_files = false;
         cancel_loading_files = false;
+        trigger_window_update();
     }
 
-    file_entry_index = 0;
-    length_to_allocate = 0;
+    file_entries.length = 0;
+    old_file_entries_allocated := file_entries_allocated;
 
     workspace := get_workspace();
-    load_directory(workspace.directory, empty_string, true, null, &workspace.sub_directories);
-
-    if cancel_loading_files return;
-
-    if file_entry_index > file_entries_reserved {
-        while file_entries_reserved < file_entry_index {
-            file_entries_reserved += file_entries_block_size;
-        }
-
-        reallocate_array(&file_entries, file_entries_reserved);
-        reallocate_array(&filtered_file_entries, file_entries_reserved);
-    }
-
-    file_entries.length = file_entry_index;
-    file_entry_index = 0;
-    file_entries_string_pointer = allocate(length_to_allocate);
-    file_entries_string_index = 0;
-
-    if cancel_loading_files return;
-
     load_directory(workspace.directory, empty_string, false, null, &workspace.sub_directories);
 
+    if cancel_loading_files return;
+
+    if old_file_entries_allocated < file_entries_allocated {
+        reallocate_array(&filtered_file_entries, file_entries_allocated);
+    }
+
+    if cancel_loading_files return;
+
     change_file_filter(empty_string);
-    trigger_window_update();
 }
 
 load_directory(string path, string display_path, bool counting, Directory* parent_directory, Array<Directory*>* sub_directories) {
@@ -122,13 +109,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                                 file_path = temp_string(display_path, "/", name);
                             }
 
-                            if counting {
-                                file_entry_index++;
-                                length_to_allocate += file_path.length;
-                            }
-                            else {
-                                file_entries[file_entry_index++] = copy_path(file_path);
-                            }
+                            add_file_entry(name, parent_directory);
                         }
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
@@ -198,13 +179,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                         file_path = temp_string(display_path, "/", name);
                     }
 
-                    if counting {
-                        file_entry_index++;
-                        length_to_allocate += file_path.length;
-                    }
-                    else {
-                        file_entries[file_entry_index++] = copy_path(file_path);
-                    }
+                    add_file_entry(name, parent_directory);
                 }
             }
 
@@ -294,6 +269,7 @@ change_file_filter(string filter) {
         }
     }
     else {
+        // TODO Use the full path
         filtered_file_entries.length = 0;
         each file in file_entries {
             if string_contains(file, filter, false) {
@@ -315,8 +291,9 @@ cleanup_files() {
         sleep(1);
     }
 
-    free_allocation(file_entries_string_pointer);
-    file_entries_string_pointer = null;
+    each results_string in search_results_strings {
+        results_string.cursor = 0;
+    }
 }
 
 open_file_to_buffer(string file) {
@@ -329,24 +306,8 @@ cancel_loading_files := false;
 file_entries: Array<string>;
 filtered_file_entries: Array<ListEntry>;
 
-file_entries_reserved := 0;
+file_entries_allocated := 0;
 file_entries_block_size := 50; #const
-file_entry_index := 0;
-length_to_allocate := 0;
-file_entries_string_pointer: u8*;
-file_entries_string_index := 0;
-
-string copy_path(string file_path) {
-    path: string = {
-        length = file_path.length;
-        data = file_entries_string_pointer + file_entries_string_index;
-    }
-
-    file_entries_string_index += file_path.length;
-    memory_copy(path.data, file_path.data, file_path.length);
-
-    return path;
-}
 
 // Search functions
 Array<ListEntry> get_search_results() {
@@ -696,6 +657,23 @@ search_file(string path, string filter) {
             }
         }
     }
+}
+
+add_file_entry(string name, Directory* parent_directory) {
+    if file_entries.length == file_entries_allocated {
+        old_data := file_entries.data;
+        old_size := file_entries_allocated * size_of(ListEntry);
+
+        file_entries_allocated += file_entries_block_size;
+        new_data := allocate(file_entries_allocated * size_of(ListEntry));
+        memory_copy(new_data, file_entries.data, old_size);
+
+        file_entries.data = new_data;
+        free_allocation(old_data);
+    }
+
+    name = format_string("%", allocate_for_search_result, name);
+    file_entries[file_entries.length++] = name;
 }
 
 bool add_search_result(string file, int line, int column, string line_text) {
