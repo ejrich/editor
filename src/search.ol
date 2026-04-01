@@ -46,6 +46,34 @@ Directory* get_or_create_directory(string name, Directory* parent_directory, Arr
     return directory;
 }
 
+string get_full_path(string file, Directory* directory) #inline {
+    if directory == null {
+        return file;
+    }
+
+    path_length := file.length;
+    dir := directory;
+    while dir {
+        path_length += dir.name.length + 1;
+        dir = dir.parent;
+    }
+
+    path_data: Array<u8>[path_length];
+    cursor := path_length - file.length;
+    memory_copy(path_data.data + cursor, file.data, file.length);
+
+    dir = directory;
+    while dir {
+        path_data[--cursor] = '/';
+        cursor -= dir.name.length;
+        memory_copy(path_data.data + cursor, dir.name.data, dir.name.length);
+        dir = dir.parent;
+    }
+
+    path: string = { length = path_length; data = path_data.data; }
+    return path;
+}
+
 // File finder functions
 load_files(int thread, JobData data) {
     loading_files = true;
@@ -56,15 +84,15 @@ load_files(int thread, JobData data) {
     }
 
     file_entries.length = 0;
-    old_file_entries_allocated := file_entries_allocated;
 
     workspace := get_workspace();
-    load_directory(workspace.directory, empty_string, false, null, &workspace.sub_directories);
+    load_directory(workspace.directory, empty_string, null, &workspace.sub_directories);
 
     if cancel_loading_files return;
 
-    if old_file_entries_allocated < file_entries_allocated {
-        reallocate_array(&filtered_file_entries, file_entries_allocated);
+    if filtered_file_entries_allocated < file_entries_allocated {
+        filtered_file_entries_allocated = file_entries_allocated;
+        reallocate_array(&filtered_file_entries, filtered_file_entries_allocated);
     }
 
     if cancel_loading_files return;
@@ -72,14 +100,14 @@ load_files(int thread, JobData data) {
     change_file_filter(empty_string);
 }
 
-load_directory(string path, string display_path, bool counting, Directory* parent_directory, Array<Directory*>* sub_directories) {
-    load_sub_directories := load_directory_files(path, display_path, counting, false, parent_directory, sub_directories);
+load_directory(string path, string display_path, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    load_sub_directories := load_directory_files(path, display_path, false, parent_directory, sub_directories);
     if load_sub_directories {
-        load_directory_files(path, display_path, counting, true, parent_directory, sub_directories);
+        load_directory_files(path, display_path, true, parent_directory, sub_directories);
     }
 }
 
-bool load_directory_files(string path, string display_path, bool counting, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
+bool load_directory_files(string path, string display_path, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     found_sub_directory := false;
 
     #if os == OS.Linux {
@@ -120,7 +148,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                                 sub_display_path = temp_string(display_path, "/", name);
                             }
                             sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            load_directory(sub_path, sub_display_path, counting, sub_directory, &sub_directory.sub_directories);
+                            load_directory(sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -160,7 +188,7 @@ bool load_directory_files(string path, string display_path, bool counting, bool 
                             sub_display_path = temp_string(display_path, "/", name);
                         }
                         sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        load_directory(sub_path, sub_display_path, counting, sub_directory, &sub_directory.sub_directories);
+                        load_directory(sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;
@@ -197,12 +225,13 @@ int get_total_files() {
 
 get_file(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
-    file := entry.key;
+    key := entry.key;
+    file_entry := file_entries[key];
 
     defer trigger_window_update();
 
-    // TODO Get the full path name
-    /*
+    file := get_full_path(file_entry.name, file_entry.directory);
+
     workspace := get_workspace();
     each buffer in workspace.buffers {
         if buffer.relative_path == file {
@@ -214,13 +243,14 @@ get_file(int thread, JobData data) {
 
     file_buffer := read_file_into_buffer(file);
 
-    if file == entry.key {
-        entry.buffer = file_buffer;
+    if file_buffer {
+        if key == entry.key {
+            entry.buffer = file_buffer;
+        }
+        else {
+            free_buffer(file_buffer);
+        }
     }
-    else {
-        free_buffer(file_buffer);
-    }
-    */
 }
 
 Buffer* read_file_into_buffer(string file_path) {
@@ -262,14 +292,18 @@ change_file_filter(string filter) {
         }
     }
     else {
-        // TODO Use the full path
         filtered_file_entries.length = 0;
         each file in file_entries {
-            if string_contains(file.name, filter, false) {
+            if file_path_contains(file.name, file.directory, filter) {
                 filtered_file_entries[filtered_file_entries.length++] = file;
             }
         }
     }
+}
+
+bool file_path_contains(string file, Directory* directory, string filter) {
+    file_path := get_full_path(file, directory);
+    return string_contains(file_path, filter, false);
 }
 
 draw_file_entry(ListEntry entry, float x, float y, u32 max_chars_per_line) {
@@ -307,6 +341,7 @@ cleanup_files() {
         sleep(1);
     }
 
+    file_entries.length = 0;
     each results_string in search_results_strings {
         results_string.cursor = 0;
     }
@@ -314,8 +349,8 @@ cleanup_files() {
 
 open_file_to_buffer(int key) {
     file_entry := file_entries[key];
-    // TODO Get the full path
-    // open_file_buffer(file, true);
+    file := get_full_path(file_entry.name, file_entry.directory);
+    open_file_buffer(file, true);
 }
 
 loading_files := false;
@@ -325,6 +360,7 @@ file_entries: Array<ListEntry>;
 filtered_file_entries: Array<ListEntry>;
 
 file_entries_allocated := 0;
+filtered_file_entries_allocated := 0;
 file_entries_block_size := 50; #const
 
 // Search functions
@@ -338,19 +374,19 @@ int get_total_search_results() {
 
 get_file_at_line(int thread, JobData data) {
     entry := cast(SelectedEntry*, data.pointer);
-    search_result := entry.key;
-
-    // TODO Get the Full path
-    /*
-    workspace := get_workspace();
-    line, column, file := parse_search_key(search_result);
-    start_line_adjust := global_font_config.max_lines_without_bottom_window / 2;
+    key := entry.key;
+    search_result := search_results[key];
 
     defer trigger_window_update();
 
+    file := get_full_path(search_result.name, search_result.directory);
+    line := search_result.value1 - 1;
+    start_line_adjust := global_font_config.max_lines_without_bottom_window / 2;
+
+    workspace := get_workspace();
     each buffer in workspace.buffers {
         if buffer.relative_path == file {
-            if search_result == entry.key {
+            if key == entry.key {
                 entry.buffer = &buffer;
                 entry.can_free_buffer = false;
                 entry.start_line = clamp(line - start_line_adjust, 0, buffer.line_count);
@@ -362,15 +398,16 @@ get_file_at_line(int thread, JobData data) {
 
     file_buffer := read_file_into_buffer(file);
 
-    if search_result == entry.key {
-        entry.buffer = file_buffer;
-        entry.start_line = clamp(line - start_line_adjust, 0, file_buffer.line_count);
-        entry.selected_line = line;
+    if file_buffer {
+        if key == entry.key {
+            entry.buffer = file_buffer;
+            entry.start_line = clamp(line - start_line_adjust, 0, file_buffer.line_count);
+            entry.selected_line = line;
+        }
+        else {
+            free_buffer(file_buffer);
+        }
     }
-    else {
-        free_buffer(file_buffer);
-    }
-    */
 }
 
 change_search_filter(string filter) {
@@ -416,14 +453,11 @@ draw_search_result(ListEntry entry, float x, float y, u32 max_chars_per_line) {
 
 open_file_at_line(int key) {
     search_result := search_results[key];
-    // TODO Get the full path
-    /*
-    line, column, file := parse_search_key(search_result);
+    file := get_full_path(search_result.name, search_result.directory);
     buffer_window := open_file_buffer(file, true);
-    buffer_window.line = line;
-    buffer_window.cursor = column;
+    buffer_window.line = search_result.value1;
+    buffer_window.cursor = search_result.value2;
     adjust_start_line(buffer_window);
-    */
 }
 
 cancel_current_search() {
@@ -435,9 +469,6 @@ cancel_current_search() {
     }
 }
 
-// Search results entries are stored in the following format
-// - key = {line}:{column}-{file}
-// - display = {file}:{line}:{column}:{line text}
 search_results: Array<ListEntry>;
 
 search_results_allocated := 0;
@@ -744,8 +775,6 @@ bool add_search_result(string file, Directory* parent_directory, int line, int c
 
     allocate_string_for_search_result(&file);
     allocate_string_for_search_result(&line_text);
-    // key := format_string("%:%-%", allocate_for_search_result, line, column, file);
-    // display = format_string("%:%:%:%", allocate_for_search_result, file, line, column, line_text);
 
     search_results[search_results.length] = {
         key = search_results.length;

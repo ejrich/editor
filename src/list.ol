@@ -156,8 +156,8 @@ struct ListEntry {
     key: u32;
     name: string;
     directory: Directory*;
-    value1: u32;
-    value2: u32;
+    value1: int;
+    value2: int;
     value3: string;
 }
 
