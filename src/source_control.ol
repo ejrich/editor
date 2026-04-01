@@ -151,16 +151,6 @@ load_status(int index, JobData data) {
 
 status_entries: Array<ListEntry>;
 
-enum GitStatus {
-    None          = 0x0;
-    Untracked     = 0x1;
-    Added         = 0x2;
-    Changed       = 0x4;
-    ChangedStaged = 0x8;
-    Deleted       = 0x10;
-    DeletedStaged = 0x20;
-}
-
 status_filter: string;
 filtered_status_entries: Array<ListEntry>;
 
@@ -238,7 +228,7 @@ string, u32 line_to_entry(BufferLine* line, int status_index) {
             file = value;
         }
         case SourceControl.Svn; {
-            // TODO Save the status
+            status = cast(u32, char_to_svn_status(value[0]));
             file = {
                 length = value.length - 8;
                 data = value.data + 8;
@@ -353,13 +343,20 @@ draw_status(ListEntry entry, float x, float y, u32 max_chars_per_line) {
 
             render_text(settings.font_size, x, y, appearance.font_color, vec4(), "% % %", status1, status2, entry.name);
         }
-        case SourceControl.Perforce;
-        case SourceControl.Svn; {
+        case SourceControl.Perforce; {
             if entry.name.length > max_chars_per_line {
                 entry.name.length = max_chars_per_line;
             }
 
             render_text(entry.name, settings.font_size, x, y, appearance.font_color, vec4());
+        }
+        case SourceControl.Svn; {
+            status := svn_status_to_string(cast(SvnStatus, entry.value1));
+            if entry.name.length + 2 > max_chars_per_line {
+                entry.name.length = max_chars_per_line - 2;
+            }
+
+            render_text(settings.font_size, x, y, appearance.font_color, vec4(), "% %", status, entry.name);
         }
     }
 }
@@ -423,6 +420,16 @@ change_status(int key) {
 
 
 // Git specific functions
+enum GitStatus {
+    None          = 0x0;
+    Untracked     = 0x1;
+    Added         = 0x2;
+    Changed       = 0x4;
+    ChangedStaged = 0x8;
+    Deleted       = 0x10;
+    DeletedStaged = 0x20;
+}
+
 GitStatus char_to_git_status(u8 char, bool first = false) {
     if first {
         switch char {
@@ -444,50 +451,59 @@ GitStatus char_to_git_status(u8 char, bool first = false) {
     return GitStatus.None;
 }
 
-string build_git_entry_display(string file, GitStatus status) {
-    display: string = {
-        length = file.length + 4;
-        data = allocate(file.length + 4);
-    }
-
-    set_git_status_display(display, status);
-    memory_copy(display.data + 4, file.data, file.length);
-
-    return display;
-}
-
-set_git_status_display(string display, GitStatus status) {
-    display[0] = ' ';
-    display[1] = ' ';
-    display[2] = ' ';
-    display[3] = ' ';
-
-    if status == GitStatus.Untracked {
-        display[0] = '?';
-    }
-    else {
-        if status & GitStatus.Added {
-            display[0] = '+';
-        }
-        if status & GitStatus.Changed {
-            display[2] = '~';
-        }
-        if status & GitStatus.ChangedStaged {
-            display[0] = '~';
-        }
-        if status & GitStatus.Deleted {
-            display[2] = '-';
-        }
-        if status & GitStatus.DeletedStaged {
-            display[0] = '-';
-        }
-    }
-}
-
-
 // Perforce specific functions
 set_perforce_client() {
     workspace := get_workspace();
     command := temp_string("p4 set P4CLIENT=", workspace.local_settings.perforce_client_name);
     run_command_silent(command);
+}
+
+// Svn specific functions
+enum SvnStatus {
+    None          = 0x0;
+    Added         = 0x1;
+    Deleted       = 0x2;
+    Modified      = 0x3;
+    Replaced      = 0x4;
+    Conflict      = 0x5;
+    External      = 0x6;
+    Ignored       = 0x7;
+    Untracked     = 0x8;
+    Missing       = 0x9;
+    DifferentType = 0xA;
+}
+
+SvnStatus char_to_svn_status(u8 char) {
+    switch char {
+        case ' '; return SvnStatus.None;
+        case 'A'; return SvnStatus.Added;
+        case 'D'; return SvnStatus.Deleted;
+        case 'M'; return SvnStatus.Modified;
+        case 'R'; return SvnStatus.Replaced;
+        case 'C'; return SvnStatus.Conflict;
+        case 'X'; return SvnStatus.External;
+        case 'I'; return SvnStatus.Ignored;
+        case '?'; return SvnStatus.Untracked;
+        case '!'; return SvnStatus.Missing;
+        case '~'; return SvnStatus.DifferentType;
+    }
+
+    return SvnStatus.None;
+}
+
+string svn_status_to_string(SvnStatus status) {
+    switch status {
+        case SvnStatus.Added;         return "A";
+        case SvnStatus.Deleted;       return "D";
+        case SvnStatus.Modified;      return "M";
+        case SvnStatus.Replaced;      return "R";
+        case SvnStatus.Conflict;      return "C";
+        case SvnStatus.External;      return "X";
+        case SvnStatus.Ignored;       return "I";
+        case SvnStatus.Untracked;     return "?";
+        case SvnStatus.Missing;       return "!";
+        case SvnStatus.DifferentType; return "~";
+    }
+
+    return " ";
 }
