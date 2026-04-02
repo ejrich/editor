@@ -11,6 +11,8 @@ struct DebuggerData {
     command_executing: bool;
     command_exited: bool;
     skip_next_stop: bool;
+    skip_next_line: bool;
+    wait_for_full_output: bool;
     parse_status: DebuggerParseStatus;
     paused_file_index: s32;
     paused_line: u32;
@@ -432,6 +434,7 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
 
                     command := temp_string("expr ", variable.name, " = ", value, "\n");
                     workspace.debugger_data.parse_status = DebuggerParseStatus.SetValue;
+                    workspace.debugger_data.wait_for_full_output = true;
                     send_command_to_debugger(workspace, command);
 
                     while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
@@ -440,7 +443,9 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     }
                     else {
                         workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
-                        send_command_to_debugger(workspace, "v\n");
+                        workspace.debugger_data.skip_next_line = true;
+                        workspace.debugger_data.wait_for_full_output = true;
+                        send_command_to_debugger(workspace, "frame variable -A -D 1000\n");
                     }
                 }
 
@@ -1295,6 +1300,9 @@ debugger_thread(int thread, JobData data) {
     send_command_to_debugger(workspace, "bt\n");
     send_command_to_debugger(workspace, "register read\n");
     send_command_to_debugger(workspace, "thread list\n");
+    #if os == OS.Linux {
+        send_command_to_debugger(workspace, "frame variable -A -D 1000\n");
+    }
     send_command_to_debugger(workspace, "DONE\n");
 
     start_debugger_command(workspace);
@@ -1305,20 +1313,27 @@ debugger_thread(int thread, JobData data) {
 
         if !success break;
 
-        if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
-            workspace.debugger_data.parse_status == DebuggerParseStatus.Variables ||
-            workspace.debugger_data.parse_status == DebuggerParseStatus.SetValue {
-            sleep(20);
-            pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
-            cursor = text.length;
-            if pending && cursor < buf.length {
-                continue;
+        if workspace.debugger_data.skip_next_line {
+            workspace.debugger_data.skip_next_line = false;
+        }
+        else {
+            if workspace.debugger_data.wait_for_full_output {
+                sleep(20);
+                pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
+                cursor = text.length;
+                if pending && cursor < buf.length {
+                    continue;
+                }
+            }
+
+            workspace.debugger_data.wait_for_full_output = false;
+
+            if !parse_debugger_output(workspace, text) {
+                add_to_debugger_buffer(workspace, text);
             }
         }
 
-        if !parse_debugger_output(workspace, text) {
-            add_to_debugger_buffer(workspace, text);
-        }
+        log("% '%'\n", workspace.debugger_data.parse_status, text);
 
         cursor = 0;
     }
@@ -1415,8 +1430,11 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                         if starts_with(status, "stopped") {
                             workspace.debugger_data.command_executing = false;
                             if !workspace.debugger_data.skip_next_stop {
-                                send_command_to_debugger(workspace, "v\n");
-                                workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+                                #if os == OS.Windows {
+                                    workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+                                    workspace.debugger_data.skip_next_line = true;
+                                    send_command_to_debugger(workspace, "frame variable -A -D 1000\n");
+                                }
                             }
 
                             workspace.debugger_data.skip_next_stop = false;
@@ -1438,13 +1456,15 @@ bool parse_debugger_output(Workspace* workspace, string text) {
         }
     }
 
-    if workspace.debugger_data.parse_status == DebuggerParseStatus.Expression ||
-        workspace.debugger_data.parse_status == DebuggerParseStatus.Variables ||
-        workspace.debugger_data.parse_status == DebuggerParseStatus.SetValue {
-        while clear_lldb_line(&text) {}
-    }
-    else {
-        clear_lldb_from_line(&text);
+    switch workspace.debugger_data.parse_status {
+        case DebuggerParseStatus.Expression;
+        case DebuggerParseStatus.Variables;
+        case DebuggerParseStatus.SetValue; {
+            while clear_lldb_line(&text) {}
+        }
+        default; {
+            clear_lldb_from_line(&text);
+        }
     }
 
     if text.length == 0 return true;
@@ -1819,7 +1839,12 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                 }
             }
 
-            workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+            #if os == OS.Windows {
+                workspace.debugger_data.parse_status = DebuggerParseStatus.None;
+            }
+            #if os == OS.Linux {
+                workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
+            }
         }
         case DebuggerParseStatus.Variables; {
             // (Workspace *) workspace = 0xff0000000000000a
@@ -2184,6 +2209,7 @@ evaluate_watch(Workspace* workspace, int index) {
 
     workspace.debugger_data = {
         parse_status = DebuggerParseStatus.Expression;
+        wait_for_full_output = true;
         evaluating_watch = true;
         watch_index = index;
     }
@@ -2192,7 +2218,7 @@ evaluate_watch(Workspace* workspace, int index) {
 }
 
 evaluate_expression(Workspace* workspace, string expression) {
-    command := temp_string("p ", expression, "\n");
+    command := temp_string("dwim-print -A -D 1000 -- ", expression, "\n");
     send_command_to_debugger(workspace, command);
 
     while workspace.debugger_data.parse_status != DebuggerParseStatus.None {}
