@@ -11,7 +11,6 @@ struct DebuggerData {
     command_executing: bool;
     command_exited: bool;
     skip_next_stop: bool;
-    skip_next_line: bool;
     wait_for_full_output: bool;
     parse_status: DebuggerParseStatus;
     paused_file_index: s32;
@@ -443,7 +442,6 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     }
                     else {
                         workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
-                        workspace.debugger_data.skip_next_line = true;
                         workspace.debugger_data.wait_for_full_output = true;
                         send_command_to_debugger(workspace, "frame variable -A -D 1000\n");
                     }
@@ -1313,27 +1311,23 @@ debugger_thread(int thread, JobData data) {
 
         if !success break;
 
-        if workspace.debugger_data.skip_next_line {
-            workspace.debugger_data.skip_next_line = false;
-        }
-        else {
-            if workspace.debugger_data.wait_for_full_output {
-                sleep(20);
-                pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
-                cursor = text.length;
-                if pending && cursor < buf.length {
-                    continue;
-                }
+        if workspace.debugger_data.wait_for_full_output {
+            sleep(20);
+            pending := output_pipe_has_pending_data(&workspace.debugger_data.process);
+            cursor = text.length;
+
+            if pending && cursor < buf.length {
+                continue;
             }
 
             workspace.debugger_data.wait_for_full_output = false;
-
-            if !parse_debugger_output(workspace, text) {
-                add_to_debugger_buffer(workspace, text);
-            }
         }
 
         log("% '%'\n", workspace.debugger_data.parse_status, text);
+
+        if !parse_debugger_output(workspace, text) {
+            add_to_debugger_buffer(workspace, text);
+        }
 
         cursor = 0;
     }
@@ -1432,7 +1426,7 @@ bool parse_debugger_output(Workspace* workspace, string text) {
                             if !workspace.debugger_data.skip_next_stop {
                                 #if os == OS.Windows {
                                     workspace.debugger_data.parse_status = DebuggerParseStatus.Variables;
-                                    workspace.debugger_data.skip_next_line = true;
+                                    workspace.debugger_data.wait_for_full_output = true;
                                     send_command_to_debugger(workspace, "frame variable -A -D 1000\n");
                                 }
                             }
