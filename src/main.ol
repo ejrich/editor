@@ -6,6 +6,7 @@
 #import "commands.ol"
 #import "debugger.ol"
 #import "events.ol"
+#import "exceptions.ol"
 #import "graphics.ol"
 #import "jumps.ol"
 #import "keybinds.ol"
@@ -337,6 +338,7 @@ show_profiling_data := false;
 program_directory: string;
 
 init_subsystems() {
+    init_exception_handler();
     init_memory();
     init_logging();
     init_workspaces();
