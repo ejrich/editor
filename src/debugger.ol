@@ -1323,8 +1323,6 @@ debugger_thread(int thread, JobData data) {
             workspace.debugger_data.wait_for_full_output = false;
         }
 
-        log("% '%'\n", workspace.debugger_data.parse_status, text);
-
         if !parse_debugger_output(workspace, text) {
             add_to_debugger_buffer(workspace, text);
         }

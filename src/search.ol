@@ -23,6 +23,7 @@ free_directory(Directory* directory) {
         free_directory(sub_directory);
     }
 
+    free_allocation(directory.sub_directories.data);
     free_allocation(directory.name.data);
     free_allocation(directory);
 }
