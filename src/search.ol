@@ -23,7 +23,13 @@ free_directory(Directory* directory) {
         free_directory(sub_directory);
     }
 
-    free_allocation(directory.sub_directories.data);
+    if directory.sub_directories.length {
+        free_allocation(directory.sub_directories.data);
+        directory.sub_directories.length = 0;
+    }
+
+    directory.parent = null;
+
     free_allocation(directory.name.data);
     free_allocation(directory);
 }
@@ -41,6 +47,8 @@ Directory* get_or_create_directory(string name, Directory* parent_directory, Arr
     directory := new<Directory>();
     directory.parent = parent_directory;
     directory.name = name;
+    directory.sub_directories.length = 0;
+    directory.sub_directories.data = null;
 
     array_insert(sub_directories, directory, allocate, reallocate);
 
@@ -98,6 +106,8 @@ load_files(int thread, JobData data) {
 
     if cancel_loading_files return;
 
+    loading_files = false;
+
     change_file_filter(empty_string);
 }
 
@@ -106,6 +116,8 @@ load_directory(string path, string display_path, Directory* parent_directory, Ar
     if load_sub_directories {
         load_directory_files(path, display_path, true, parent_directory, sub_directories);
     }
+
+    trigger_window_update();
 }
 
 bool load_directory_files(string path, string display_path, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
@@ -286,6 +298,10 @@ Buffer* read_file_into_buffer(string file_path) {
 }
 
 change_file_filter(string filter) {
+    filtered_file_entries.length = 0;
+
+    if loading_files return;
+
     if string_is_empty(filter) {
         filtered_file_entries.length = file_entries.length;
         each file, i in file_entries {
@@ -293,7 +309,6 @@ change_file_filter(string filter) {
         }
     }
     else {
-        filtered_file_entries.length = 0;
         each file in file_entries {
             if file_path_contains(file.name, file.directory, filter) {
                 filtered_file_entries[filtered_file_entries.length++] = file;
