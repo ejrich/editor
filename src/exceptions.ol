@@ -1,6 +1,6 @@
 init_exception_handler() {
     #if os == OS.Windows {
-        // TODO Implement
+        AddVectoredExceptionHandler(1, exception_handler);
     }
     #if os == OS.Linux {
         sigaction: Sigaction = {
@@ -14,7 +14,12 @@ init_exception_handler() {
 #private
 
 #if os == OS.Windows {
-    // TODO Implement
+    int exception_handler(EXCEPTION_POINTERS* exception_inf) {
+        log("Hello world\n");
+        // TODO Implement
+        exit_program(-1);
+        return 0;
+    }
 }
 #if os == OS.Linux {
     signal_handler(int signal) {
