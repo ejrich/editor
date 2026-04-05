@@ -1,57 +1,24 @@
 init_logging() {
+    #if os == OS.Linux {
+        parse_timezone_file();
+    }
+
     home_directory := get_environment_variable(home_environment_variable, temp_allocate);
     log_file_path := temp_string(home_directory, "/Documents/", application_name, "/log/run.log");
 
     create_directories_recursively(log_file_path);
 
     opened: bool;
-    opened, log_file = open_file(log_file_path, FileFlags.Create | FileFlags.Truncate);
+    opened, log_file = open_file(log_file_path, FileFlags.Create | FileFlags.Append);
     if !opened {
         print("Unable to write to log file: '%'\n", log_file_path);
-    }
-
-    #if os == OS.Linux {
-        found, tzfile := read_file("/etc/localtime", allocate);
-        if found {
-            defer free_allocation(tzfile.data);
-
-            head := cast(tzhead*, tzfile.data);
-            timecnt := decode(&head.tzh_timecnt);
-            typecnt := decode(&head.tzh_typecnt);
-            index := size_of(tzhead);
-
-            now: Timespec;
-            clock_gettime(ClockId.CLOCK_REALTIME, &now);
-            time := now.tv_sec + time_adjust;
-
-            highest: u64;
-            transition_index: u8;
-            each i in timecnt {
-                transition := decode(tzfile.data + index);
-                if time > transition && transition > highest {
-                    highest = transition;
-                    transition_index = i;
-                }
-                index += 4;
-            }
-
-            type_index := *(tzfile.data + index + transition_index);
-            index += timecnt;
-
-            each i in typecnt {
-                if i == type_index {
-                    time_adjust = decode(tzfile.data + index);
-                    break;
-                }
-                index += 6;
-            }
-        }
     }
 }
 
 deinit_logging() {
-    if log_file.handle
+    if log_file.handle {
         close_file(log_file);
+    }
 }
 
 log(string format, Params args) {
@@ -92,6 +59,44 @@ string_buffer_write_to_console_and_file(void* data, u8* buffer, s64 length) {
 log_file: File;
 
 #if os == OS.Linux {
+    parse_timezone_file() {
+        found, tzfile := read_file("/etc/localtime", allocate);
+        if found {
+            defer free_allocation(tzfile.data);
+
+            head := cast(tzhead*, tzfile.data);
+            timecnt := decode(&head.tzh_timecnt);
+            typecnt := decode(&head.tzh_typecnt);
+            index := size_of(tzhead);
+
+            now: Timespec;
+            clock_gettime(ClockId.CLOCK_REALTIME, &now);
+            time := now.tv_sec + time_adjust;
+
+            highest: u64;
+            transition_index: u8;
+            each i in timecnt {
+                transition := decode(tzfile.data + index);
+                if time > transition && transition > highest {
+                    highest = transition;
+                    transition_index = i;
+                }
+                index += 4;
+            }
+
+            type_index := *(tzfile.data + index + transition_index);
+            index += timecnt;
+
+            each i in typecnt {
+                if i == type_index {
+                    time_adjust = decode(tzfile.data + index);
+                    break;
+                }
+                index += 6;
+            }
+        }
+    }
+
     calculate_timestamp(u32* month, u32* day, u32* year, u32* hour, u32* min, u32* sec) {
         now: Timespec;
         clock_gettime(ClockId.CLOCK_REALTIME, &now);

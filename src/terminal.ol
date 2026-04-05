@@ -315,13 +315,13 @@ handle_command(Workspace* workspace) {
     arg0 := args[0];
     if arg0 == "cd" {
         if args.length == 1 {
-            home_directory := get_environment_variable(home_environment_variable, allocate);
+            home_directory := get_environment_variable(home_environment_variable, temp_allocate);
             change_terminal_directory(workspace, home_directory);
         }
         else if args.length == 2 {
             arg1 := args[1];
             if arg1 == "~" {
-                home_directory := get_environment_variable(home_environment_variable, allocate);
+                home_directory := get_environment_variable(home_environment_variable, temp_allocate);
                 change_terminal_directory(workspace, home_directory);
             }
             else {
