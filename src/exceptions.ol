@@ -36,24 +36,32 @@ init_exception_handler() {
         }
         column: int;
 
-        log("Exception occured, printing current stack:\n");
+        if exception_info != null && exception_info.ExceptionRecord != null {
+            log("Exception occured with code 0x%\n", uint_format(exception_info.ExceptionRecord.ExceptionCode, 16, 8));
+        }
+        else {
+            log("Exception occured\n");
+        }
+
+        log("Stack trace:\n");
 
         each i in frames {
             address := cast(s64, stack[i]);
             success := SymFromAddr(process_handle, address, null, symbol);
+            frame := frames - i - 1;
             if success {
                 name := convert_c_string(&symbol.Name);
                 success = SymGetLineFromAddr64(process_handle, address, &column, &line);
                 if success {
                     file := convert_c_string(line.FileName);
-                    log("%:%:% % - %\n", file, line.LineNumber, column, name, stack[i]);
+                    log("% %:%:% % - %\n", frame, file, line.LineNumber, column, name, stack[i]);
                 }
                 else {
-                    log("% - %\n", name, stack[i]);
+                    log("% % - %\n", frame, name, stack[i]);
                 }
             }
             else {
-                log("% - %\n", i, stack[i]);
+                log("% - %\n", frame, stack[i]);
             }
         }
 
