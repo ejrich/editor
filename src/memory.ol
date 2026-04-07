@@ -93,8 +93,8 @@ free_allocation(void* pointer) {
 
 reallocate_array<T>(Array<T>* array, int length) {
     free_allocation(array.data);
-    array.length = length;
     array.data = allocate(size_of(T) * length);
+    array.length = length;
 }
 
 deallocate_arenas() {

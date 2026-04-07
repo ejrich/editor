@@ -101,7 +101,9 @@ load_files(int thread, JobData data) {
 
     if filtered_file_entries_allocated < file_entries_allocated {
         filtered_file_entries_allocated = file_entries_allocated;
-        reallocate_array(&filtered_file_entries, filtered_file_entries_allocated);
+
+        free_allocation(filtered_file_entries.data);
+        filtered_file_entries.data = allocate(size_of(ListEntry) * filtered_file_entries_allocated);
     }
 
     if cancel_loading_files return;
