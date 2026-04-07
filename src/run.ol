@@ -26,7 +26,7 @@ terminate_process(ProcessData* process) {
         TerminateProcess(process.process, command_exited_code);
     }
     else {
-        kill(process.pid, KillSignal.SIGKILL);
+        kill(process.pid, LinuxSignal.SIGKILL);
     }
 }
 

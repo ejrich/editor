@@ -188,7 +188,7 @@ stop_running_terminal_command(Workspace* workspace) {
             TerminateJobObject(workspace.terminal_data.process.job_object, 0);
         }
         else {
-            kill(workspace.terminal_data.process.pid, KillSignal.SIGKILL);
+            kill(workspace.terminal_data.process.pid, LinuxSignal.SIGKILL);
         }
     }
 }

@@ -1354,7 +1354,7 @@ escape_debugger(Workspace* workspace) {
         send_command_to_debugger(workspace, "process interrupt\n");
     }
     #if os == OS.Linux {
-        kill(workspace.debugger_data.process.pid, KillSignal.SIGINT);
+        kill(workspace.debugger_data.process.pid, LinuxSignal.SIGINT);
     }
 
     sleep(200);

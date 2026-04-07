@@ -9,7 +9,7 @@ init_exception_handler() {
         sigaction: Sigaction = {
             sa_handler = signal_handler;
         }
-        a := rt_sigaction(11, &sigaction, null, 8);
+        a := rt_sigaction(LinuxSignal.SIGSEGV, &sigaction, null, 8);
         log("%\n", a);
     }
 }
@@ -70,7 +70,7 @@ init_exception_handler() {
     }
 }
 #if os == OS.Linux {
-    signal_handler(int signal) {
+    signal_handler(LinuxSignal signal) {
         log("Hello world\n");
         // TODO Implement
         exit_program(-1);
