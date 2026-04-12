@@ -6,13 +6,18 @@ init_exception_handler() {
         AddVectoredExceptionHandler(1, exception_handler);
     }
     #if os == OS.Linux {
+        handler: SigHandler_T;
+        handler.sigaction_handler = signal_handler;
         sigaction: Sigaction = {
-            sa_handler = signal_handler;
+            sa_handler = handler;
             sa_flags = 0x4000000;
             sa_restorer = signal_restorer;
         }
         rt_sigaction(LinuxSignal.SIGSEGV, &sigaction, null, 8);
     }
+
+    // a: int* = null;
+    // b := *a;
 }
 
 #private
@@ -71,9 +76,25 @@ init_exception_handler() {
     }
 }
 #if os == OS.Linux {
-    signal_handler(LinuxSignal signal) {
-        log("Hello world\n");
-        // TODO Implement
+    signal_handler(LinuxSignal signal, SigInfo* info, UContext* context) {
+        log("%\n\n%\n", *info, *context);
+        /*
+        stack_frames := 100; #const
+        stack: Array<void*>[stack_frames];
+
+        frames := backtrace(stack.data, stack_frames);
+        frames_str := backtrace_symbols(stack.data, stack_frames);
+
+        log("Stack trace:\n");
+
+        each i in frames {
+            frame := frames - i - 1;
+            name := convert_c_string(frames_str[i]);
+            address := stack[i];
+            log("% % - %\n", frame, name, address);
+        }
+        */
+
         exit_program(-1);
     }
 
