@@ -4270,7 +4270,7 @@ adjust_start_line(BufferWindow* window) {
 calculate_line_digits(Buffer* buffer) {
     digit_count: u32 = 1;
     value := 10;
-    while value < buffer.line_count {
+    while value <= buffer.line_count {
         value *= 10;
         digit_count++;
     }
