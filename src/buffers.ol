@@ -382,39 +382,14 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
             relative_path = path;
             syntax = get_syntax_for_file(path);
             line_count = 1;
+            line_count_digits = 1;
             lines = line;
         }
 
         found, file := read_file(path, temp_allocate);
         if found {
-            tab := create_empty_string(settings.tab_size);
-
-            add_new_line := false;
-            each i in file.length {
-                char := file[i];
-                if add_new_line {
-                    next_line := allocate_line();
-                    buffer.line_count++;
-                    line.next = next_line;
-                    next_line.previous = line;
-                    line = next_line;
-                    add_new_line = false;
-                }
-
-                if char == '\n' {
-                    add_new_line = true;
-                }
-                else if char == '\t' {
-                    add_text_to_line(line, tab, line.length);
-                }
-                else {
-                    char_string: string = { length = 1; data = &char; }
-                    add_text_to_line(line, char_string, line.length);
-                }
-            }
+           add_text_to_end_of_buffer(&buffer, file, false);
         }
-
-        calculate_line_digits(&buffer);
 
         if reload && buffer_index >= 0 {
             old_buffer := workspace.buffers[buffer_index];
@@ -1354,6 +1329,7 @@ end_insert_mode() {
 BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
     text: string;
+    tab := create_empty_string(settings.tab_size);
 
     each i in value.length {
         char := value[i];
@@ -1432,6 +1408,14 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
             line = add_new_line(null, buffer, line, false, false);
             calculate_line_digits(buffer);
 
+            text = { length = 0; data = value.data + i + 1; }
+        }
+        else if char == '\t' {
+            if text.length {
+                add_text_to_line(line, text, line.length);
+            }
+
+            add_text_to_line(line, tab, line.length);
             text = { length = 0; data = value.data + i + 1; }
         }
         else if char != '\r' {
