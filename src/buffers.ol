@@ -997,8 +997,10 @@ copy_selected(BufferWindow* buffer_window, Buffer* buffer, u32 line_1, u32 curso
                 copy_string.data[i++] = '\n';
             }
             else if current_line == end_line {
-                if !include_end end_cursor--;
-                i = copy_line_into_buffer(copy_string.data, current_line, i, 0, end_cursor);
+                if end_cursor > 0 {
+                    if !include_end end_cursor--;
+                    i = copy_line_into_buffer(copy_string.data, current_line, i, 0, end_cursor);
+                }
             }
             else {
                 i = copy_line_into_buffer(copy_string.data, current_line, i);
@@ -1148,7 +1150,8 @@ paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool o
     current_line := 0;
     clipboard_lines[current_line] = { length = 0; data = clipboard.value.data; }
     each i in clipboard.value.length {
-        if clipboard.value[i] == '\n' {
+        char := clipboard.value[i];
+        if char == '\n' {
             current_line++;
             if current_line < clipboard_lines.length {
                 clipboard_lines[current_line] = {
@@ -1157,7 +1160,7 @@ paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool o
                 }
             }
         }
-        else {
+        else if char != '\r' {
             clipboard_lines[current_line].length++;
         }
     }
