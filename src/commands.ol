@@ -11,7 +11,7 @@ string, bool open_file_command(string path) {
     opened := open_file_buffer(path, true) != null;
 
     if !opened {
-        command_result := format_string("Unable to open file \"%\"", path);
+        command_result := format_string("Unable to open file \"%\"", allocate, path);
         return command_result, true;
     }
 
@@ -98,7 +98,7 @@ string, bool reload_file() {
     if buffer {
         open_file_buffer(buffer.relative_path, false, true);
 
-        command_result := format_string("Reloaded file \"%\"", buffer.relative_path);
+        command_result := format_string("Reloaded file \"%\"", allocate, buffer.relative_path);
         return command_result, true;
     }
 
