@@ -16,8 +16,8 @@ init_exception_handler() {
         rt_sigaction(LinuxSignal.SIGSEGV, &sigaction, null, 8);
     }
 
-    // a: int* = null;
-    // b := *a;
+    a: int* = null;
+    b := *a;
 }
 
 #private
@@ -54,20 +54,19 @@ init_exception_handler() {
         each i in frames {
             address := cast(s64, stack[i]);
             success := SymFromAddr(process_handle, address, null, symbol);
-            frame := frames - i - 1;
             if success {
                 name := convert_c_string(&symbol.Name);
                 success = SymGetLineFromAddr64(process_handle, address, &column, &line);
                 if success {
                     file := convert_c_string(line.FileName);
-                    log("% %:%:% % - %\n", frame, file, line.LineNumber, column, name, stack[i]);
+                    log("% %:%:% % - %\n", i, file, line.LineNumber, column, name, stack[i]);
                 }
                 else {
-                    log("% % - %\n", frame, name, stack[i]);
+                    log("% % - %\n", i, name, stack[i]);
                 }
             }
             else {
-                log("% - %\n", frame, stack[i]);
+                log("% - %\n", i, stack[i]);
             }
         }
 
@@ -76,24 +75,24 @@ init_exception_handler() {
     }
 }
 #if os == OS.Linux {
-    signal_handler(LinuxSignal signal, SigInfo* info, UContext* context) {
-        log("%\n\n%\n", *info, *context);
-        /*
-        stack_frames := 100; #const
-        stack: Array<void*>[stack_frames];
+    struct StackFrameAddress {
+        previous: StackFrameAddress*;
+        return_address: void*;
+    }
 
-        frames := backtrace(stack.data, stack_frames);
-        frames_str := backtrace_symbols(stack.data, stack_frames);
+    signal_handler(LinuxSignal signal, SigInfo* info, UContext* context) {
+        frame: StackFrameAddress*;
+        asm {
+            out frame, rbp;
+        }
 
         log("Stack trace:\n");
 
-        each i in frames {
-            frame := frames - i - 1;
-            name := convert_c_string(frames_str[i]);
-            address := stack[i];
-            log("% % - %\n", frame, name, address);
+        index := 0;
+        while frame {
+            log("% - %\n", index++, frame);
+            frame = frame.previous;
         }
-        */
 
         exit_program(-1);
     }
