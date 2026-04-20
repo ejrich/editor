@@ -86,6 +86,7 @@ init_exception_handler() {
         self_path := "/proc/self/exe"; #const
         bytes := readlink(self_path.data, &executable_path, path_length - 1);
 
+        has_debug_info := false;
         path_string: string = { length = bytes; data = &executable_path; }
         found, executable_file := read_file(path_string);
         if found {
@@ -95,21 +96,14 @@ init_exception_handler() {
             sections: Array<Elf64_Shdr>;
             sections.length = header.e_shnum;
             sections.data = cast(Elf64_Shdr*, executable_file.data + header.e_shoff);
-            each section, i in sections {
-                log("Section % = %\n", i, section);
-            }
-
             shstrtab := sections[header.e_shstrndx];
-            section_names: Array<string>[sections.length];
-            section_names.length = 0;
-
-            i := 1;
-            while i < shstrtab.sh_size {
-                name := convert_c_string(executable_file.data + shstrtab.sh_offset + i);
-                section_names[section_names.length++] = name;
-                i += name.length + 1;
+            each section in sections {
+                name := convert_c_string(executable_file.data + shstrtab.sh_offset + section.sh_name);
+                log("Section %: %\n", name, section);
+                if name == ".debug_info" {
+                    has_debug_info = true;
+                }
             }
-            log("Section Names = %\n", section_names);
         }
 
         frame: StackFrameAddress*;
