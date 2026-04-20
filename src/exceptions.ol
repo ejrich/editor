@@ -81,6 +81,37 @@ init_exception_handler() {
     }
 
     signal_handler(LinuxSignal signal, SigInfo* info, UContext* context) {
+        path_length := 4096; #const
+        executable_path: CArray<u8>[path_length];
+        self_path := "/proc/self/exe"; #const
+        bytes := readlink(self_path.data, &executable_path, path_length - 1);
+
+        path_string: string = { length = bytes; data = &executable_path; }
+        found, executable_file := read_file(path_string);
+        if found {
+            header := cast(Elf64_Ehdr*, executable_file.data);
+            log("%\n", *header);
+
+            sections: Array<Elf64_Shdr>;
+            sections.length = header.e_shnum;
+            sections.data = cast(Elf64_Shdr*, executable_file.data + header.e_shoff);
+            each section, i in sections {
+                log("Section % = %\n", i, section);
+            }
+
+            shstrtab := sections[header.e_shstrndx];
+            section_names: Array<string>[sections.length];
+            section_names.length = 0;
+
+            i := 1;
+            while i < shstrtab.sh_size {
+                name := convert_c_string(executable_file.data + shstrtab.sh_offset + i);
+                section_names[section_names.length++] = name;
+                i += name.length + 1;
+            }
+            log("Section Names = %\n", section_names);
+        }
+
         frame: StackFrameAddress*;
         asm {
             out frame, rbp;
@@ -99,5 +130,36 @@ init_exception_handler() {
 
     signal_restorer() {
         rt_sigreturn();
+    }
+
+    struct Elf64_Ehdr {
+        __reserved1: u64;
+        __reserved2: u64;
+        e_type: u16;
+        e_machine: u16;
+        e_version: u32;
+        e_entry: u64;
+        e_phoff: u64;
+        e_shoff: u64;
+        e_flags: u32;
+        e_ehsize: u16;
+        e_phentsize: u16;
+        e_phnum: u16;
+        e_shentsize: u16;
+        e_shnum: u16;
+        e_shstrndx: u16;
+    }
+
+    struct Elf64_Shdr {
+        sh_name: u32;
+        sh_type: u32;
+        sh_flags: u64;
+        sh_addr: u64;
+        sh_offset: u64;
+        sh_size: u64;
+        sh_link: u32;
+        sh_info: u32;
+        sh_addralign: u64;
+        sh_entsize: u64;
     }
 }
