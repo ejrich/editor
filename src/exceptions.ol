@@ -86,7 +86,7 @@ init_exception_handler() {
         self_path := "/proc/self/exe"; #const
         bytes := readlink(self_path.data, &executable_path, path_length - 1);
 
-        has_debug_info := false;
+        debug_info, debug_abbrev, debug_str, debug_line: Elf64_Shdr*;
         path_string: string = { length = bytes; data = &executable_path; }
         found, executable_file := read_file(path_string);
         if found {
@@ -97,11 +97,21 @@ init_exception_handler() {
             sections.length = header.e_shnum;
             sections.data = cast(Elf64_Shdr*, executable_file.data + header.e_shoff);
             shstrtab := sections[header.e_shstrndx];
+
             each section in sections {
                 name := convert_c_string(executable_file.data + shstrtab.sh_offset + section.sh_name);
                 log("Section %: %\n", name, section);
                 if name == ".debug_info" {
-                    has_debug_info = true;
+                    debug_info = &section;
+                }
+                if name == ".debug_abbrev" {
+                    debug_abbrev = &section;
+                }
+                if name == ".debug_str" {
+                    debug_str = &section;
+                }
+                if name == ".debug_line" {
+                    debug_line = &section;
                 }
             }
         }
@@ -115,7 +125,7 @@ init_exception_handler() {
 
         index := 0;
         while frame {
-            log("% - %\n", index++, frame);
+            log("% - %\n", index++, frame.return_address);
             frame = frame.previous;
         }
 
