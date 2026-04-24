@@ -154,6 +154,10 @@ init_exception_handler() {
 
         index := 0;
         while frame {
+            if debug_info {
+                find_function_in_die(executable_file.data + debug_info.sh_offset, debug_info.sh_size, declarations, cast(u64, frame.return_address));
+            }
+
             log("% - %\n", index++, frame.return_address);
             frame = frame.previous;
         }
@@ -542,27 +546,155 @@ init_exception_handler() {
     }
 
     bool, u64, u64, string find_function_in_die(u8* data, u64 length, Array<AbbrevDeclaration> declarations, u64 address) {
-        found := false;
+        found, is_32bit := false;
         min, max: u64;
         function: string;
-        i := 11;
+        i := 0;
+
+        section_length: u64 = *cast(u32*, data);
+        if section_length != 0xFFFFFFFF {
+            i = 4;
+            is_32bit = true;
+        }
+        else {
+            section_length = *cast(u64*, data + 4);
+            i = 12;
+        }
+
+        version := *cast(u16*, data + i);
+        i += 2;
+
+        address_size: u8;
+        abbrev_offset: u64;
+        if version >= 5 {
+            unit_type := *cast(u8*, data + i++);
+            address_size = *cast(u8*, data + i++);
+            if is_32bit {
+                abbrev_offset = *cast(u32*, data + i);
+                i += 4;
+            }
+            else {
+                abbrev_offset = *cast(u64*, data + i);
+                i += 8;
+            }
+        }
+        else {
+            if is_32bit {
+                abbrev_offset = *cast(u32*, data + i);
+                i += 4;
+            }
+            else {
+                abbrev_offset = *cast(u64*, data + i);
+                i += 8;
+            }
+            address_size = *cast(u8*, data + i++);
+        }
 
         while i < length {
             abbrev_index := translate_leb128(data, &i);
-            if abbrev_index == 0 break;
+            if abbrev_index == 0 continue;
 
             declaration := declarations[abbrev_index - 1];
 
-            if declaration.tag == DwarfTag.DW_TAG_subprogram {
-                // TODO Parse the value and determine if address matches
+            low, high, file, name: u64;
+            each attribute in declaration.attributes {
+                value := parse_dwarf_attribute_value(data, &i, attribute, address_size, is_32bit);
+                switch attribute.name {
+                    case DwarfAttribute.DW_AT_low_pc; low = value;
+                    case DwarfAttribute.DW_AT_high_pc; high = value;
+                    case DwarfAttribute.DW_AT_decl_file; file = value;
+                    case DwarfAttribute.DW_AT_name; name = value;
+                }
             }
-            else {
-                each attribute in declaration.attributes {
-                    // TODO Move through the DIE node
+
+            if declaration.tag == DwarfTag.DW_TAG_subprogram {
+                if low <= address && high >= address {
+                    // TODO Return the data needed to determine the location
+                    log("Function found at address %, low = %, high = %\n", address, low, high);
                 }
             }
         }
 
         return found, min, max, function;
+    }
+
+    u64 parse_dwarf_attribute_value(u8* data, int* i, AbbrevAttribute attribute, u8 address_size, bool is_32bit) {
+        value: u64;
+        index := *i;
+
+        switch attribute.form {
+            case DwarfForm.DW_FORM_data1;
+            case DwarfForm.DW_FORM_ref1;
+            case DwarfForm.DW_FORM_flag; {
+                value = *(data + index);
+                index++;
+            }
+            case DwarfForm.DW_FORM_data2;
+            case DwarfForm.DW_FORM_ref2; {
+                value = *cast(u16*, data + index);
+                index += 2;
+            }
+            case DwarfForm.DW_FORM_data4;
+            case DwarfForm.DW_FORM_ref4; {
+                value = *cast(u32*, data + index);
+                index += 4;
+            }
+            case DwarfForm.DW_FORM_data8;
+            case DwarfForm.DW_FORM_ref8; {
+                value = *cast(u64*, data + index);
+                index += 8;
+            }
+            case DwarfForm.DW_FORM_sdata;
+            case DwarfForm.DW_FORM_udata; {
+                value = translate_leb128(data, &index);
+            }
+            case DwarfForm.DW_FORM_addr; {
+                if address_size == 8 {
+                    value = *cast(u64*, data + index);
+                    index += 8;
+                }
+                else {
+                    value = *cast(u32*, data + index);
+                    index += 4;
+                }
+            }
+            case DwarfForm.DW_FORM_ref_addr;
+                value = read_dwarf_offset(data, &index, is_32bit);
+            case DwarfForm.DW_FORM_flag_present;
+                value = 1;
+            case DwarfForm.DW_FORM_string; {
+                while data[index] != 0 {
+                    index++;
+                }
+            }
+            case DwarfForm.DW_FORM_strp;
+            case DwarfForm.DW_FORM_line_strp;
+                value = read_dwarf_offset(data, &index, is_32bit);
+            case DwarfForm.DW_FORM_exprloc; {
+                length := translate_leb128(data, &index);
+                index += length;
+            }
+            case DwarfForm.DW_FORM_sec_offset;
+                value = read_dwarf_offset(data, &index, is_32bit);
+            case DwarfForm.DW_FORM_implicit_const;
+                value = attribute.value;
+        }
+
+        *i = index;
+        return value;
+    }
+
+    u64 read_dwarf_offset(u8* data, int* i, bool is_32bit) {
+        value: u64;
+        if is_32bit {
+            value = *cast(u32*, data + *i);
+            *i = *i + 4;
+        }
+        else {
+            value = *cast(u64*, data + *i);
+            *i = *i + 8;
+        }
+
+        return value;
     }
 }
