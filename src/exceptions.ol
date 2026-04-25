@@ -91,7 +91,6 @@ init_exception_handler() {
         found, executable_file := read_file(path_string);
         if found {
             header := cast(Elf64_Ehdr*, executable_file.data);
-            log("%\n", *header);
 
             sections: Array<Elf64_Shdr>;
             sections.length = header.e_shnum;
@@ -100,7 +99,6 @@ init_exception_handler() {
 
             each section in sections {
                 name := convert_c_string(executable_file.data + shstrtab.sh_offset + section.sh_name);
-                log("Section %: %\n", name, section);
                 if name == ".debug_info" {
                     debug_info = &section;
                 }
@@ -155,10 +153,27 @@ init_exception_handler() {
         index := 0;
         while frame {
             if debug_info {
-                find_function_in_die(executable_file.data + debug_info.sh_offset, debug_info.sh_size, declarations, cast(u64, frame.return_address));
+                address := cast(u64, frame.return_address);
+                function_found, start, function := find_function_in_die(executable_file.data + debug_info.sh_offset, debug_info.sh_size, declarations,address , executable_file.data + debug_str.sh_offset);
+
+                if function_found {
+                    location_found, line, column, folder, file := find_debug_line_location(executable_file.data + debug_line.sh_offset, debug_line.sh_size, address, start);
+
+                    if location_found {
+                        log("% %/%:%:% % - %\n", index++, folder, file, line, column, function, frame.return_address);
+                    }
+                    else {
+                        log("% % - %\n", index++, function, frame.return_address);
+                    }
+                }
+                else {
+                    log("% - %\n", index++, frame.return_address);
+                }
+            }
+            else {
+                log("% - %\n", index++, frame.return_address);
             }
 
-            log("% - %\n", index++, frame.return_address);
             frame = frame.previous;
         }
 
@@ -519,6 +534,22 @@ init_exception_handler() {
         DW_FORM_GNU_strp_alt = 0x1f21;
     }
 
+    enum DwarfLineOpcode : u8 {
+        DW_LNE = 0;
+        DW_LNS_copy = 1;
+        DW_LNS_advance_pc = 2;
+        DW_LNS_advance_line = 3;
+        DW_LNS_set_file = 4;
+        DW_LNS_set_column = 5;
+        DW_LNS_negate_stmt = 6;
+        DW_LNS_set_basic_block = 7;
+        DW_LNS_const_add_pc = 8;
+        DW_LNS_fixed_advance_pc = 9;
+        DW_LNS_set_prologue_end = 10;
+        DW_LNS_set_epilogue_begin = 11;
+        DW_LNS_set_isa = 12;
+    }
+
     struct AbbrevDeclaration {
         tag: DwarfTag;
         has_children: bool;
@@ -545,10 +576,8 @@ init_exception_handler() {
         return value;
     }
 
-    bool, u64, u64, string find_function_in_die(u8* data, u64 length, Array<AbbrevDeclaration> declarations, u64 address) {
-        found, is_32bit := false;
-        min, max: u64;
-        function: string;
+    bool, u64, string find_function_in_die(u8* data, u64 length, Array<AbbrevDeclaration> declarations, u64 address, u8* debug_strings) {
+        is_32bit := false;
         i := 0;
 
         section_length: u64 = *cast(u32*, data);
@@ -608,14 +637,14 @@ init_exception_handler() {
             }
 
             if declaration.tag == DwarfTag.DW_TAG_subprogram {
-                if low <= address && high >= address {
-                    // TODO Return the data needed to determine the location
-                    log("Function found at address %, low = %, high = %\n", address, low, high);
+                if low <= address && address - low <= high {
+                    function := convert_c_string(debug_strings + name);
+                    return true, low, function;
                 }
             }
         }
 
-        return found, min, max, function;
+        return false, 0, empty_string;
     }
 
     u64 parse_dwarf_attribute_value(u8* data, int* i, AbbrevAttribute attribute, u8 address_size, bool is_32bit) {
@@ -663,9 +692,7 @@ init_exception_handler() {
             case DwarfForm.DW_FORM_flag_present;
                 value = 1;
             case DwarfForm.DW_FORM_string; {
-                while data[index] != 0 {
-                    index++;
-                }
+                read_inline_dwarf_string(data, &index);
             }
             case DwarfForm.DW_FORM_strp;
             case DwarfForm.DW_FORM_line_strp;
@@ -695,6 +722,117 @@ init_exception_handler() {
             *i = *i + 8;
         }
 
+        return value;
+    }
+
+    bool, u64, u64, string, string find_debug_line_location(u8* data, u64 length, u64 address, u64 function_start) {
+        is_32bit := false;
+        i := 0;
+
+        section_length: u64 = *cast(u32*, data);
+        if section_length != 0xFFFFFFFF {
+            i = 4;
+            is_32bit = true;
+        }
+        else {
+            section_length = *cast(u64*, data + 4);
+            i = 12;
+        }
+
+        version := *cast(u16*, data + i);
+        i += 2;
+
+        prologue_length: u64;
+        if is_32bit {
+            prologue_length = *cast(u32*, data + i);
+            i += 4;
+        }
+        else {
+            prologue_length = *cast(u64*, data + i);
+            i += 8;
+        }
+        min_instruction_length := translate_leb128(data, &i);
+        max_ops_per_instruction := translate_leb128(data, &i);
+        default_is_statement := translate_leb128(data, &i);
+        line_base := *cast(s8*, data + i++);
+        line_range := translate_leb128(data, &i);
+        opcode_base := translate_leb128(data, &i);
+
+        i += 12;
+
+        directories: Array<string>;
+        while i < length {
+            directory := read_inline_dwarf_string(data, &i);
+            if directory.length == 0 break;
+
+            array_insert(&directories, directory);
+        }
+
+        files: Array<DwarfFileEntry>;
+        while i < length {
+            file := read_inline_dwarf_string(data, &i);
+            if file.length == 0 break;
+
+            entry: DwarfFileEntry = { file = file; }
+            entry.directory = translate_leb128(data, &i);
+            entry.mod_time = translate_leb128(data, &i);
+            entry.length = translate_leb128(data, &i);
+
+            array_insert(&files, entry);
+        }
+
+        current_address, file, line, column: u64;
+        while i < length {
+            opcode := *cast(DwarfLineOpcode*, data + i++);
+            switch opcode {
+                case DwarfLineOpcode.DW_LNE; {
+                    // TODO Handle extended opcodes
+                }
+                case DwarfLineOpcode.DW_LNS_copy;
+                case DwarfLineOpcode.DW_LNS_negate_stmt;
+                case DwarfLineOpcode.DW_LNS_set_basic_block;
+                case DwarfLineOpcode.DW_LNS_fixed_advance_pc;
+                case DwarfLineOpcode.DW_LNS_set_prologue_end;
+                case DwarfLineOpcode.DW_LNS_set_epilogue_begin; {
+                    // These opcodes have no arguments or actions
+                }
+                case DwarfLineOpcode.DW_LNS_advance_pc; {
+                    // TODO Update address
+                }
+                case DwarfLineOpcode.DW_LNS_advance_line; {
+                    // TODO Update line
+                }
+                case DwarfLineOpcode.DW_LNS_set_file; {
+                    // TODO Calculate file
+                }
+                case DwarfLineOpcode.DW_LNS_set_column; {
+                    // TODO Calculate column
+                }
+                case DwarfLineOpcode.DW_LNS_const_add_pc; {
+                    // TODO Calculate advance
+                }
+                case DwarfLineOpcode.DW_LNS_set_isa; {
+                    i++;
+                }
+                default; {
+                    // TODO Update address/line/op-index
+                }
+            }
+        }
+
+        return false, 0, 0, empty_string, empty_string;
+    }
+
+    struct DwarfFileEntry {
+        file: string;
+        directory: u64;
+        mod_time: u64;
+        length: u64;
+    }
+
+    string read_inline_dwarf_string(u8* data, int* i) {
+        value := convert_c_string(data + *i);
+        *i = *i + value.length + 1;
         return value;
     }
 }
