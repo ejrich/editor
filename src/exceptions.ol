@@ -41,7 +41,6 @@ init_exception_handler() {
             SizeOfStruct = size_of(IMAGEHLP_LINE);
         }
         column: int;
-
         if exception_info != null && exception_info.ExceptionRecord != null {
             log("Exception occured with code 0x%\n", uint_format(exception_info.ExceptionRecord.ExceptionCode, 16, 8));
         }
@@ -148,9 +147,13 @@ init_exception_handler() {
             out frame, rbp;
         }
 
+        frame = frame.previous;
+
         log("Stack trace:\n");
 
-        index := 0;
+        // TODO Print frame 0 using SigInfo._sigfault.si_addr
+
+        index := 1;
         while frame {
             if debug_info {
                 address := cast(u64, frame.return_address);
@@ -550,6 +553,17 @@ init_exception_handler() {
         DW_LNS_set_isa = 12;
     }
 
+    enum DwarfExtendedOpcode : u8 {
+        DW_LNE_end_sequence = 1;
+        DW_LNE_set_address = 2;
+        DW_LNE_define_file = 3;
+        DW_LNE_set_discriminator = 4;
+        DW_LNE_lo_user = 128;
+        DW_LNE_NVIDIA_inlined_call = 144;
+        DW_LNE_NVIDIA_set_function_name = 145;
+        DW_LNE_hi_user = 255;
+    }
+
     struct AbbrevDeclaration {
         tag: DwarfTag;
         has_children: bool;
@@ -570,6 +584,26 @@ init_exception_handler() {
             value |= (byte & 0x7F) << shift;
             shift += 7;
             if (byte & 0x80) == 0 break;
+        }
+
+        *i = index;
+        return value;
+    }
+
+    s64 translate_sleb128(u8* data, int* i) {
+        value, shift: s64;
+        index := *i;
+        while true {
+            byte := data[index++];
+            value |= (byte & 0x7F) << shift;
+            shift += 7;
+            if (byte & 0x80) == 0 {
+                if byte & 0x40 {
+                    signed_mask := 0xFFFFFFFFFFFFFFFF << shift;
+                    value |= signed_mask;
+                }
+                break;
+            }
         }
 
         *i = index;
@@ -758,6 +792,8 @@ init_exception_handler() {
         line_range := translate_leb128(data, &i);
         opcode_base := translate_leb128(data, &i);
 
+        const_add_pc_increment := (255 - opcode_base) / line_range * min_instruction_length;
+
         i += 12;
 
         directories: Array<string>;
@@ -786,7 +822,23 @@ init_exception_handler() {
             opcode := *cast(DwarfLineOpcode*, data + i++);
             switch opcode {
                 case DwarfLineOpcode.DW_LNE; {
-                    // TODO Handle extended opcodes
+                    data_length := translate_leb128(data, &i) - 1;
+                    extended_opcode := cast(DwarfExtendedOpcode, data[i++]);
+                    switch extended_opcode {
+                        case DwarfExtendedOpcode.DW_LNE_end_sequence; {
+                            // No action
+                        }
+                        case DwarfExtendedOpcode.DW_LNE_set_address; {
+                            if data_length == 8 {
+                                current_address = *cast(u64*, data + i);
+                            }
+                            else {
+                                current_address = *cast(u32*, data + i);
+                            }
+                        }
+                    }
+
+                    i += data_length;
                 }
                 case DwarfLineOpcode.DW_LNS_copy;
                 case DwarfLineOpcode.DW_LNS_negate_stmt;
@@ -797,25 +849,32 @@ init_exception_handler() {
                     // These opcodes have no arguments or actions
                 }
                 case DwarfLineOpcode.DW_LNS_advance_pc; {
-                    // TODO Update address
+                    current_address += translate_leb128(data, &i);
                 }
                 case DwarfLineOpcode.DW_LNS_advance_line; {
-                    // TODO Update line
+                    line += translate_sleb128(data, &i);
                 }
                 case DwarfLineOpcode.DW_LNS_set_file; {
-                    // TODO Calculate file
+                    file = translate_leb128(data, &i);
                 }
                 case DwarfLineOpcode.DW_LNS_set_column; {
-                    // TODO Calculate column
+                    column = translate_leb128(data, &i);
                 }
                 case DwarfLineOpcode.DW_LNS_const_add_pc; {
-                    // TODO Calculate advance
+                    current_address += const_add_pc_increment;
                 }
                 case DwarfLineOpcode.DW_LNS_set_isa; {
                     i++;
                 }
                 default; {
-                    // TODO Update address/line/op-index
+                    adjusted_opcode := cast(u8, opcode) - opcode_base;
+                    current_address += adjusted_opcode / line_range;
+                    line += line_base + (adjusted_opcode % line_range);
+                    if address == current_address {
+                        file_entry := files[file - 1];
+                        directory := directories[file_entry.directory];
+                        return true, line + 1, column, directory, file_entry.file;
+                    }
                 }
             }
         }
