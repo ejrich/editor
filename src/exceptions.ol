@@ -15,9 +15,6 @@ init_exception_handler() {
         }
         rt_sigaction(LinuxSignal.SIGSEGV, &sigaction, null, 8);
     }
-
-    a: int* = null;
-    b := *a;
 }
 
 #private
@@ -142,41 +139,37 @@ init_exception_handler() {
             }
         }
 
-        frame: StackFrameAddress*;
-        asm {
-            out frame, rbp;
-        }
+        instruction_pointer := cast(void*, context.uc_mcontext.mc_gregs[cast(u8, MContextRegister.REG_RIP)]);
+        frame := cast(StackFrameAddress*, context.uc_mcontext.mc_gregs[cast(u8, MContextRegister.REG_RBP)]);
 
-        frame = frame.previous;
-
+        // log("Error accessing address %:\n", info.si_fields._sigfault.si_addr);
         log("Stack trace:\n");
 
-        // TODO Print frame 0 using SigInfo._sigfault.si_addr
-
-        index := 1;
+        index := 0;
         while frame {
             if debug_info {
-                address := cast(u64, frame.return_address);
+                address := cast(u64, instruction_pointer);
                 function_found, start, function := find_function_in_die(executable_file.data + debug_info.sh_offset, debug_info.sh_size, declarations,address , executable_file.data + debug_str.sh_offset);
 
                 if function_found {
                     location_found, line, column, folder, file := find_debug_line_location(executable_file.data + debug_line.sh_offset, debug_line.sh_size, address, start);
 
                     if location_found {
-                        log("% %/%:%:% % - %\n", index++, folder, file, line, column, function, frame.return_address);
+                        log("% %/%:%:% % - %\n", index++, folder, file, line, column, function, instruction_pointer);
                     }
                     else {
-                        log("% % - %\n", index++, function, frame.return_address);
+                        log("% % - %\n", index++, function, instruction_pointer);
                     }
                 }
                 else {
-                    log("% - %\n", index++, frame.return_address);
+                    log("% - %\n", index++, instruction_pointer);
                 }
             }
             else {
-                log("% - %\n", index++, frame.return_address);
+                log("% - %\n", index++, instruction_pointer);
             }
 
+            instruction_pointer = frame.return_address;
             frame = frame.previous;
         }
 
@@ -818,6 +811,7 @@ init_exception_handler() {
         }
 
         current_address, file, line, column: u64;
+        current_file, current_line, current_column: u64;
         while i < length {
             opcode := *cast(DwarfLineOpcode*, data + i++);
             switch opcode {
@@ -870,11 +864,16 @@ init_exception_handler() {
                     adjusted_opcode := cast(u8, opcode) - opcode_base;
                     current_address += adjusted_opcode / line_range;
                     line += line_base + (adjusted_opcode % line_range);
-                    if address == current_address {
-                        file_entry := files[file - 1];
+
+                    if address <= current_address {
+                        file_entry := files[current_file - 1];
                         directory := directories[file_entry.directory];
-                        return true, line + 1, column, directory, file_entry.file;
+                        return true, current_line + 1, current_column, directory, file_entry.file;
                     }
+
+                    current_file = file;
+                    current_line = line;
+                    current_column = column;
                 }
             }
         }
