@@ -10,7 +10,7 @@ init_exception_handler() {
         handler.sigaction_handler = signal_handler;
         sigaction: Sigaction = {
             sa_handler = handler;
-            sa_flags = 0x4000000;
+            sa_flags = 0x4000004;
             sa_restorer = signal_restorer;
         }
         rt_sigaction(LinuxSignal.SIGSEGV, &sigaction, null, 8);
@@ -77,6 +77,8 @@ init_exception_handler() {
     }
 
     signal_handler(LinuxSignal signal, SigInfo* info, UContext* context) {
+        log("Error accessing address %\n", info.si_fields._sigfault.si_addr);
+
         path_length := 4096; #const
         executable_path: CArray<u8>[path_length];
         self_path := "/proc/self/exe"; #const
@@ -142,7 +144,6 @@ init_exception_handler() {
         instruction_pointer := cast(void*, context.uc_mcontext.mc_gregs[cast(u8, MContextRegister.REG_RIP)]);
         frame := cast(StackFrameAddress*, context.uc_mcontext.mc_gregs[cast(u8, MContextRegister.REG_RBP)]);
 
-        // log("Error accessing address %:\n", info.si_fields._sigfault.si_addr);
         log("Stack trace:\n");
 
         index := 0;
