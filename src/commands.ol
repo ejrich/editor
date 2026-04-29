@@ -383,6 +383,9 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 }
                 update_list = false;
             }
+            case KeyCode.Tab; {
+                // @Future Tab autocomplete
+            }
             default; {
                 set_buffer_value();
                 if (mod & ModCode.Control) != ModCode.Control && char.length > 0 && command_prompt_buffer.length + char.length < command_prompt_buffer_length {

@@ -109,9 +109,7 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                     set_command_line(workspace);
                 }
                 else {
-                    add_text_to_line(workspace.terminal_data.command_line, char, workspace.terminal_data.command_write_cursor);
-                    workspace.terminal_data.command_write_cursor += char.length;
-                    workspace.terminal_data.buffer_window.cursor += char.length;
+                    add_text_to_terminal_command_line(workspace, char);
                 }
             }
         }
@@ -158,6 +156,26 @@ bool change_terminal_cursor(bool append, bool boundary) {
     return true;
 }
 
+bool paste_in_terminal() {
+    workspace := get_workspace();
+    if unable_to_input_to_terminal(workspace) return false;
+
+    value_to_paste := clipboard.value;
+
+    if clipboard.value_lines > 1 {
+        each i in value_to_paste.length {
+            char := value_to_paste[i];
+            if char == '\n' ||  char == '\r' {
+                value_to_paste.length = i;
+            }
+        }
+    }
+
+    add_text_to_terminal_command_line(workspace, value_to_paste);
+
+    return true;
+}
+
 BufferWindow* get_terminal_window(Workspace* workspace) {
     if workspace.terminal_data.displaying {
         return &workspace.terminal_data.buffer_window;
@@ -180,6 +198,12 @@ bool unable_to_input_to_terminal(Workspace* workspace) {
         return true;
 
     return false;
+}
+
+add_text_to_terminal_command_line(Workspace* workspace, string value) {
+    add_text_to_line(workspace.terminal_data.command_line, value, workspace.terminal_data.command_write_cursor);
+    workspace.terminal_data.command_write_cursor += value.length;
+    workspace.terminal_data.buffer_window.cursor += value.length;
 }
 
 stop_running_terminal_command(Workspace* workspace) {

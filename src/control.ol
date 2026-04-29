@@ -510,6 +510,8 @@ copy(ModCode mod) {
 
 [keybind, no_repeat]
 paste(ModCode mod) {
+    if paste_in_terminal() return;
+
     paste_count := get_repeats();
     if edit_mode == EditMode.Normal {
         paste_by_cursor((mod & ModCode.Shift) == ModCode.Shift, paste_count);
