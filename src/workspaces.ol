@@ -166,11 +166,7 @@ CloseWorkspaceResult close_current_workspace(bool change_to_next_active, bool fo
     close_editor_window(&workspace.left_window, true);
     close_editor_window(&workspace.right_window, false);
 
-    close_local_settings(&workspace.local_settings);
-    if workspace.command_keybinds.length {
-        workspace.command_keybinds.length = 0;
-        free_allocation(workspace.command_keybinds.data);
-    }
+    close_local_settings(workspace);
 
     if workspace.sub_directories.length {
         each sub_directory in workspace.sub_directories {
@@ -199,7 +195,7 @@ Workspace* get_workspace() {
 
 reload_workspace() {
     workspace := &workspaces[current_workspace];
-    close_local_settings(&workspace.local_settings);
+    close_local_settings(workspace);
     load_local_settings(workspace);
 }
 

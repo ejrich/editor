@@ -138,17 +138,22 @@ load_local_settings(Workspace* workspace) {
     }
 }
 
-close_local_settings(LocalSettings* local_settings) {
-    if !string_is_empty(local_settings.perforce_client_name) {
-        free_allocation(local_settings.perforce_client_name.data);
+close_local_settings(Workspace* workspace) {
+    if !string_is_empty(workspace.local_settings.perforce_client_name) {
+        free_allocation(workspace.local_settings.perforce_client_name.data);
     }
-    if !string_is_empty(local_settings.perforce_client_suffix) {
-        free_allocation(local_settings.perforce_client_suffix.data);
+    if !string_is_empty(workspace.local_settings.perforce_client_suffix) {
+        free_allocation(workspace.local_settings.perforce_client_suffix.data);
     }
 
-    local_settings.source_control = SourceControl.None;
-    local_settings.perforce_client_name = empty_string;
-    local_settings.perforce_client_suffix = empty_string;
+    workspace.local_settings.source_control = SourceControl.None;
+    workspace.local_settings.perforce_client_name = empty_string;
+    workspace.local_settings.perforce_client_suffix = empty_string;
+
+    if workspace.command_keybinds.length {
+        workspace.command_keybinds.length = 0;
+        free_allocation(workspace.command_keybinds.data);
+    }
 }
 
 #private

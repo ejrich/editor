@@ -165,7 +165,7 @@ bool paste_in_terminal() {
     if clipboard.value_lines > 1 {
         each i in value_to_paste.length {
             char := value_to_paste[i];
-            if char == '\n' ||  char == '\r' {
+            if char == '\n' || char == '\r' {
                 value_to_paste.length = i;
             }
         }
