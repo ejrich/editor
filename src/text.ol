@@ -63,7 +63,7 @@ float render_text(string text, u32 size, float x, float y, Vector4 color, Vector
     if font_texture == null return x;
 
     // Create the glyphs for the text string
-    quad_data := temp_allocate_array<QuadInstanceData>(text.length);
+    quad_data: Array<QuadInstanceData>[text.length];
 
     i, length, line_start, line_length := 0;
     x_start := x;
