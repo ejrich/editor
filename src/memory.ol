@@ -39,6 +39,10 @@ void* allocate(u64 size) {
     while arena {
         block := arena.first_block;
         while block {
+            if cast(u64, block) < arena.start || cast(u64, block) > arena.end {
+                log("Memory corrupted, block with invalid pointer % in arena %\n", block, arena);
+                assert(false);
+            }
             if block.flags == MemoryBlockFlags.Unused && block.size >= size {
                 // Try to obtain a lock on the block
                 if compare_exchange(&block.flags, MemoryBlockFlags.Locked, MemoryBlockFlags.Unused) == MemoryBlockFlags.Unused {
@@ -275,6 +279,8 @@ struct Arena {
     first_block: MemoryBlock*;
     next: Arena*;
     size: u64;
+    start: u64;
+    end: u64;
 }
 
 min_block_size := 1024; #const
@@ -332,6 +338,8 @@ Arena* create_arena(u64 initial_block_size, u64 size = default_arena_size) {
     arena.first_block = first_block;
     arena.next = null;
     arena.size = size + size_of(MemoryBlock);
+    arena.start = cast(u64, pointer);
+    arena.end = cast(u64, pointer) + size_to_allocate;
 
     return arena;
 }

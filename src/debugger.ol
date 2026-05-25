@@ -471,10 +471,11 @@ bool handle_debugger_press(PressState state, KeyCode code, ModCode mod, string c
                     each i in workspace.debugger_data.watches.length {
                         watch := &workspace.debugger_data.watches.array[i];
                         if line_index == workspace.debugger_data.view_index {
-                            memory_copy(edit_buffer.data, watch.expression.data, watch.expression.length);
+                            copy_length := clamp(watch.expression.length, 0, edit_buffer_length);
+                            memory_copy(edit_buffer.data, watch.expression.data, copy_length);
 
-                            edit_cursor = watch.expression.length;
-                            edit_length = watch.expression.length;
+                            edit_cursor = copy_length;
+                            edit_length = copy_length;
                             workspace.debugger_data.editing_watch = true;
                             add_watch = false;
                             workspace.debugger_data.editing_index = i;
@@ -1531,15 +1532,18 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             //     frame #3: 0x00000000004596dd editor`_start + 13
             move_to_next_line(&text);
 
+            old_stack_frames_data := workspace.debugger_data.stack_frames_data;
+
             allocate_strings(&text);
-            if !string_is_empty(workspace.debugger_data.stack_frames_data) {
-                free_allocation(workspace.debugger_data.stack_frames_data.data);
-            }
             workspace.debugger_data = {
                 stack_frames = { length = 0; }
                 max_function_length = "Function ".length;
                 max_location_length = "Location ".length;
                 stack_frames_data = text;
+            }
+
+            if !string_is_empty(old_stack_frames_data) {
+                free_allocation(old_stack_frames_data.data);
             }
 
             lines := split_string(text);
@@ -1843,14 +1847,19 @@ bool parse_debugger_output(Workspace* workspace, string text) {
             // (BufferWindow *) bottom_window = 0x00000000004795e0
             // (bool) bottom_focused = true
             allocate_strings(&text);
-            if !string_is_empty(workspace.debugger_data.local_variables_data) {
-                free_allocation(workspace.debugger_data.local_variables_data.data);
-            }
-            each i in workspace.debugger_data.local_variables.length {
+
+            old_local_variables_length := workspace.debugger_data.local_variables.length;
+            old_local_variables_data := workspace.debugger_data.local_variables_data;
+
+            workspace.debugger_data.local_variables.length = 0;
+            workspace.debugger_data.local_variables_data = text;
+
+            each i in old_local_variables_length {
                 clear_debug_value(&workspace.debugger_data.local_variables.array[i].value);
             }
-            workspace.debugger_data.local_variables_data = text;
-            workspace.debugger_data.local_variables.length = 0;
+            if !string_is_empty(old_local_variables_data) {
+                free_allocation(old_local_variables_data.data);
+            }
 
             parsing_type := true;
             parsing_name, parsing_value, parse_value_to_eol, in_string, escape, reset := false;
