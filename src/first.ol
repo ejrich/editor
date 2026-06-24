@@ -39,7 +39,7 @@ executable_name := "editor";
         get_current_optimizations(&optimizations);
 
         // @Robustness instcombine pass is not working, so disable
-        optimizations.combine_redudant_instruction = false;
+        optimizations.combine_redundant_instruction = false;
 
         optimizations.forget_scalar_evolution_in_loop_unrolling = true;
         set_optimizations(&optimizations);
