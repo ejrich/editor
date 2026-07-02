@@ -2,13 +2,17 @@ struct LocalSettings {
     debug_command: string;
     source_control: SourceControl;
 
+    // Search settings
+    excluded_directories: string;
+    excluded_extensions: string;
+
     // Perforce specific settings
     perforce_client_name: string;
     perforce_client_suffix: string;
 }
 
 #run {
-    local_settings_type := cast(StructTypeInfo*, type_of(Settings));
+    local_settings_type := cast(StructTypeInfo*, type_of(LocalSettings));
 
     each local_setting in local_settings_type.fields {
         switch local_setting.type_info.type {
@@ -136,6 +140,14 @@ load_local_settings(Workspace* workspace) {
             }
         }
     }
+
+    if workspace.local_settings.excluded_directories.length {
+         workspace.excluded_directories = string_with_commas_to_array(workspace.local_settings.excluded_directories);
+    }
+
+    if workspace.local_settings.excluded_extensions.length {
+         workspace.excluded_extensions = string_with_commas_to_array(workspace.local_settings.excluded_extensions);
+    }
 }
 
 close_local_settings(Workspace* workspace) {
@@ -146,7 +158,19 @@ close_local_settings(Workspace* workspace) {
         free_allocation(workspace.local_settings.perforce_client_suffix.data);
     }
 
+    if workspace.excluded_directories.length {
+        workspace.excluded_directories.length = 0;
+        free_allocation(workspace.excluded_directories.data);
+    }
+
+    if workspace.excluded_extensions.length {
+        workspace.excluded_extensions.length = 0;
+        free_allocation(workspace.excluded_extensions.data);
+    }
+
     workspace.local_settings.source_control = SourceControl.None;
+    workspace.local_settings.excluded_directories = empty_string;
+    workspace.local_settings.excluded_extensions = empty_string;
     workspace.local_settings.perforce_client_name = empty_string;
     workspace.local_settings.perforce_client_suffix = empty_string;
 
@@ -181,6 +205,61 @@ string get_computer_name() {
                     result.length = i;
                     break;
                 }
+            }
+        }
+    }
+
+    return result;
+}
+
+Array<string> string_with_commas_to_array(string value) {
+    count := 0;
+    started := false;
+    each i in value.length {
+        if value[i] == ',' {
+            if started {
+                count++;
+                started = false;
+            }
+        }
+        else if !started {
+            if value[i] != ' ' {
+                started = true;
+            }
+        }
+    }
+
+    if started count++;
+
+    result: Array<string>;
+    if count {
+        array_resize(&result, count, allocate);
+
+        index := 0;
+        start_index := 0;
+        started = false;
+        each i in value.length {
+            if value[i] == ',' {
+                if started {
+                    result[index++] = {
+                        length = i - start_index;
+                        data = value.data + start_index;
+                    }
+                    started = false;
+                }
+            }
+            else if !started {
+                if value[i] != ' ' {
+                    started = true;
+                    start_index = i;
+                }
+            }
+        }
+
+        if started {
+            result[index++] = {
+                length = value.length - start_index;
+                data = value.data + start_index;
             }
         }
     }

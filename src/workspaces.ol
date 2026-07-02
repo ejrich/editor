@@ -12,6 +12,8 @@ struct Workspace {
     terminal_data: TerminalData;
     debugger_data: DebuggerData;
     local_settings: LocalSettings;
+    excluded_directories: Array<string>;
+    excluded_extensions: Array<string>;
     command_keybinds: Array<CommandKeybind>;
     sub_directories: Array<Directory*>;
 }

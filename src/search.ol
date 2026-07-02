@@ -95,7 +95,7 @@ load_files(int thread, JobData data) {
     file_entries.length = 0;
 
     workspace := get_workspace();
-    load_directory(workspace.directory, empty_string, null, &workspace.sub_directories);
+    load_directory(workspace, workspace.directory, empty_string, null, &workspace.sub_directories);
 
     if cancel_loading_files return;
 
@@ -113,16 +113,16 @@ load_files(int thread, JobData data) {
     change_file_filter(empty_string);
 }
 
-load_directory(string path, string display_path, Directory* parent_directory, Array<Directory*>* sub_directories) {
-    load_sub_directories := load_directory_files(path, display_path, false, parent_directory, sub_directories);
+load_directory(Workspace* workspace, string path, string display_path, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    load_sub_directories := load_directory_files(workspace, path, display_path, false, parent_directory, sub_directories);
     if load_sub_directories {
-        load_directory_files(path, display_path, true, parent_directory, sub_directories);
+        load_directory_files(workspace, path, display_path, true, parent_directory, sub_directories);
     }
 
     trigger_window_update();
 }
 
-bool load_directory_files(string path, string display_path, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
+bool load_directory_files(Workspace* workspace, string path, string display_path, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     found_sub_directory := false;
 
     #if os == OS.Linux {
@@ -144,9 +144,9 @@ bool load_directory_files(string path, string display_path, bool load_sub_direct
                 dirent := cast(Dirent*, &buffer + position);
                 name := convert_c_string(&dirent.d_name);
 
-                if !array_contains(directories_to_ignore, name) {
+                if !ignore_directory(name, workspace) {
                     if dirent.d_type == DirentType.DT_REG {
-                        if !load_sub_directories {
+                        if !ignore_file(name, workspace) && !load_sub_directories {
                             file_path := name;
                             if !string_is_empty(display_path) {
                                 file_path = temp_string(display_path, "/", name);
@@ -163,7 +163,7 @@ bool load_directory_files(string path, string display_path, bool load_sub_direct
                                 sub_display_path = temp_string(display_path, "/", name);
                             }
                             sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            load_directory(sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
+                            load_directory(workspace, sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -194,7 +194,7 @@ bool load_directory_files(string path, string display_path, bool load_sub_direct
         while !cancel_loading_files {
             name := convert_c_string(&find_data.cFileName);
 
-            if !array_contains(directories_to_ignore, name) {
+            if !ignore_directory(name, workspace) {
                 if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
                     if load_sub_directories {
                         sub_path := temp_string(path, "/", name);
@@ -203,13 +203,13 @@ bool load_directory_files(string path, string display_path, bool load_sub_direct
                             sub_display_path = temp_string(display_path, "/", name);
                         }
                         sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        load_directory(sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
+                        load_directory(workspace, sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;
                     }
                 }
-                else if !load_sub_directories {
+                else if !ignore_file(name, workspace) && !load_sub_directories {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -229,6 +229,22 @@ bool load_directory_files(string path, string display_path, bool load_sub_direct
 }
 
 directories_to_ignore: Array<string> = [".", "..", "bin", "obj", ".git"]
+
+bool ignore_directory(string target, Workspace* workspace) {
+    each directory in directories_to_ignore {
+        if target == directory {
+            return true;
+        }
+    }
+
+    each directory in workspace.excluded_directories {
+        if target == directory {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 Array<ListEntry> get_files() {
     return filtered_file_entries;
@@ -536,17 +552,17 @@ search_text_in_files(int thread, JobData data) {
     }
 
     workspace := get_workspace();
-    search_directory(workspace.directory, empty_string, filter, null, &workspace.sub_directories);
+    search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
 }
 
-search_directory(string path, string display_path, string filter, Directory* parent_directory, Array<Directory*>* sub_directories) {
-    search_sub_directories := search_directory_files(path, display_path, filter, false, parent_directory, sub_directories);
+search_directory(Workspace* workspace, string path, string display_path, string filter, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    search_sub_directories := search_directory_files(workspace, path, display_path, filter, false, parent_directory, sub_directories);
     if search_sub_directories {
-        search_directory_files(path, display_path, filter, true, parent_directory, sub_directories);
+        search_directory_files(workspace, path, display_path, filter, true, parent_directory, sub_directories);
     }
 }
 
-bool search_directory_files(string path, string display_path, string filter, bool search_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
+bool search_directory_files(Workspace* workspace, string path, string display_path, string filter, bool search_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     defer trigger_window_update();
 
     found_sub_directory := false;
@@ -570,8 +586,8 @@ bool search_directory_files(string path, string display_path, string filter, boo
                 dirent := cast(Dirent*, &buffer + position);
                 name := convert_c_string(&dirent.d_name);
 
-                if !array_contains(directories_to_ignore, name) {
-                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name) && !search_sub_directories {
+                if !ignore_directory(name, workspace) {
+                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name, workspace) && !search_sub_directories {
                         file_path := name;
                         if !string_is_empty(display_path) {
                             file_path = temp_string(display_path, "/", name);
@@ -587,7 +603,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
                                 sub_display_path = temp_string(display_path, "/", name);
                             }
                             sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            search_directory(sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
+                            search_directory(workspace, sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -618,7 +634,7 @@ bool search_directory_files(string path, string display_path, string filter, boo
         while !cancel_search && search_results.length < max_search_results {
             name := convert_c_string(&find_data.cFileName);
 
-            if !array_contains(directories_to_ignore, name) {
+            if !ignore_directory(name, workspace) {
                 if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
                     if search_sub_directories {
                         sub_path := temp_string(path, "/", name);
@@ -627,13 +643,13 @@ bool search_directory_files(string path, string display_path, string filter, boo
                             sub_display_path = temp_string(display_path, "/", name);
                         }
                         sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        search_directory(sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
+                        search_directory(workspace, sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;
                     }
                 }
-                else if !ignore_file(name) && !search_sub_directories {
+                else if !ignore_file(name, workspace) && !search_sub_directories {
                     file_path := name;
                     if !string_is_empty(display_path) {
                         file_path = temp_string(display_path, "/", name);
@@ -654,8 +670,14 @@ bool search_directory_files(string path, string display_path, string filter, boo
 
 file_types_to_ignore: Array<string> = [".exe", ".pdb", ".dll", ".so", ".a"]
 
-bool ignore_file(string file) {
+bool ignore_file(string file, Workspace* workspace) {
     each file_type in file_types_to_ignore {
+        if ends_with(file, file_type) {
+            return true;
+        }
+    }
+
+    each file_type in workspace.excluded_extensions {
         if ends_with(file, file_type) {
             return true;
         }
