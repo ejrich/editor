@@ -459,7 +459,16 @@ u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_text
 u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
-    quad_data: Array<QuadInstanceData>[text.length];
+    quad_data: Array<QuadInstanceData>;
+    // Use a quick allocation for lines longer that 5k, otherwise push onto the stack
+    if line.length > 5000 {
+        quad_data.data = allocate(size_of(QuadInstanceData) * line.length);
+        quad_data.length = line.length;
+    }
+    else {
+        quad_data_storage: Array<QuadInstanceData>[line.length];
+        quad_data = quad_data_storage;
+    }
     length := 0;
 
     each i in text.length {
@@ -517,13 +526,27 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     if length > 0
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
+    if line.length > 5000 {
+        free_allocation(quad_data.data);
+    }
+
     return line_count, x, y;
 }
 
 u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
-    quad_data: Array<QuadInstanceData>[line.length];
+    quad_data: Array<QuadInstanceData>;
+    // Use a quick allocation for lines longer that 5k, otherwise push onto the stack
+    if line.length > 5000 {
+        quad_data.data = allocate(size_of(QuadInstanceData) * line.length);
+        quad_data.length = line.length;
+    }
+    else {
+        quad_data_storage: Array<QuadInstanceData>[line.length];
+        quad_data = quad_data_storage;
+    }
+
     length, reset_state_after, skip, quads_to_draw := 0;
     escaping, max_quads_exceeded := false;
 
@@ -747,6 +770,10 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             length = quads_to_draw;
         }
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
+    }
+
+    if line.length > 5000 {
+        free_allocation(quad_data.data);
     }
 
     reset_render_line_state(state);
