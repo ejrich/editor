@@ -461,12 +461,12 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>;
     // Use a quick allocation for lines longer that 5k, otherwise push onto the stack
-    if line.length > 5000 {
-        quad_data.data = allocate(size_of(QuadInstanceData) * line.length);
-        quad_data.length = line.length;
+    if text.length > 5000 {
+        quad_data.data = allocate(size_of(QuadInstanceData) * text.length);
+        quad_data.length = text.length;
     }
     else {
-        quad_data_storage: Array<QuadInstanceData>[line.length];
+        quad_data_storage: Array<QuadInstanceData>[text.length];
         quad_data = quad_data_storage;
     }
     length := 0;
@@ -526,7 +526,7 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     if length > 0
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
-    if line.length > 5000 {
+    if text.length > 5000 {
         free_allocation(quad_data.data);
     }
 
