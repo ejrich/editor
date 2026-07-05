@@ -384,7 +384,7 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
                 update_list = false;
             }
             case KeyCode.Tab; {
-                // @Future Tab autocomplete
+                autocomplete_command();
             }
             default; {
                 set_buffer_value();
@@ -416,6 +416,146 @@ bool handle_command_press(PressState state, KeyCode code, ModCode mod, string ch
     }
 
     return true;
+}
+
+autocomplete_command() {
+    buffer_string, _ := get_buffer_string();
+
+    // Remove initial padding
+    name_start := 0;
+    while name_start < buffer_string.length {
+        if buffer_string[name_start] != ' ' {
+            break;
+        }
+        name_start++;
+    }
+
+    // Get the end of the command name
+    name_end := name_start;
+    while name_end < buffer_string.length {
+        if buffer_string[name_end] == ' ' {
+            break;
+        }
+        name_end++;
+    }
+
+    name: string = { length = name_end - name_start; data = buffer_string.data + name_start; }
+
+    if name.length == 0 return;
+
+    // Handle command autocomplete
+    if name_end == buffer_string.length || name_end >= command_prompt_buffer.cursor {
+        candidate := empty_string;
+        each command in commands {
+            if starts_with(command.name, name) {
+                if candidate.length {
+                    if candidate.length > command.name.length {
+                        candidate.length = command.name.length;
+                        each i in name.length..command.name.length - 1 {
+                            if candidate[i] != command.name[i] {
+                                candidate.length = i;
+                                break;
+                            }
+                        }
+                    }
+                    else {
+                        each i in name.length..candidate.length - 1 {
+                            if candidate[i] != command.name[i] {
+                                candidate.length = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+                else {
+                    candidate = command.name;
+                }
+            }
+        }
+
+        if candidate.length {
+            memory_copy(command_prompt_buffer.buffer.data, command_prompt_buffer.buffer.data + name_end, command_prompt_buffer.length - name_end);
+            command_prompt_buffer.length -= name_end;
+
+            if command_prompt_buffer.length {
+                each i in command_prompt_buffer.length {
+                    index := command_prompt_buffer.length - i - 1;
+                    command_prompt_buffer.buffer[index + candidate.length] = command_prompt_buffer.buffer[index];
+                }
+            }
+
+            memory_copy(command_prompt_buffer.buffer.data, candidate.data, candidate.length);
+            command_prompt_buffer.length += candidate.length;
+            command_prompt_buffer.cursor = candidate.length;
+        }
+        return;
+    }
+
+    // Find the current argument under the cursor
+    i := name_end + 1;
+    while i < buffer_string.length {
+        char := buffer_string[i++];
+        if char != ' ' {
+            arg_start := i - 1;
+            value_start := i - 1;
+            arg_end := i;
+            value_end := i;
+
+            end_char := ' ';
+            if char == '\"' {
+                value_start++;
+                end_char = '\"';
+            }
+
+            has_cursor := command_prompt_buffer.cursor == arg_start;
+            while i < buffer_string.length {
+                if command_prompt_buffer.cursor == i {
+                    has_cursor = true;
+                }
+
+                is_end_char := buffer_string[i] == end_char;
+
+                if is_end_char {
+                    if end_char == '\"' {
+                        arg_end++;
+                    }
+                    break;
+                }
+
+                i++;
+                arg_end++;
+                value_end++;
+            }
+
+            if i == buffer_string.length && i == command_prompt_buffer.cursor {
+                has_cursor = true;
+            }
+
+            if has_cursor {
+                argument: string = { length = value_end - value_start; data = buffer_string.data + value_start; }
+
+                // TODO Find path that matches the argument
+                candidate := empty_string;
+
+                if candidate.length == 0 { // TODO change conditional
+                    memory_copy(command_prompt_buffer.buffer.data + arg_start, command_prompt_buffer.buffer.data + arg_end, command_prompt_buffer.length - arg_end);
+                    command_prompt_buffer.length -= arg_end - arg_start;
+
+                    each j in command_prompt_buffer.length - arg_start {
+                        index := command_prompt_buffer.length - j - 1;
+                        command_prompt_buffer.buffer[index + candidate.length] = command_prompt_buffer.buffer[index];
+                    }
+
+                    memory_copy(command_prompt_buffer.buffer.data + arg_start, candidate.data, candidate.length);
+                    command_prompt_buffer.length += candidate.length;
+                    command_prompt_buffer.cursor = arg_start + candidate.length;
+                }
+                return;
+            }
+
+            i++;
+        }
+    }
 }
 
 call_command(string command, bool allocated) {
@@ -459,8 +599,6 @@ call_command(string command, bool allocated) {
     // Parse the command arguments
     i := name_end + 1;
     argument_count := 0;
-    parsing_string := false;
-    parsing_value := false;
     while i < command.length {
         char := command[i++];
         if char != ' ' {
