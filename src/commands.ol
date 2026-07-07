@@ -534,21 +534,130 @@ autocomplete_command() {
             if has_cursor {
                 argument: string = { length = value_end - value_start; data = buffer_string.data + value_start; }
 
-                // TODO Find path that matches the argument
+                path: string = { length = 0; data = argument.data; }
+                slash_index := argument.length - 1;
+                while slash_index >= 0 {
+                    if argument[slash_index] == '/' {
+                        path.length = slash_index + 1;
+                        break;
+                    }
+
+                    slash_index--;
+                }
+
+                // There's nothing to search for if the argument ends with /
+                if path.length == argument.length return;
+
                 candidate := empty_string;
 
-                if candidate.length == 0 { // TODO change conditional
+                #if os == OS.Windows {
+                    candidate_file := empty_string;
+                    search_string := temp_string(argument, "*");
+
+                    find_data: WIN32_FIND_DATAA;
+                    find_handle := FindFirstFileA(search_string.data, &find_data);
+
+                    if cast(s64, find_handle) == -1 return;
+
+                    while true {
+                        file_name := convert_c_string(&find_data.cFileName);
+                        if file_name != ".." && file_name != "." {
+                            if candidate.length {
+                                if candidate.length > file_name.length {
+                                    candidate.length = file_name.length;
+                                    each j in name.length..file_name.length - 1 {
+                                        if candidate[j] != file_name[j] {
+                                            candidate.length = j;
+                                            break;
+                                        }
+                                    }
+                                }
+                                else {
+                                    each j in file_name.length..candidate.length - 1 {
+                                        if candidate[j] != file_name[j] {
+                                            candidate.length = j;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            else if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
+                                candidate = temp_string(file_name, "/");
+                            }
+                            else {
+                                candidate = temp_string(file_name);
+                            }
+                        }
+
+                        if !FindNextFileA(find_handle, &find_data) break;
+                    }
+                }
+                #if os == OS.Linux {
+                    open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
+                    null_terminated_path := temp_string(path);
+                    directory := open(null_terminated_path.data, open_flags, FileMode.S_RWALL);
+
+                    if directory < 0 return;
+
+                    buffer: CArray<u8>[5600];
+                    while !cancel_loading_files {
+                        bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
+
+                        if bytes <= 0 break;
+
+                        position := 0;
+                        while position < bytes && !cancel_loading_files {
+                            dirent := cast(Dirent*, &buffer + position);
+                            file_name := convert_c_string(&dirent.d_name);
+
+                            if file_name != ".." && file_name != "." {
+                                if candidate.length {
+                                    if candidate.length > file_name.length {
+                                        candidate.length = file_name.length;
+                                        each j in name.length..file_name.length - 1 {
+                                            if candidate[j] != file_name[j] {
+                                                candidate.length = j;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        each j in file_name.length..candidate.length - 1 {
+                                            if candidate[j] != file_name[j] {
+                                                candidate.length = j;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                else if dirent.d_type == DirentType.DT_REG {
+                                    candidate = temp_string(file_name);
+                                }
+                                else if dirent.d_type == DirentType.DT_DIR {
+                                    candidate = temp_string(file_name, "/");
+                                }
+                            }
+
+                            position += dirent.d_reclen;
+                        }
+                    }
+
+                    close(directory);
+                }
+
+                if candidate.length {
+                    full_path := temp_string(path, candidate);
                     memory_copy(command_prompt_buffer.buffer.data + arg_start, command_prompt_buffer.buffer.data + arg_end, command_prompt_buffer.length - arg_end);
                     command_prompt_buffer.length -= arg_end - arg_start;
 
                     each j in command_prompt_buffer.length - arg_start {
                         index := command_prompt_buffer.length - j - 1;
-                        command_prompt_buffer.buffer[index + candidate.length] = command_prompt_buffer.buffer[index];
+                        command_prompt_buffer.buffer[index + full_path.length] = command_prompt_buffer.buffer[index];
                     }
 
-                    memory_copy(command_prompt_buffer.buffer.data + arg_start, candidate.data, candidate.length);
-                    command_prompt_buffer.length += candidate.length;
-                    command_prompt_buffer.cursor = arg_start + candidate.length;
+                    memory_copy(command_prompt_buffer.buffer.data + arg_start, full_path.data, full_path.length);
+                    command_prompt_buffer.length += full_path.length;
+                    command_prompt_buffer.cursor = arg_start + full_path.length;
                 }
                 return;
             }
