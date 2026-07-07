@@ -599,7 +599,7 @@ autocomplete_command() {
 
                     if directory < 0 return;
 
-                    query: string = { length = argument.length - path.length; data = argument + path.length; }
+                    query: string = { length = argument.length - path.length; data = argument.data + path.length; }
 
                     buffer: CArray<u8>[5600];
                     while true {
