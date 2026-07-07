@@ -561,7 +561,7 @@ autocomplete_command() {
 
                     while true {
                         file_name := convert_c_string(&find_data.cFileName);
-                        if file_name != ".." && file_name != "." {
+                        if file_name != "." && file_name != ".." {
                             if candidate.length {
                                 if candidate.length > file_name.length {
                                     candidate.length = file_name.length;
@@ -599,18 +599,20 @@ autocomplete_command() {
 
                     if directory < 0 return;
 
+                    query: string = { length = argument.length - path.length; data = argument + path.length; }
+
                     buffer: CArray<u8>[5600];
-                    while !cancel_loading_files {
+                    while true {
                         bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
 
                         if bytes <= 0 break;
 
                         position := 0;
-                        while position < bytes && !cancel_loading_files {
+                        while position < bytes {
                             dirent := cast(Dirent*, &buffer + position);
                             file_name := convert_c_string(&dirent.d_name);
 
-                            if file_name != ".." && file_name != "." {
+                            if starts_with(file_name, query) && file_name != "." && file_name != ".." {
                                 if candidate.length {
                                     if candidate.length > file_name.length {
                                         candidate.length = file_name.length;
