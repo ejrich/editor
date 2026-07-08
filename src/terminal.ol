@@ -74,7 +74,7 @@ bool handle_terminal_press(PressState state, KeyCode code, ModCode mod, string c
                 }
             }
             case KeyCode.Tab; {
-                // @Future Tab autocomplete
+                autocomplete_terminal(workspace);
             }
             case KeyCode.Enter; {
                 handle_command(workspace);
@@ -261,8 +261,196 @@ set_command_line(Workspace* workspace) {
     adjust_start_line(&workspace.terminal_data.buffer_window);
 }
 
+autocomplete_terminal(Workspace* workspace) {
+    command, cursor := get_command(workspace);
+    print("%\n", command);
+
+    // Find the current argument under the cursor
+    i := 0;
+    while i < command.length {
+        char := command[i++];
+        if char != ' ' {
+            arg_start := i - 1;
+            value_start := i - 1;
+            arg_end := i;
+            value_end := i;
+
+            end_char := ' ';
+            if char == '\"' {
+                value_start++;
+                end_char = '\"';
+            }
+
+            has_cursor := cursor == arg_start;
+            while i < command.length {
+                if cursor == i {
+                    has_cursor = true;
+                }
+
+                is_end_char := command[i] == end_char;
+
+                if is_end_char {
+                    if end_char == '\"' {
+                        arg_end++;
+                    }
+                    break;
+                }
+
+                i++;
+                arg_end++;
+                value_end++;
+            }
+
+            if i == command.length && i == cursor {
+                has_cursor = true;
+            }
+
+            if has_cursor {
+                argument: string = { length = value_end - value_start; data = command.data + value_start; }
+                print("Arg: %\n", argument);
+
+                path: string = { length = 0; data = argument.data; }
+                slash_index := argument.length - 1;
+                while slash_index >= 0 {
+                    if argument[slash_index] == '/' {
+                        path.length = slash_index + 1;
+                        break;
+                    }
+
+                    slash_index--;
+                }
+
+                // There's nothing to search for if the argument ends with /
+                if path.length == argument.length return;
+
+                candidate := empty_string;
+
+                #if os == OS.Windows {
+                    candidate_file := empty_string;
+                    search_string := temp_string(argument, "*");
+
+                    find_data: WIN32_FIND_DATAA;
+                    find_handle := FindFirstFileA(search_string.data, &find_data);
+
+                    if cast(s64, find_handle) == -1 return;
+
+                    while true {
+                        file_name := convert_c_string(&find_data.cFileName);
+                        if file_name != "." && file_name != ".." {
+                            if candidate.length {
+                                if candidate.length > file_name.length {
+                                    candidate.length = file_name.length;
+                                }
+
+                                each j in argument.length - path.length..candidate.length - 1 {
+                                    if candidate[j] != file_name[j] {
+                                        candidate.length = j;
+                                        break;
+                                    }
+                                }
+                            }
+                            else if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
+                                candidate = temp_string(file_name, "/");
+                            }
+                            else {
+                                candidate = temp_string(file_name);
+                            }
+                        }
+
+                        if !FindNextFileA(find_handle, &find_data) break;
+                    }
+                }
+                #if os == OS.Linux {
+                    open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
+                    null_terminated_path := temp_string(path);
+                    directory := open(null_terminated_path.data, open_flags, FileMode.S_RWALL);
+
+                    if directory < 0 return;
+
+                    query: string = { length = argument.length - path.length; data = argument.data + path.length; }
+
+                    buffer: CArray<u8>[5600];
+                    while true {
+                        bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
+
+                        if bytes <= 0 break;
+
+                        position := 0;
+                        while position < bytes {
+                            dirent := cast(Dirent*, &buffer + position);
+                            file_name := convert_c_string(&dirent.d_name);
+
+                            if starts_with(file_name, query) && file_name != "." && file_name != ".." {
+                                if candidate.length {
+                                    if candidate.length > file_name.length {
+                                        candidate.length = file_name.length;
+                                    }
+
+                                    each j in argument.length - path.length..candidate.length - 1 {
+                                        if candidate[j] != file_name[j] {
+                                            candidate.length = j;
+                                            break;
+                                        }
+                                    }
+                                }
+                                else if dirent.d_type == DirentType.DT_REG {
+                                    candidate = temp_string(file_name);
+                                }
+                                else if dirent.d_type == DirentType.DT_DIR {
+                                    candidate = temp_string(file_name, "/");
+                                }
+                            }
+
+                            position += dirent.d_reclen;
+                        }
+                    }
+
+                    close(directory);
+                }
+
+                if candidate.length {
+                    full_path := temp_string(path, candidate);
+                    print("Candidate: %\n", full_path);
+                    length := full_path.length;
+
+                    escape := string_contains(full_path, " ");
+                    if escape length += 2;
+
+                    /*
+                    memory_copy(command_prompt_buffer.buffer.data + arg_start, command_prompt_buffer.buffer.data + arg_end, command_prompt_buffer.length - arg_end);
+                    command_prompt_buffer.length -= arg_end - arg_start;
+
+                    each j in command_prompt_buffer.length - arg_start {
+                        index := command_prompt_buffer.length - j - 1;
+                        command_prompt_buffer.buffer[index + length] = command_prompt_buffer.buffer[index];
+                    }
+
+                    if escape {
+                        command_prompt_buffer.buffer[arg_start] = '"';
+                        memory_copy(command_prompt_buffer.buffer.data + arg_start + 1, full_path.data, full_path.length);
+                        command_prompt_buffer.buffer[arg_start + length - 1] = '"';
+
+                        command_prompt_buffer.length += length;
+                        command_prompt_buffer.cursor = arg_start + length;
+                    }
+                    else {
+                        memory_copy(command_prompt_buffer.buffer.data + arg_start, full_path.data, full_path.length);
+
+                        command_prompt_buffer.length += full_path.length;
+                        command_prompt_buffer.cursor = arg_start + full_path.length;
+                    }
+                    */
+                }
+                return;
+            }
+
+            i++;
+        }
+    }
+}
+
 handle_command(Workspace* workspace) {
-    command := get_command(workspace);
+    command, _ := get_command(workspace);
 
     arg_string_buffer: Array<u8>[command.length];
     args: Array<string>[command.length];
@@ -394,7 +582,7 @@ execute_terminal_command(int index, JobData data) {
         trigger_window_update();
     }
 
-    command := get_command(workspace);
+    command, _ := get_command(workspace);
     workspace.terminal_data.running = start_command(command, workspace.terminal_data.directory, &workspace.terminal_data.process, true, true);
 
     if !workspace.terminal_data.running return;
@@ -413,8 +601,8 @@ execute_terminal_command(int index, JobData data) {
     log("Terminal command exited with code %\n", workspace.terminal_data.exit_code);
 }
 
-string get_command(Workspace* workspace) #inline {
-    if workspace.terminal_data.command_line == null return empty_string;
+string, int get_command(Workspace* workspace) #inline {
+    if workspace.terminal_data.command_line == null return empty_string, 0;
 
     length := workspace.terminal_data.command_line.length - workspace.terminal_data.command_start_index;
     command_buffer: Array<u8>[length + 1];
@@ -449,7 +637,8 @@ string get_command(Workspace* workspace) #inline {
 
     command_buffer[length] = 0;
 
-    return command;
+    cursor := workspace.terminal_data.command_write_cursor - workspace.terminal_data.command_start_index;
+    return command, cursor;
 }
 
 add_to_terminal_buffer(Workspace* workspace, string text) {

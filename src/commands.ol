@@ -565,19 +565,12 @@ autocomplete_command() {
                             if candidate.length {
                                 if candidate.length > file_name.length {
                                     candidate.length = file_name.length;
-                                    each j in name.length..file_name.length - 1 {
-                                        if candidate[j] != file_name[j] {
-                                            candidate.length = j;
-                                            break;
-                                        }
-                                    }
                                 }
-                                else {
-                                    each j in file_name.length..candidate.length - 1 {
-                                        if candidate[j] != file_name[j] {
-                                            candidate.length = j;
-                                            break;
-                                        }
+
+                                each j in argument.length - path.length..candidate.length - 1 {
+                                    if candidate[j] != file_name[j] {
+                                        candidate.length = j;
+                                        break;
                                     }
                                 }
                             }
@@ -616,19 +609,12 @@ autocomplete_command() {
                                 if candidate.length {
                                     if candidate.length > file_name.length {
                                         candidate.length = file_name.length;
-                                        each j in name.length..file_name.length - 1 {
-                                            if candidate[j] != file_name[j] {
-                                                candidate.length = j;
-                                                break;
-                                            }
-                                        }
                                     }
-                                    else {
-                                        each j in file_name.length..candidate.length - 1 {
-                                            if candidate[j] != file_name[j] {
-                                                candidate.length = j;
-                                                break;
-                                            }
+
+                                    each j in argument.length - path.length..candidate.length - 1 {
+                                        if candidate[j] != file_name[j] {
+                                            candidate.length = j;
+                                            break;
                                         }
                                     }
                                 }
@@ -649,17 +635,33 @@ autocomplete_command() {
 
                 if candidate.length {
                     full_path := temp_string(path, candidate);
+                    length := full_path.length;
+
+                    escape := string_contains(full_path, " ");
+                    if escape length += 2;
+
                     memory_copy(command_prompt_buffer.buffer.data + arg_start, command_prompt_buffer.buffer.data + arg_end, command_prompt_buffer.length - arg_end);
                     command_prompt_buffer.length -= arg_end - arg_start;
 
                     each j in command_prompt_buffer.length - arg_start {
                         index := command_prompt_buffer.length - j - 1;
-                        command_prompt_buffer.buffer[index + full_path.length] = command_prompt_buffer.buffer[index];
+                        command_prompt_buffer.buffer[index + length] = command_prompt_buffer.buffer[index];
                     }
 
-                    memory_copy(command_prompt_buffer.buffer.data + arg_start, full_path.data, full_path.length);
-                    command_prompt_buffer.length += full_path.length;
-                    command_prompt_buffer.cursor = arg_start + full_path.length;
+                    if escape {
+                        command_prompt_buffer.buffer[arg_start] = '"';
+                        memory_copy(command_prompt_buffer.buffer.data + arg_start + 1, full_path.data, full_path.length);
+                        command_prompt_buffer.buffer[arg_start + length - 1] = '"';
+
+                        command_prompt_buffer.length += length;
+                        command_prompt_buffer.cursor = arg_start + length;
+                    }
+                    else {
+                        memory_copy(command_prompt_buffer.buffer.data + arg_start, full_path.data, full_path.length);
+
+                        command_prompt_buffer.length += full_path.length;
+                        command_prompt_buffer.cursor = arg_start + full_path.length;
+                    }
                 }
                 return;
             }
