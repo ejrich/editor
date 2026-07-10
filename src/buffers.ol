@@ -4000,7 +4000,7 @@ search_for_value_in_buffer() {
 
     start_index := cursor;
     while start_index > 0 {
-        if get_char(line, start_index - 1) == ' ' {
+        if !is_text_character(get_char(line, start_index - 1)) {
             break;
         }
 
@@ -4009,7 +4009,7 @@ search_for_value_in_buffer() {
 
     end_index := cursor;
     while end_index < line.length - 1 {
-        if get_char(line, end_index + 1) == ' ' {
+        if !is_text_character(get_char(line, end_index + 1)) {
             break;
         }
 

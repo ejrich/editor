@@ -718,6 +718,7 @@ search_file(string path, string file_name, Directory* parent_directory, string f
 
     line_number, column := 1;
     skip_until_next_line := false;
+    file_added_to_cache := false;
     each i in file.length {
         char := file[i];
         if skip_until_next_line {
@@ -757,6 +758,13 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                             }
                             line.length++;
                         }
+                        if !file_added_to_cache {
+                            allocate_string_for_search_result(&file_name);
+                            file_added_to_cache = true;
+
+                            // TODO Add the file_name and parent_directory to the search result cache
+                        }
+
                         if !add_search_result(file_name, parent_directory, line_number, column, line) return;
                         skip_until_next_line = true;
                     }
@@ -813,7 +821,6 @@ bool add_search_result(string file, Directory* parent_directory, int line, int c
         free_allocation(old_data);
     }
 
-    allocate_string_for_search_result(&file);
     allocate_string_for_search_result(&line_text);
 
     search_results[search_results.length] = {
@@ -861,34 +868,4 @@ void* allocate_for_search_result(u64 length) {
 
     array_insert(&search_results_strings, results_strings, allocate, reallocate);
     return pointer;
-}
-
-
-int, int, string parse_search_key(string key) {
-    line, column: int;
-    i := 0;
-    while key[i] != ':' {
-        line *= 10;
-        line += key[i] - '0';
-        i++;
-    }
-
-    line--;
-    i++;
-
-    while key[i] != '-' {
-        column *= 10;
-        column += key[i] - '0';
-        i++;
-    }
-
-    column--;
-    i++;
-
-    file: string = {
-        length = key.length - i;
-        data = key.data + i;
-    }
-
-    return line, column, file;
 }
