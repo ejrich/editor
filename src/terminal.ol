@@ -263,7 +263,6 @@ set_command_line(Workspace* workspace) {
 
 autocomplete_terminal(Workspace* workspace) {
     command, cursor := get_command(workspace);
-    print("%\n", command);
 
     // Find the current argument under the cursor
     i := 0;
@@ -280,6 +279,10 @@ autocomplete_terminal(Workspace* workspace) {
                 value_start++;
                 end_char = '\"';
             }
+            else if char == '\'' {
+                value_start++;
+                end_char = '\'';
+            }
 
             has_cursor := cursor == arg_start;
             while i < command.length {
@@ -290,7 +293,7 @@ autocomplete_terminal(Workspace* workspace) {
                 is_end_char := command[i] == end_char;
 
                 if is_end_char {
-                    if end_char == '\"' {
+                    if end_char != ' ' {
                         arg_end++;
                     }
                     break;
@@ -307,7 +310,6 @@ autocomplete_terminal(Workspace* workspace) {
 
             if has_cursor {
                 argument: string = { length = value_end - value_start; data = command.data + value_start; }
-                print("Arg: %\n", argument);
 
                 path: string = { length = 0; data = argument.data; }
                 slash_index := argument.length - 1;
@@ -410,36 +412,20 @@ autocomplete_terminal(Workspace* workspace) {
 
                 if candidate.length {
                     full_path := temp_string(path, candidate);
-                    print("Candidate: %\n", full_path);
-                    length := full_path.length;
 
                     escape := string_contains(full_path, " ");
-                    if escape length += 2;
-
-                    /*
-                    memory_copy(command_prompt_buffer.buffer.data + arg_start, command_prompt_buffer.buffer.data + arg_end, command_prompt_buffer.length - arg_end);
-                    command_prompt_buffer.length -= arg_end - arg_start;
-
-                    each j in command_prompt_buffer.length - arg_start {
-                        index := command_prompt_buffer.length - j - 1;
-                        command_prompt_buffer.buffer[index + length] = command_prompt_buffer.buffer[index];
+                    if string_contains(full_path, " ") {
+                        #if os == OS.Windows {
+                            full_path = temp_string("'", full_path, "'");
+                        }
+                        else {
+                            full_path = temp_string("\"", full_path, "\"");
+                        }
                     }
 
-                    if escape {
-                        command_prompt_buffer.buffer[arg_start] = '"';
-                        memory_copy(command_prompt_buffer.buffer.data + arg_start + 1, full_path.data, full_path.length);
-                        command_prompt_buffer.buffer[arg_start + length - 1] = '"';
+                    workspace.terminal_data.command_write_cursor = delete_from_line(workspace.terminal_data.command_line, workspace.terminal_data.command_start_index + arg_start, workspace.terminal_data.command_start_index + arg_end, false);
 
-                        command_prompt_buffer.length += length;
-                        command_prompt_buffer.cursor = arg_start + length;
-                    }
-                    else {
-                        memory_copy(command_prompt_buffer.buffer.data + arg_start, full_path.data, full_path.length);
-
-                        command_prompt_buffer.length += full_path.length;
-                        command_prompt_buffer.cursor = arg_start + full_path.length;
-                    }
-                    */
+                    add_text_to_terminal_command_line(workspace, full_path);
                 }
                 return;
             }
