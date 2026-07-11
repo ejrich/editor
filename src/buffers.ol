@@ -1059,7 +1059,7 @@ u32 copy_line_into_buffer(u8* buffer, BufferLine* line, u32 index, u32 start = 0
             }
 
             copy_length := copy_end - copy_start + 1;
-            memory_copy(buffer + index, child.data.data + start, copy_length);
+            memory_copy(buffer + index, child.data.data + copy_start, copy_length);
 
             index += copy_length;
 
