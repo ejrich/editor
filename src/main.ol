@@ -175,6 +175,11 @@ allocate_strings(bool null_terminate = false, Params<string*> strings) {
     }
 }
 
+string copy_string(string value) {
+    allocate_strings(&value);
+    return value;
+}
+
 bool string_contains(string value, string sub_value, bool case_sensitive = true) {
     if sub_value.length == 0 return true;
     if sub_value.length > value.length return false;

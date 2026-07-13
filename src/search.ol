@@ -9,7 +9,7 @@ open_files_list() {
 
 open_search_list(string initial_search = empty_string) {
     change_search_filter(empty_string);
-    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, draw_search_result, open_file_at_line, cleanup = cancel_current_search, initial_value = initial_search, loading = &running_search);
+    start_list_mode("Search", get_search_results, get_total_search_results, get_file_at_line, change_search_filter, draw_search_result, open_file_at_line, cleanup = cleanup_search, initial_value = initial_search, loading = &running_search);
 }
 
 struct Directory {
@@ -494,6 +494,20 @@ open_file_at_line(int key) {
     adjust_start_line(buffer_window);
 }
 
+cleanup_search() {
+    cancel_current_search();
+
+    if search_results_cache.length {
+        search_results_cache.length = 0;
+        free_allocation(search_results_cache.data);
+    }
+
+    if search_results_cache_filter.length {
+        search_results_cache_filter.length = 0;
+        free_allocation(search_results_cache_filter.data);
+    }
+}
+
 cancel_current_search() {
     if running_search {
         cancel_search = true;
@@ -504,6 +518,15 @@ cancel_current_search() {
 }
 
 search_results: Array<ListEntry>;
+
+struct SearchResultCacheFile {
+    file: string;
+    directory: Directory*;
+}
+
+pending_search_results_cache: Array<SearchResultCacheFile>;
+search_results_cache: Array<SearchResultCacheFile>;
+search_results_cache_filter: string;
 
 search_results_allocated := 0;
 search_results_block_size := 100; #const
@@ -552,7 +575,33 @@ search_text_in_files(int thread, JobData data) {
     }
 
     workspace := get_workspace();
-    search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
+    if search_results_cache_filter.length > 0 && starts_with(filter, search_results_cache_filter) {
+        log("Using cache '%' - %\n", search_results_cache_filter, search_results_cache);
+        each cache_file in search_results_cache {
+            if cancel_search break;
+
+            file_path := get_full_path(cache_file.file, cache_file.directory);
+            search_file(file_path, cache_file.file, cache_file.directory, filter, true);
+        }
+    }
+    else {
+        search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
+    }
+
+    // log("Cache: %\n", pending_search_results_cache);
+    if !cancel_search && search_results.length <= max_search_results {
+        // TODO Clear last search_results_cache and filter?
+        search_results_cache = pending_search_results_cache;
+        allocate_strings(&filter);
+        search_results_cache_filter = filter;
+
+        pending_search_results_cache.length = 0;
+        pending_search_results_cache.data = null;
+    }
+    else if pending_search_results_cache.length {
+        pending_search_results_cache.length = 0;
+        free_allocation(pending_search_results_cache.data);
+    }
 }
 
 search_directory(Workspace* workspace, string path, string display_path, string filter, Directory* parent_directory, Array<Directory*>* sub_directories) {
@@ -702,7 +751,7 @@ bool is_file_binary(File file) {
     return false;
 }
 
-search_file(string path, string file_name, Directory* parent_directory, string filter) {
+search_file(string path, string file_name, Directory* parent_directory, string filter, bool name_allocated = false) {
     if search_results.length == max_search_results return;
 
     success, file_handle := open_file(path);
@@ -763,6 +812,11 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                             file_added_to_cache = true;
 
                             // TODO Add the file_name and parent_directory to the search result cache
+                            cache_file: SearchResultCacheFile = {
+                                file = copy_string(file_name);
+                                directory = parent_directory;
+                            }
+                            array_insert(&pending_search_results_cache, cache_file, allocate, reallocate);
                         }
 
                         if !add_search_result(file_name, parent_directory, line_number, column, line) return;
