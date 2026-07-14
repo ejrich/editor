@@ -154,7 +154,7 @@ signal_shutdown() {
 }
 
 // Takes in a list of strings and allocates the data in a single block
-allocate_strings(bool null_terminate = false, Params<string*> strings) {
+void* allocate_strings(bool null_terminate = false, Params<string*> strings) {
     length: u64;
     each str in strings {
         length += str.length;
@@ -164,7 +164,7 @@ allocate_strings(bool null_terminate = false, Params<string*> strings) {
         length++;
     }
 
-    if length == 0 return;
+    if length == 0 return null;
 
     pointer := allocate(length);
     i: s64;
@@ -173,6 +173,8 @@ allocate_strings(bool null_terminate = false, Params<string*> strings) {
         str.data = pointer + i;
         i += str.length;
     }
+
+    return pointer;
 }
 
 string copy_string(string value) {

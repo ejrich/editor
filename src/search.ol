@@ -504,8 +504,9 @@ cleanup_search() {
 
     if search_results_cache_filter.length {
         search_results_cache_filter.length = 0;
-        free_allocation(search_results_cache_filter.data);
     }
+
+    free_allocation(search_results_cache_string_pointer);
 }
 
 cancel_current_search() {
@@ -527,6 +528,7 @@ struct SearchResultCacheFile {
 pending_search_results_cache: Array<SearchResultCacheFile>;
 search_results_cache: Array<SearchResultCacheFile>;
 search_results_cache_filter: string;
+search_results_cache_string_pointer: void*;
 
 search_results_allocated := 0;
 search_results_block_size := 100; #const
@@ -576,27 +578,37 @@ search_text_in_files(int thread, JobData data) {
 
     workspace := get_workspace();
     if search_results_cache_filter.length > 0 && starts_with(filter, search_results_cache_filter) {
-        log("Using cache '%' - %\n", search_results_cache_filter, search_results_cache);
         each cache_file in search_results_cache {
             if cancel_search break;
 
             file_path := get_full_path(cache_file.file, cache_file.directory);
-            search_file(file_path, cache_file.file, cache_file.directory, filter, true);
+            search_file(file_path, cache_file.file, cache_file.directory, filter);
         }
     }
     else {
         search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
     }
 
-    // log("Cache: %\n", pending_search_results_cache);
     if !cancel_search && search_results.length <= max_search_results {
-        // TODO Clear last search_results_cache and filter?
-        search_results_cache = pending_search_results_cache;
-        allocate_strings(&filter);
+        old_cache := search_results_cache;
+        old_string_pointer := search_results_cache_string_pointer;
+
+        strings: Array<string*>[pending_search_results_cache.length + 1];
+        strings[0] = &filter;
+
+        each i in pending_search_results_cache.length {
+            strings[i + 1] = &pending_search_results_cache[i].file;
+        }
+
+        search_results_cache_string_pointer = allocate_strings(strings);
         search_results_cache_filter = filter;
+        search_results_cache = pending_search_results_cache;
 
         pending_search_results_cache.length = 0;
         pending_search_results_cache.data = null;
+
+        free_allocation(old_string_pointer);
+        free_allocation(old_cache.data);
     }
     else if pending_search_results_cache.length {
         pending_search_results_cache.length = 0;
@@ -751,7 +763,7 @@ bool is_file_binary(File file) {
     return false;
 }
 
-search_file(string path, string file_name, Directory* parent_directory, string filter, bool name_allocated = false) {
+search_file(string path, string file_name, Directory* parent_directory, string filter) {
     if search_results.length == max_search_results return;
 
     success, file_handle := open_file(path);
@@ -808,12 +820,11 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                             line.length++;
                         }
                         if !file_added_to_cache {
-                            allocate_string_for_search_result(&file_name);
                             file_added_to_cache = true;
+                            allocate_string_for_search_result(&file_name);
 
-                            // TODO Add the file_name and parent_directory to the search result cache
                             cache_file: SearchResultCacheFile = {
-                                file = copy_string(file_name);
+                                file = file_name;
                                 directory = parent_directory;
                             }
                             array_insert(&pending_search_results_cache, cache_file, allocate, reallocate);
