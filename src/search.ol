@@ -1,3 +1,7 @@
+init_search() {
+    create_semaphore(&search_result_mutex, initial_value = 1);
+}
+
 open_files_list() {
     file_entries.length = 0;
     change_file_filter(empty_string);
@@ -520,6 +524,8 @@ cancel_current_search() {
 }
 
 search_results: Array<ListEntry>;
+searches_in_progress: u32;
+search_result_mutex: Semaphore;
 
 struct SearchResultCacheFile {
     file: string;
@@ -540,6 +546,8 @@ cancel_search := false;
 
 search_text_in_files(int thread, JobData data) {
     running_search = true;
+    searches_in_progress = 0;
+
     defer {
         running_search = false;
         cancel_search = false;
@@ -583,11 +591,16 @@ search_text_in_files(int thread, JobData data) {
             if cancel_search break;
 
             file_path := get_full_path(cache_file.file, cache_file.directory);
+            atomic_increment(&searches_in_progress);
             search_file(file_path, cache_file.file, cache_file.directory, filter);
         }
     }
     else {
         search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
+    }
+
+    while searches_in_progress {
+        sleep(1);
     }
 
     if !cancel_search && search_results.length <= max_search_results {
@@ -655,6 +668,7 @@ bool search_directory_files(Workspace* workspace, string path, string display_pa
                             file_path = temp_string(display_path, "/", name);
                         }
 
+                        atomic_increment(&searches_in_progress);
                         search_file(file_path, name, parent_directory, filter);
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
@@ -717,6 +731,7 @@ bool search_directory_files(Workspace* workspace, string path, string display_pa
                         file_path = temp_string(display_path, "/", name);
                     }
 
+                    atomic_increment(&searches_in_progress);
                     search_file(file_path, name, parent_directory, filter);
                 }
             }
@@ -765,6 +780,8 @@ bool is_file_binary(File file) {
 }
 
 search_file(string path, string file_name, Directory* parent_directory, string filter) {
+    defer atomic_decrement(&searches_in_progress);
+
     if search_results.length == max_search_results return;
 
     success, file_handle := open_file(path);
@@ -780,7 +797,7 @@ search_file(string path, string file_name, Directory* parent_directory, string f
 
     line_number, column := 1;
     skip_until_next_line := false;
-    file_added_to_cache := false;
+    found_match := false;
     each i in file.length {
         char := file[i];
         if skip_until_next_line {
@@ -820,8 +837,10 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                             }
                             line.length++;
                         }
-                        if !file_added_to_cache {
-                            file_added_to_cache = true;
+
+                        if !found_match {
+                            found_match = true;
+                            semaphore_wait(&search_result_mutex);
                             allocate_string_for_search_result(&file_name);
 
                             cache_file: SearchResultCacheFile = {
@@ -831,7 +850,7 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                             array_insert(&pending_search_results_cache, cache_file, allocate, reallocate);
                         }
 
-                        if !add_search_result(file_name, parent_directory, line_number, column, line) return;
+                        if !add_search_result(file_name, parent_directory, line_number, column, line) break;
                         skip_until_next_line = true;
                     }
                 }
@@ -845,6 +864,10 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                 column++;
             }
         }
+    }
+
+    if found_match {
+        semaphore_release(&search_result_mutex);
     }
 }
 

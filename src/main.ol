@@ -358,6 +358,7 @@ init_subsystems() {
     init_clipboard();
     init_graphics();
     init_text();
+    init_search();
 }
 
 deinit_subsystems() {
