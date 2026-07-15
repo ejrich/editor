@@ -489,9 +489,10 @@ open_file_at_line(int key) {
     search_result := search_results[key];
     file := get_full_path(search_result.name, search_result.directory);
     buffer_window := open_file_buffer(file, true);
-    buffer_window.line = search_result.value1;
-    buffer_window.cursor = search_result.value2;
-    adjust_start_line(buffer_window);
+    buffer_window.line = search_result.value1 - 1;
+    buffer_window.cursor = search_result.value2 - 1;
+    buffer := get_buffer_from_window(buffer_window);
+    scroll_to_position(ScrollTo.Middle, buffer_window, buffer);
 }
 
 cleanup_search() {

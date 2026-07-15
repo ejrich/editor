@@ -2501,6 +2501,10 @@ scroll_to_position(ScrollTo scroll_position) {
         return;
     }
 
+    scroll_to_position(scroll_position, buffer_window, buffer);
+}
+
+scroll_to_position(ScrollTo scroll_position, BufferWindow* buffer_window, Buffer* buffer) {
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
 
     switch scroll_position {
@@ -4092,18 +4096,23 @@ BufferWindow*, bool, bool, bool get_bottom_window(Workspace* workspace) {
 
 BufferWindow*, Buffer* get_current_window_and_buffer() {
     buffer_window := get_current_window();
+    buffer := get_buffer_from_window(buffer_window);
+    return buffer_window, buffer;
+}
+
+Buffer* get_buffer_from_window(BufferWindow* buffer_window) {
     if buffer_window {
         if buffer_window.buffer_index >= 0 {
             workspace := get_workspace();
-            return buffer_window, &workspace.buffers[buffer_window.buffer_index];
+            return &workspace.buffers[buffer_window.buffer_index];
         }
 
         if buffer_window.static_buffer {
-            return buffer_window, buffer_window.static_buffer;
+            return buffer_window.static_buffer;
         }
     }
 
-    return null, null;
+    return null;
 }
 
 BufferLine* get_buffer_line(Buffer* buffer, u32 target_line) {
