@@ -42,6 +42,12 @@ union JobData {
     long: s64;
     pointer: void*;
     string: string;
+    multiple: JobDataMultiple;
+}
+
+struct JobDataMultiple {
+    value1: string;
+    value2: void*;
 }
 
 interface Callback(int index, JobData data)
@@ -52,6 +58,7 @@ queue_work(WorkQueue* queue, Callback callback) {
 }
 
 queue_work(WorkQueue* queue, Callback callback, JobData data) {
+    // TODO Make this thread safe
     current_end := queue.end;
     next_end := (current_end + 1) % queue_size;
     assert(next_end != queue.start);
@@ -102,7 +109,8 @@ void* thread_worker(void* queue) {
     return null;
 }
 
-queue_size := 256; #const
+// TODO Change this back to 256 after testing
+queue_size := 2560; #const
 
 struct QueueItem {
     callback: Callback;

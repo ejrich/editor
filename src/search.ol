@@ -512,6 +512,7 @@ cleanup_search() {
     }
 
     free_allocation(search_results_cache_string_pointer);
+    search_results_cache_string_pointer = null;
 }
 
 cancel_current_search() {
@@ -524,6 +525,7 @@ cancel_current_search() {
 }
 
 search_results: Array<ListEntry>;
+search_filter: string;
 searches_in_progress: u32;
 search_result_mutex: Semaphore;
 
@@ -553,8 +555,11 @@ search_text_in_files(int thread, JobData data) {
         cancel_search = false;
     }
 
-    filter_buffer: Array<u8>[data.string.length];
-    filter: string = { data = filter_buffer.data; }
+    search_filter = { length = 0; data = allocate(data.string.length); }
+    defer {
+        search_filter.length = 0;
+        free_allocation(search_filter.data);
+    }
 
     escape := false;
     each i in data.string.length {
@@ -567,47 +572,48 @@ search_text_in_files(int thread, JobData data) {
                 case '\\'; escaped_char = '\\';
                 case '/';  escaped_char = '/';
                 default; {
-                    filter[filter.length++] = '\\';
+                    search_filter[search_filter.length++] = '\\';
                     escaped_char = char;
                 }
             }
-            filter[filter.length++] = escaped_char;
+            search_filter[search_filter.length++] = escaped_char;
             escape = false;
         }
         else if char == '\\' {
             escape = true;
         }
         else {
-            filter[filter.length++] = char;
+            search_filter[search_filter.length++] = char;
         }
     }
     if escape {
-        filter[filter.length++] = '\\';
+        search_filter[search_filter.length++] = '\\';
     }
 
     workspace := get_workspace();
-    if search_results_cache_filter.length > 0 && starts_with(filter, search_results_cache_filter) {
+    if search_results_cache_filter.length > 0 && starts_with(search_filter, search_results_cache_filter) {
         each cache_file in search_results_cache {
             if cancel_search break;
 
             file_path := get_full_path(cache_file.file, cache_file.directory);
             atomic_increment(&searches_in_progress);
-            search_file(file_path, cache_file.file, cache_file.directory, filter);
+            search_file(cache_file.file, cache_file.directory);
         }
     }
     else {
-        search_directory(workspace, workspace.directory, empty_string, filter, null, &workspace.sub_directories);
+        search_directory(workspace, workspace.directory, null, &workspace.sub_directories);
     }
 
     while searches_in_progress {
         sleep(1);
     }
 
-    if !cancel_search && search_results.length <= max_search_results {
+    if !cancel_search && search_results.length < max_search_results {
         old_cache := search_results_cache;
         old_string_pointer := search_results_cache_string_pointer;
 
         strings: Array<string*>[pending_search_results_cache.length + 1];
+        filter := search_filter;
         strings[0] = &filter;
 
         each i in pending_search_results_cache.length {
@@ -622,7 +628,9 @@ search_text_in_files(int thread, JobData data) {
         pending_search_results_cache.data = null;
 
         free_allocation(old_string_pointer);
-        free_allocation(old_cache.data);
+        if old_cache.length {
+            free_allocation(old_cache.data);
+        }
     }
     else if pending_search_results_cache.length {
         pending_search_results_cache.length = 0;
@@ -630,14 +638,14 @@ search_text_in_files(int thread, JobData data) {
     }
 }
 
-search_directory(Workspace* workspace, string path, string display_path, string filter, Directory* parent_directory, Array<Directory*>* sub_directories) {
-    search_sub_directories := search_directory_files(workspace, path, display_path, filter, false, parent_directory, sub_directories);
+search_directory(Workspace* workspace, string path, Directory* parent_directory, Array<Directory*>* sub_directories) {
+    search_sub_directories := search_directory_files(workspace, path, false, parent_directory, sub_directories);
     if search_sub_directories {
-        search_directory_files(workspace, path, display_path, filter, true, parent_directory, sub_directories);
+        search_directory_files(workspace, path, true, parent_directory, sub_directories);
     }
 }
 
-bool search_directory_files(Workspace* workspace, string path, string display_path, string filter, bool search_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
+bool search_directory_files(Workspace* workspace, string path, bool search_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     defer trigger_window_update();
 
     found_sub_directory := false;
@@ -663,23 +671,14 @@ bool search_directory_files(Workspace* workspace, string path, string display_pa
 
                 if !ignore_directory(name, workspace) {
                     if dirent.d_type == DirentType.DT_REG && !ignore_file(name, workspace) && !search_sub_directories {
-                        file_path := name;
-                        if !string_is_empty(display_path) {
-                            file_path = temp_string(display_path, "/", name);
-                        }
-
                         atomic_increment(&searches_in_progress);
-                        search_file(file_path, name, parent_directory, filter);
+                        search_file(name, parent_directory);
                     }
                     else if dirent.d_type == DirentType.DT_DIR {
                         if search_sub_directories {
                             sub_path := temp_string(path, "/", name);
-                            sub_display_path := name;
-                            if !string_is_empty(display_path) {
-                                sub_display_path = temp_string(display_path, "/", name);
-                            }
                             sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            search_directory(workspace, sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
+                            search_directory(workspace, sub_path, sub_directory, &sub_directory.sub_directories);
                         }
                         else {
                             found_sub_directory = true;
@@ -714,25 +713,16 @@ bool search_directory_files(Workspace* workspace, string path, string display_pa
                 if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
                     if search_sub_directories {
                         sub_path := temp_string(path, "/", name);
-                        sub_display_path := name;
-                        if !string_is_empty(display_path) {
-                            sub_display_path = temp_string(display_path, "/", name);
-                        }
                         sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        search_directory(workspace, sub_path, sub_display_path, filter, sub_directory, &sub_directory.sub_directories);
+                        search_directory(workspace, sub_path, sub_directory, &sub_directory.sub_directories);
                     }
                     else {
                         found_sub_directory = true;
                     }
                 }
                 else if !ignore_file(name, workspace) && !search_sub_directories {
-                    file_path := name;
-                    if !string_is_empty(display_path) {
-                        file_path = temp_string(display_path, "/", name);
-                    }
-
                     atomic_increment(&searches_in_progress);
-                    search_file(file_path, name, parent_directory, filter);
+                    search_file(name, parent_directory);
                 }
             }
 
@@ -779,11 +769,25 @@ bool is_file_binary(File file) {
     return false;
 }
 
-search_file(string path, string file_name, Directory* parent_directory, string filter) {
+search_file(string file_name, Directory* parent_directory) {
+    // TODO Change this to use allocate_string_for_search_result
+    allocate_strings(&file_name);
+    data: JobData;
+    data.multiple.value1 = file_name;
+    data.multiple.value2 = parent_directory;
+
+    queue_work(&low_priority_queue, search_file_job, data);
+}
+
+search_file_job(int thread, JobData data) {
     defer atomic_decrement(&searches_in_progress);
 
     if search_results.length == max_search_results return;
 
+    file_name := data.multiple.value1;
+    parent_directory: Directory* = data.multiple.value2;
+
+    path := get_full_path(file_name, parent_directory);
     success, file_handle := open_file(path);
     if !success || is_file_binary(file_handle) {
         close_file(file_handle);
@@ -799,6 +803,8 @@ search_file(string path, string file_name, Directory* parent_directory, string f
     skip_until_next_line := false;
     found_match := false;
     each i in file.length {
+        if cancel_search break;
+
         char := file[i];
         if skip_until_next_line {
             if char == '\n' {
@@ -808,14 +814,14 @@ search_file(string path, string file_name, Directory* parent_directory, string f
             }
         }
         else {
-            if char == filter[0] {
-                if file.length - i >= filter.length {
+            if char == search_filter[0] {
+                if file.length - i >= search_filter.length {
                     match := true;
                     filter_index := 1;
                     file_index := i + 1;
-                    while filter_index < filter.length && file_index < file.length {
+                    while filter_index < search_filter.length && file_index < file.length {
                         test_char := file[file_index];
-                        filter_char := filter[filter_index];
+                        filter_char := search_filter[filter_index];
                         if test_char == '\r' {
                             file_index++;
                         }
@@ -829,7 +835,7 @@ search_file(string path, string file_name, Directory* parent_directory, string f
                         }
                     }
 
-                    if match && filter_index == filter.length {
+                    if match && filter_index == search_filter.length {
                         line: string = { data = file.data + i - column + 1; }
                         while line.length < global_font_config.max_chars_per_line {
                             if line[line.length] == '\n' {
