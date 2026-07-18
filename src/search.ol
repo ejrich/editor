@@ -1,5 +1,6 @@
 init_search() {
     create_semaphore(&search_result_mutex, initial_value = 1);
+    create_semaphore(&allocate_search_result_mutex, initial_value = 1);
 }
 
 open_files_list() {
@@ -770,8 +771,8 @@ bool is_file_binary(File file) {
 }
 
 search_file(string file_name, Directory* parent_directory) {
-    // TODO Change this to use allocate_string_for_search_result
-    allocate_strings(&file_name);
+    allocate_string_for_search_result(&file_name);
+
     data: JobData;
     data.multiple.value1 = file_name;
     data.multiple.value2 = parent_directory;
@@ -847,7 +848,6 @@ search_file_job(int thread, JobData data) {
                         if !found_match {
                             found_match = true;
                             semaphore_wait(&search_result_mutex);
-                            allocate_string_for_search_result(&file_name);
 
                             cache_file: SearchResultCacheFile = {
                                 file = file_name;
@@ -938,6 +938,7 @@ struct SearchResultsStrings {
 }
 search_results_strings_size := 50000; #const
 search_results_strings: Array<SearchResultsStrings>;
+allocate_search_result_mutex: Semaphore;
 
 void allocate_string_for_search_result(string* value) {
     old_data := value.data;
@@ -946,6 +947,9 @@ void allocate_string_for_search_result(string* value) {
 }
 
 void* allocate_for_search_result(u64 length) {
+    semaphore_wait(&allocate_search_result_mutex);
+    defer semaphore_release(&allocate_search_result_mutex);
+
     each results_string in search_results_strings {
         if results_string.cursor + length < search_results_strings_size {
             pointer := results_string.pointer + results_string.cursor;

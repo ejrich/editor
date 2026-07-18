@@ -58,15 +58,20 @@ queue_work(WorkQueue* queue, Callback callback) {
 }
 
 queue_work(WorkQueue* queue, Callback callback, JobData data) {
-    // TODO Make this thread safe
     current_end := queue.end;
     next_end := (current_end + 1) % queue_size;
-    assert(next_end != queue.start);
+    while next_end == queue.start {
+        current_end = queue.end;
+        next_end = (current_end + 1) % queue_size;
+    }
 
     while current_end != compare_exchange(&queue.end, next_end, current_end) {
         current_end = queue.end;
         next_end = (current_end + 1) % queue_size;
-        assert(next_end != queue.start);
+        while next_end == queue.start {
+            current_end = queue.end;
+            next_end = (current_end + 1) % queue_size;
+        }
     }
 
     queue.entries[current_end] = { callback = callback; data = data; }
@@ -109,8 +114,7 @@ void* thread_worker(void* queue) {
     return null;
 }
 
-// TODO Change this back to 256 after testing
-queue_size := 2560; #const
+queue_size := 2048; #const
 
 struct QueueItem {
     callback: Callback;
