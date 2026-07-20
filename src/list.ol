@@ -3,6 +3,7 @@ start_list_mode(string title, ListEntries entries, ListTotal total, Callback loa
         displaying = true;
         browsing = false;
         title = title;
+        start_index = 0;
         selected_index = 0;
         entries = entries;
         total = total;
@@ -19,6 +20,10 @@ start_list_mode(string title, ListEntries entries, ListTotal total, Callback loa
 
 filter_list(string filter) {
     list.filter(filter);
+    list = {
+        start_index = 0;
+        selected_index = 0;
+    }
 }
 
 enter_list_browse_mode() {
@@ -125,9 +130,17 @@ bool change_list_select(int change) {
     entries := list.entries();
     if new_index >= entries.length {
         new_index = 0;
+        list.start_index = 0;
     }
     else if new_index < 0 {
-        new_index = entries.length;
+        new_index = entries.length - 1;
+        list.start_index = entries.length - (entries.length % global_font_config.max_lines_without_bottom_window);
+    }
+    else if new_index < list.start_index {
+        list.start_index = new_index;
+    }
+    else if new_index >= list.start_index + global_font_config.max_lines_without_bottom_window {
+        list.start_index = new_index - global_font_config.max_lines_without_bottom_window + 1;
     }
 
     list.selected_index = new_index;
@@ -247,24 +260,17 @@ draw_list_entries() {
         queue_work(&low_priority_queue, list.load_entry, load_entry_data);
     }
 
-    entries_to_display, start_index: int;
+    entries_to_display: int;
     if entries.length > global_font_config.max_lines_without_bottom_window {
-        entries_to_display = global_font_config.max_lines_without_bottom_window;
-        if list.selected_index < global_font_config.max_lines_without_bottom_window {
-            start_index = 0;
-        }
-        else {
-            start_index = list.selected_index - global_font_config.max_lines_without_bottom_window + 1;
-        }
+        entries_to_display = clamp(entries.length - list.start_index, 0, global_font_config.max_lines_without_bottom_window);
     }
     else {
         entries_to_display = entries.length;
-        start_index = 0;
     }
     max_chars_per_line := global_font_config.max_chars_per_line - 4;
 
     each i in entries_to_display {
-        index := i + start_index;
+        index := i + list.start_index;
         entry := entries[index];
 
         y := initial_y + global_font_config.line_height * i;
@@ -314,6 +320,7 @@ struct ListData {
     displaying := false;
     browsing := false;
     title: string;
+    start_index: int;
     selected_index: int;
     entries: ListEntries;
     total: ListTotal;
