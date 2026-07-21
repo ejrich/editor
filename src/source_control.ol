@@ -29,9 +29,10 @@ source_control_status() {
 
         status_entries.length = 0;
         filtered_status_entries.length = 0;
+        loading_status = true;
 
         queue_work(&low_priority_queue, load_status);
-        start_list_mode(list_title, get_status_entries, get_total_status_entries, load_diff, change_filter, draw_status, open_status_file, change_status);
+        start_list_mode(list_title, get_status_entries, get_total_status_entries, load_diff, change_filter, draw_status, open_status_file, change_status, loading = &loading_status);
     }
 }
 
@@ -105,11 +106,15 @@ source_control_commit(string message) {
 
 commit_command: string;
 
+loading_status: bool;
+
 load_status(int index, JobData data) {
     if !string_is_empty(status_filter) {
         free_allocation(status_filter.data);
     }
     status_filter = empty_string;
+
+    defer loading_status = false;
 
     status_buffer: Buffer*;
     workspace := get_workspace();
@@ -119,7 +124,7 @@ load_status(int index, JobData data) {
         }
         case SourceControl.Perforce; {
             set_perforce_client();
-            status_buffer = run_command_and_save_to_buffer("p4 diff -sa");
+            status_buffer = run_command_and_save_to_buffer("p4 diff -sa -f");
         }
         case SourceControl.Svn; {
             status_buffer = run_command_and_save_to_buffer("svn status --quiet");
