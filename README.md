@@ -11,7 +11,7 @@ The main goal of this editor is to be everything you need while being extremely 
 * Vim Keybindings
 * Source Control (git, p4, svn)
 * Terminal
-* Debugger
+* Debugger (requires lldb)
 * Workspaces
 * File Finder
 * Search
@@ -62,11 +62,22 @@ The `keybinds` file has a command and an associated keybind in the format `{comm
 
 * Keybinds can be combined with any combination of Shift, Control, or Alt, e.g., `Shift+X`, `Control+Y`, `Shift+Alt+Z`, `Shift+Control+Alt+A`
 
-
 ### Local Configuration
 
-Create a file named `localsettings` in a directory to create
+Create a file named `localsettings` in a directory to create settings and custom commands for only that workspace
 
+Should contain the following sections:
+
+* Settings
+  * debug_command - Command that executes in the debugger
+  * source_control - Source control for the directory, defaults to git
+  * excluded_directorie - Directories that should be excluded from searches
+  * excluded_extensions - Extensions that should be excluded from searches
+  * perforce_client_name - Optional p4 config for the full workspace name
+  * perforce_client_suffix - Optional p4 config for the suffix of the workspace name with the name of the computer as the prefix
+
+* Commands
+  * Formatted as `{key combination}={command}`
 
 ## License
 
