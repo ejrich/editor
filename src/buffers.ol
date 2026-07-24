@@ -204,7 +204,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                     cursor = workspace.terminal_data.command_write_cursor;
                 }
                 else if line_number == cursor_line ||
-                    (edit_mode == EditMode.BlockInsert &&
+                    (edit_mode == EditMode.BlockInsert && selected &&
                     line_number >= (block_insert_data.start_line + 1) &&
                     line_number <= (block_insert_data.end_line + 1)) {
                     cursor = window.cursor;
