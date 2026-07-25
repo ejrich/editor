@@ -229,7 +229,10 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         line_number_offset := (digits + 1) * font_texture.quad_advance;
         available_line_width := max_x - x - line_number_offset;
 
-        full_line_width := line.length * font_texture.quad_advance;
+        length := line.length;
+        if cursor == length length++;
+
+        full_line_width := length * font_texture.quad_advance;
         rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
 
         draw_line_background(font_texture, x, y, max_x, rendered_line_count);
@@ -519,6 +522,11 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     }
 
     if cursor == index && render_cursor {
+        if x + font_texture.quad_advance > max_x && line_count < lines_available {
+            x = x_start;
+            y -= font_texture.line_height;
+            line_count++;
+        }
         draw_cursor(x, y, appearance.cursor_color);
     }
 
@@ -761,6 +769,11 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     check_for_keyword(state, quad_data, length);
 
     if cursor == line.length && render_cursor {
+        if !max_quads_exceeded && x + font_texture.quad_advance > max_x && line_count < lines_available {
+            x = x_start;
+            y -= font_texture.line_height;
+            line_count++;
+        }
         draw_cursor(x, y, appearance.cursor_color);
     }
 
