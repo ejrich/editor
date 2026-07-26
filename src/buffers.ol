@@ -173,6 +173,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
     else {
         start_line := clamp(window.start_line, 0, buffer.line_count - 1);
         digits := buffer.line_count_digits;
+        max_chars := calculate_max_chars_per_line(window, digits);
         breakpoint := buffer.breakpoints;
 
         visual_start_line, visual_end_line := -1;
@@ -285,7 +286,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 
                 debug_line := line_number == current_debugger_line;
 
-                lines := render_line(&render_line_state, line, x, y, line_number, digits, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end, has_breakpoint, debug_line);
+                lines := render_line(&render_line_state, line, x, y, line_number, digits, max_chars, cursor, selected, line_max_x, available_lines_to_render, visual_start, visual_end, has_breakpoint, debug_line);
                 y -= global_font_config.line_height * lines;
                 available_lines_to_render -= lines;
             }
@@ -1122,7 +1123,7 @@ paste_over_selected(u32 paste_count) {
                         delete_from_line(line, start_cursor, end_cursor);
                         cursor := start_cursor;
                         each i in paste_count {
-                            cursor = add_text_to_line(line, clipboard.value, cursor);
+                            cursor = add_text_to_line(buffer_window, line, clipboard.value, cursor);
                         }
                     }
                     line = line.next;
@@ -1181,7 +1182,7 @@ paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool o
                 }
 
                 each i in paste_count {
-                    start_cursor = add_text_to_line(line, clipboard_line, start_cursor);
+                    start_cursor = add_text_to_line(buffer_window, line, clipboard_line, start_cursor);
                 }
                 buffer_window.cursor = start_cursor - 1;
             }
@@ -1249,7 +1250,7 @@ paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool o
                 each clipboard_line, i in clipboard_lines {
                     cursor := buffer_window.cursor;
                     each paste in paste_count {
-                        cursor = add_text_to_line(line, clipboard_line, cursor, true);
+                        cursor = add_text_to_line(buffer_window, line, clipboard_line, cursor, true);
                     }
 
                     if line.next {
@@ -1272,7 +1273,7 @@ paste_clipboard(BufferWindow* buffer_window, Buffer* buffer, bool before, bool o
 BufferLine* paste_lines(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, Array<string> clipboard_lines, u32 paste_count, u32 cursor = 0, bool wrap = false) {
     each paste in paste_count {
         each clipboard_line, i in clipboard_lines {
-            add_text_to_line(line, clipboard_line, cursor);
+            add_text_to_line(buffer_window, line, clipboard_line, cursor);
             cursor = 0;
 
             if i < clipboard_lines.length - 1 {
@@ -1390,7 +1391,7 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
         }
         else if char == 0x1B {
             if text.length {
-                add_text_to_line(line, text, line.length);
+                add_text_to_line(null, line, text, line.length);
                 text.length = 0;
             }
 
@@ -1405,7 +1406,7 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
         }
         else if char == '\n' {
             if text.length {
-                add_text_to_line(line, text, line.length);
+                add_text_to_line(null, line, text, line.length);
             }
 
             line = add_new_line(null, buffer, line, false, false);
@@ -1415,10 +1416,10 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
         }
         else if char == '\t' {
             if text.length {
-                add_text_to_line(line, text, line.length);
+                add_text_to_line(null, line, text, line.length);
             }
 
-            add_text_to_line(line, tab, line.length);
+            add_text_to_line(null, line, tab, line.length);
             text = { length = 0; data = value.data + i + 1; }
         }
         else if char != '\r' {
@@ -1430,7 +1431,7 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
     }
 
     if text.length {
-        add_text_to_line(line, text, line.length);
+        add_text_to_line(null, line, text, line.length);
     }
 
     calculate_line_digits(buffer);
@@ -1497,10 +1498,21 @@ add_text_to_line(string text) {
     }
 
     line := get_buffer_line(buffer, buffer_window.line);
-    buffer_window.cursor = add_text_to_line(line, text, buffer_window.cursor);
+    buffer_window.cursor = add_text_to_line(buffer_window, line, text, buffer_window.cursor);
 }
 
-u32 add_text_to_line(BufferLine* line, string text, u32 cursor = 0, bool fill = false, bool clear = false) {
+u32 add_text_to_line(BufferWindow* buffer_window, BufferLine* line, string text, u32 cursor = 0, bool fill = false, bool clear = false) {
+    max_chars := get_max_chars_per_line(buffer_window);
+    original_length := line.length;
+
+    defer {
+        if buffer_window != null &&
+            original_length < line.length &&
+            calculate_rendered_lines(max_chars, original_length) < calculate_rendered_lines(max_chars, line.length) {
+            adjust_start_line(buffer_window);
+        }
+    }
+
     if clear {
         // Free any child lines that extend past the new text length
         if text.length <= line_buffer_length {
@@ -1679,7 +1691,7 @@ add_text_to_block(string text) {
     new_cursor := buffer_window.cursor;
     while line != null && line_number <= block_insert_data.end_line {
         if buffer_window.cursor <= line.length {
-            new_cursor = add_text_to_line(line, text, buffer_window.cursor);
+            new_cursor = add_text_to_line(buffer_window, line, text, buffer_window.cursor);
         }
 
         line = line.next;
@@ -2281,7 +2293,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
                 new_line_string: string = { length = line.length - buffer_window.cursor; data = line.data.data + buffer_window.cursor; }
                 line.length = buffer_window.cursor;
 
-                add_text_to_line(new_line, new_line_string);
+                add_text_to_line(buffer_window, new_line, new_line_string);
                 buffer_window.cursor = 0;
             }
         }
@@ -2298,17 +2310,18 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
     }
 
     buffer.line_count++;
+
     return new_line;
 }
 
-BufferLine* add_new_line(Buffer* buffer, BufferLine* line, u32 cursor) {
+BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, u32 cursor) {
     new_line := allocate_line();
 
     if cursor <= line.length {
         new_line_string: string = { length = line.length - cursor; data = line.data.data + cursor; }
         line.length = cursor;
 
-        add_text_to_line(new_line, new_line_string);
+        add_text_to_line(buffer_window, new_line, new_line_string);
     }
 
     if line.next {
@@ -2352,7 +2365,7 @@ change_indentation(bool indent, u32 indentations) {
             break;
 
         if indent {
-            indent_line(line, indent_size);
+            indent_line(buffer_window, line, indent_size);
         }
         else {
             available_whitespace: u32;
@@ -3636,7 +3649,7 @@ replace_value_in_buffer() {
     }
 
     if new_lines == 1 {
-        add_text_to_line(find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
+        add_text_to_line(find_and_replace_data.buffer_window, find_and_replace_data.line, find_and_replace_data.new_value, find_and_replace_data.cursor);
         find_and_replace_data.cursor += find_and_replace_data.new_value.length;
     }
     else {
@@ -3656,12 +3669,12 @@ replace_value_in_buffer() {
 
         each line_text, i in new_value_lines {
             if line_text.length {
-                add_text_to_line(find_and_replace_data.line, line_text, find_and_replace_data.cursor);
+                add_text_to_line(find_and_replace_data.buffer_window, find_and_replace_data.line, line_text, find_and_replace_data.cursor);
                 find_and_replace_data.cursor += line_text.length;
             }
 
             if i < new_lines - 1 {
-                find_and_replace_data.line = add_new_line(find_and_replace_data.buffer, find_and_replace_data.line, find_and_replace_data.cursor);
+                find_and_replace_data.line = add_new_line(find_and_replace_data.buffer_window, find_and_replace_data.buffer, find_and_replace_data.line, find_and_replace_data.cursor);
                 find_and_replace_data.cursor = 0;
             }
         }
@@ -3766,8 +3779,8 @@ change_selected_line_commenting() {
         line_number := start_line;
         while line != null && line_number <= end_line {
             if comment_cursor < line.length {
-                add_text_to_line(line, comment_string, comment_cursor);
-                add_text_to_line(line, " ", comment_cursor + comment_string.length);
+                add_text_to_line(buffer_window, line, comment_string, comment_cursor);
+                add_text_to_line(buffer_window, line, " ", comment_cursor + comment_string.length);
             }
 
             line = line.next;
@@ -4219,6 +4232,7 @@ adjust_start_line(BufferWindow* window) {
 
     if starting_line == null return;
 
+    // TODO Fix this
     current_line := starting_line;
     max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
     rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
@@ -4826,14 +4840,14 @@ indent_line(BufferWindow* buffer_window, BufferLine* line) {
         indent_length += settings.tab_size;
 
     if indent_length {
-        indent_line(line, indent_length);
+        indent_line(buffer_window, line, indent_length);
         buffer_window.cursor = indent_length;
     }
 }
 
-indent_line(BufferLine* line, u32 indent_length) {
+indent_line(BufferWindow* buffer_window, BufferLine* line, u32 indent_length) {
     indent_string := create_empty_string(indent_length);
-    add_text_to_line(line, indent_string);
+    add_text_to_line(buffer_window, line, indent_string);
 }
 
 // Movement helpers
@@ -4923,9 +4937,22 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
 }
 
 u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
-    lines := line_length / max_chars + 1;
+    lines := line_length / max_chars;
+    if line_length % max_chars lines++;
 
     return lines;
+}
+
+u32 get_max_chars_per_line(BufferWindow* window) {
+    if window == null return 0;
+
+    workspace := get_workspace();
+    buffer := window.static_buffer;
+    if buffer == null {
+        buffer = &workspace.buffers[window.buffer_index];
+    }
+
+    return calculate_max_chars_per_line(window, buffer.line_count_digits);
 }
 
 u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {

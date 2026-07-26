@@ -216,7 +216,7 @@ evaluate_line_without_rendering(RenderLineState* state, BufferLine* line, u32 li
     reset_render_line_state(state);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end, bool has_breakpoint, bool debug_line) {
+u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 line_number, u32 digits, u32 max_chars_per_line, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start, int visual_end, bool has_breakpoint, bool debug_line) {
     // Load the font and texture
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return 0;
@@ -226,15 +226,11 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
 
     // Draw the line background
     if cursor >= 0 {
-        line_number_offset := (digits + 1) * font_texture.quad_advance;
-        available_line_width := max_x - x - line_number_offset;
-
         length := line.length;
         if cursor == length length++;
 
-        full_line_width := length * font_texture.quad_advance;
-        rendered_line_count := cast(u32, (full_line_width / available_line_width) + 1);
-
+        rendered_line_count := length / max_chars_per_line;
+        if length % max_chars_per_line rendered_line_count++;
         draw_line_background(font_texture, x, y, max_x, rendered_line_count);
     }
 

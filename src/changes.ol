@@ -375,7 +375,7 @@ apply_change(BufferWindow* buffer_window, Buffer* buffer, ChangeValue change_fro
                 // Modify existing lines
                 line_index := 0;
                 overwrite_count := change_from.end_line - change_from.start_line + 1;
-                line = overwrite_lines(line, overwrite_count, value_lines);
+                line = overwrite_lines(buffer_window, line, overwrite_count, value_lines);
 
                 // Insert additional lines if necessary
                 if change_from.end_line < change_to.end_line {
@@ -383,12 +383,12 @@ apply_change(BufferWindow* buffer_window, Buffer* buffer, ChangeValue change_fro
                     each i in change_to.end_line - change_from.end_line {
                         line = add_new_line(buffer_window, buffer, line, false, false);
                         value_line := value_lines[i + overwrite_count];
-                        add_text_to_line(line, value_line);
+                        add_text_to_line(buffer_window, line, value_line);
                     }
                 }
             }
             else {
-                line = overwrite_lines(line, change_to.end_line - change_to.start_line + 1, value_lines);
+                line = overwrite_lines(buffer_window, line, change_to.end_line - change_to.start_line + 1, value_lines);
 
                 line = line.previous;
                 delete_lines_in_range(buffer, line, change_from.end_line - change_to.end_line);
@@ -403,10 +403,10 @@ apply_change(BufferWindow* buffer_window, Buffer* buffer, ChangeValue change_fro
     adjust_start_line(buffer_window);
 }
 
-BufferLine* overwrite_lines(BufferLine* line, u32 count, Array<string> value_lines) {
+BufferLine* overwrite_lines(BufferWindow* buffer_window, BufferLine* line, u32 count, Array<string> value_lines) {
     each i in count {
         value_line := value_lines[i];
-        add_text_to_line(line, value_line, clear = true);
+        add_text_to_line(buffer_window, line, value_line, clear = true);
 
         line = line.next;
     }

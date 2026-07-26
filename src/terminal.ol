@@ -201,7 +201,7 @@ bool unable_to_input_to_terminal(Workspace* workspace) {
 }
 
 add_text_to_terminal_command_line(Workspace* workspace, string value) {
-    add_text_to_line(workspace.terminal_data.command_line, value, workspace.terminal_data.command_write_cursor);
+    add_text_to_line(&workspace.terminal_data.buffer_window, workspace.terminal_data.command_line, value, workspace.terminal_data.command_write_cursor);
     workspace.terminal_data.command_write_cursor += value.length;
     workspace.terminal_data.buffer_window.cursor += value.length;
 }
@@ -222,7 +222,7 @@ set_command_from_history(Workspace* workspace) {
 
     if workspace.terminal_data.selected_history_index < workspace.terminal_data.command_history.length {
         command := workspace.terminal_data.command_history[workspace.terminal_data.selected_history_index];
-        add_text_to_line(workspace.terminal_data.command_line, command, workspace.terminal_data.command_start_index);
+        add_text_to_line(&workspace.terminal_data.buffer_window, workspace.terminal_data.command_line, command, workspace.terminal_data.command_start_index);
     }
 
     workspace.terminal_data = {
@@ -246,7 +246,7 @@ set_command_line(Workspace* workspace) {
     }
 
     line_start := temp_string(workspace.terminal_data.directory, "> ");
-    add_text_to_line(last_line, line_start);
+    add_text_to_line(&workspace.terminal_data.buffer_window, last_line, line_start);
     workspace.terminal_data = {
         command_line = last_line;
         command_line_index = workspace.terminal_data.buffer.line_count - 1;
@@ -494,7 +494,7 @@ handle_command(Workspace* workspace) {
         args[args.length++] = arg;
     }
 
-    add_new_line(null, &workspace.terminal_data.buffer, workspace.terminal_data.command_line, false, false);
+    add_new_line(&workspace.terminal_data.buffer_window, &workspace.terminal_data.buffer, workspace.terminal_data.command_line, false, false);
     calculate_line_digits(&workspace.terminal_data.buffer);
     workspace.terminal_data.buffer_window = {
         line = workspace.terminal_data.buffer_window.line + 1;
