@@ -4232,7 +4232,6 @@ adjust_start_line(BufferWindow* window) {
 
     if starting_line == null return;
 
-    // TODO Fix this
     current_line := starting_line;
     max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
     rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
@@ -4937,6 +4936,8 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
 }
 
 u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
+    if line_length == 0 return 1;
+
     lines := line_length / max_chars;
     if line_length % max_chars lines++;
 
