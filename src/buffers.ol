@@ -4234,13 +4234,17 @@ adjust_start_line(BufferWindow* window) {
 
     current_line := starting_line;
     max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
-    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
-    while current_line != null && line_number != window.line {
-        current_line = current_line.next;
-        if current_line {
-            rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
-            line_number++;
+    rendered_lines: u32;
+    while current_line != null {
+        // TODO Handle this properly when the line takes up the whole screen
+        if line_number == window.line {
+            rendered_lines += calculate_rendered_lines(max_chars, current_line.length, window.cursor);
+            break;
         }
+
+        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+        current_line = current_line.next;
+        line_number++;
     }
 
     if rendered_lines <= scroll_offset {
@@ -4894,10 +4898,15 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
 
     current_line := starting_line;
     max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
-    rendered_lines := calculate_rendered_lines(max_chars, current_line.length);
-    while current_line != null && line_number != window.line {
-        current_line = current_line.next;
+    rendered_lines: u32;
+    while current_line != null {
+        if line_number == window.line {
+            rendered_lines += calculate_rendered_lines(max_chars, current_line.length, window.cursor);
+            break;
+        }
+
         rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+        current_line = current_line.next;
         line_number++;
     }
 
@@ -4906,7 +4915,7 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
             while current_line.next != null && rendered_lines <= scroll_offset {
                 window.line++;
                 current_line = current_line.next;
-                rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+                rendered_lines += calculate_rendered_lines(max_chars, current_line.length, window.cursor);
             }
         }
         return;
@@ -4928,15 +4937,17 @@ scroll_buffer(Workspace* workspace, BufferWindow* window, bool up, u32 line_chan
         if rendered_lines + rendered_lines_after_current > max_lines {
             while current_line != null && rendered_lines + scroll_offset > max_lines {
                 window.line--;
-                rendered_lines -= calculate_rendered_lines(max_chars, current_line.length);
+                rendered_lines -= calculate_rendered_lines(max_chars, current_line.length, window.cursor);
                 current_line = current_line.previous;
             }
         }
     }
 }
 
-u32 calculate_rendered_lines(u32 max_chars, u32 line_length) {
+u32 calculate_rendered_lines(u32 max_chars, u32 line_length, u32 cursor = 0) {
     if line_length == 0 return 1;
+
+    if cursor >= line_length line_length++;
 
     lines := line_length / max_chars;
     if line_length % max_chars lines++;

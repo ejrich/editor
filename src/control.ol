@@ -36,8 +36,10 @@ struct KeyCommandData {
 
 key_command: KeyCommandData;
 
-set_key_command(KeyCommand command, ModCode mod) {
-    reset_post_movement_command();
+set_key_command(KeyCommand command, ModCode mod, bool reset_movement_command) {
+    if reset_movement_command {
+        reset_post_movement_command();
+    }
 
     key_command = {
         command = command;
@@ -476,7 +478,7 @@ replace(ModCode mod) {
         start_replace_mode();
     }
     else {
-        set_key_command(KeyCommand.Replace, mod);
+        set_key_command(KeyCommand.Replace, mod, true);
     }
 }
 
@@ -527,12 +529,12 @@ paste(ModCode mod) {
 
 [keybind, no_repeat]
 scroll_to(ModCode mod) {
-    set_key_command(KeyCommand.ScrollTo, mod);
+    set_key_command(KeyCommand.ScrollTo, mod, true);
 }
 
 [keybind, no_repeat]
 quit(ModCode mod) {
-    set_key_command(KeyCommand.Quit, mod);
+    set_key_command(KeyCommand.Quit, mod, true);
 }
 
 // Movement keybinds
@@ -722,25 +724,25 @@ go_to(ModCode mod) {
         go_to_line(0);
     }
     else {
-        set_key_command(KeyCommand.GoTo, ModCode.None);
+        set_key_command(KeyCommand.GoTo, ModCode.None, false);
     }
 }
 
 [keybind, no_repeat]
 find(ModCode mod) {
     if mod & ModCode.Shift {
-        set_key_command(KeyCommand.Find, mod);
+        set_key_command(KeyCommand.Find, mod, true);
     }
     else {
         post_movement_command.include_end_cursor = true;
-        set_key_command(KeyCommand.FindChar, mod);
+        set_key_command(KeyCommand.FindChar, mod, false);
     }
 }
 
 [keybind, no_repeat]
 until_char(ModCode mod) {
     post_movement_command.include_end_cursor = true;
-    set_key_command(KeyCommand.UntilChar, mod);
+    set_key_command(KeyCommand.UntilChar, mod, false);
 }
 
 [keybind]
