@@ -4236,9 +4236,15 @@ adjust_start_line(BufferWindow* window) {
     max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
     rendered_lines: u32;
     while current_line != null {
-        // TODO Handle this properly when the line takes up the whole screen
         if line_number == window.line {
-            rendered_lines += calculate_rendered_lines(max_chars, current_line.length, window.cursor);
+            lines := calculate_rendered_lines(max_chars, current_line.length, window.cursor);
+            // Handle when the line takes up the whole screen
+            if lines >= max_lines {
+                window.start_line = line_number;
+                return;
+            }
+
+            rendered_lines += lines;
             break;
         }
 

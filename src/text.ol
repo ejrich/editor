@@ -223,14 +223,28 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
 
     glyphs := font_texture.glyphs;
     x_start := x;
+    line_start: u32;
 
     // Draw the line background
     if cursor >= 0 {
-        length := line.length;
-        if cursor == length length++;
+        rendered_line_count: u32 = 1;
+        if line.length {
+            length := line.length;
+            if cursor == length length++;
 
-        rendered_line_count := length / max_chars_per_line;
-        if length % max_chars_per_line rendered_line_count++;
+            rendered_line_count = length / max_chars_per_line;
+            if length % max_chars_per_line rendered_line_count++;
+
+            cursor_line := cursor / max_chars_per_line + 1;
+
+            if cursor_line > lines_available {
+                adjust := cursor_line - lines_available;
+                line_start = adjust * max_chars_per_line;
+            }
+
+            rendered_line_count = clamp(rendered_line_count, 1, lines_available);
+        }
+
         draw_line_background(font_texture, x, y, max_x, rendered_line_count);
     }
 
@@ -289,7 +303,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line(state, line, font_texture, x_start, x, y, max_x, line_number, lines_available, cursor, render_cursor, visual_start, visual_end);
+    return render_line(state, line, line_start, font_texture, x_start, x, y, max_x, line_number, lines_available, cursor, render_cursor, visual_start, visual_end);
 }
 
 u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, float max_x, u32 line_number, u32 lines_available, int max_line_chars, int selected_line) {
@@ -303,7 +317,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, floa
         visual_end = line.length;
     }
 
-    return render_line(state, line, font_texture, x, x, y, max_x, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
+    return render_line(state, line, 0, font_texture, x, x, y, max_x, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
 }
 
 draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1) {
@@ -319,7 +333,7 @@ render_line_with_cursor(string text, float x, float y, int cursor, float max_x, 
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available);
+    render_line_with_cursor(font_texture, text, 0, x, x, y, cursor, render_cursor, max_x, lines_available);
 }
 
 render_highlighted_line_with_cursor(string text, float x, float y, int cursor, float max_x, u32 lines_available = 1, bool render_cursor = true) {
@@ -327,7 +341,7 @@ render_highlighted_line_with_cursor(string text, float x, float y, int cursor, f
     font_texture := load_font_texture(settings.font_size);
     if font_texture == null return;
 
-    render_line_with_cursor(font_texture, text, x, x, y, cursor, render_cursor, max_x, lines_available, 0, text.length);
+    render_line_with_cursor(font_texture, text, 0, x, x, y, cursor, render_cursor, max_x, lines_available, 0, text.length);
 }
 
 draw_cursor(float x, float y, Vector4 color) {
@@ -429,22 +443,22 @@ draw_line_background(FontTexture* font_texture, float x, float y, float max_x, u
     draw_quad(&current_line_quad, 1);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 line_number, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
+u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 line_number, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
     line_count: u32;
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
     if state.syntax != null || state.next_escape_code != null || state.current_escape_code != null {
-        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, x_start, x, y, line_number, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
     }
     else {
-        line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+        line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
 
         if line.child {
             child := line.child;
             index := text.length;
             while child {
                 text = { length = child.length; data = child.data.data; }
-                line_count, x, y = render_line_with_cursor(font_texture, text, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars);
+                line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars);
 
                 index += child.length;
                 child = child.next;
@@ -455,19 +469,10 @@ u32 render_line(RenderLineState* state, BufferLine* line, FontTexture* font_text
     return line_count;
 }
 
-u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, u32 line_start, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
-    quad_data: Array<QuadInstanceData>;
-    // Use a quick allocation for lines longer that 5k, otherwise push onto the stack
-    if text.length > 5000 {
-        quad_data.data = allocate(size_of(QuadInstanceData) * text.length);
-        quad_data.length = text.length;
-    }
-    else {
-        quad_data_storage: Array<QuadInstanceData>[text.length];
-        quad_data = quad_data_storage;
-    }
+    quad_data: Array<QuadInstanceData>[text.length];
     length := 0;
 
     each i in text.length {
@@ -489,31 +494,34 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
             font_color = appearance.cursor_font_color;
             draw_cursor(x, y, appearance.cursor_color);
         }
-        else if index >= visual_start && index <= visual_end {
+        else if index >= visual_start && index <= visual_end && index >= line_start {
             font_color = appearance.visual_font_color;
             draw_cursor(x, y, appearance.font_color);
         }
 
-        char := text[i];
-        if char < glyphs.length {
-            glyph := glyphs[char];
-            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
-                x_pos := x + glyph.quad_adjust.x;
-                y_pos := y - glyph.quad_adjust.y;
+        if index >= line_start {
+            char := text[i];
+            if char < glyphs.length {
+                glyph := glyphs[char];
+                if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+                    x_pos := x + glyph.quad_adjust.x;
+                    y_pos := y - glyph.quad_adjust.y;
 
-                quad_data[length++] = {
-                    color = font_color;
-                    position = { x = x_pos; y = y_pos; z = 0.0; }
-                    flags = QuadFlags.SingleChannel;
-                    width = glyph.quad_dimensions.x;
-                    height = glyph.quad_dimensions.y;
-                    bottom_left_texture_coord = glyph.bottom_left_texture_coord;
-                    top_right_texture_coord = glyph.top_right_texture_coord;
+                    quad_data[length++] = {
+                        color = font_color;
+                        position = { x = x_pos; y = y_pos; z = 0.0; }
+                        flags = QuadFlags.SingleChannel;
+                        width = glyph.quad_dimensions.x;
+                        height = glyph.quad_dimensions.y;
+                        bottom_left_texture_coord = glyph.bottom_left_texture_coord;
+                        top_right_texture_coord = glyph.top_right_texture_coord;
+                    }
                 }
             }
+
+            x += font_texture.quad_advance;
         }
 
-        x += font_texture.quad_advance;
         index++;
     }
 
@@ -530,24 +538,21 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     if length > 0
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
 
-    if text.length > 5000 {
-        free_allocation(quad_data.data);
-    }
-
     return line_count, x, y;
 }
 
-u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, u32 line_start, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>;
-    // Use a quick allocation for lines longer that 5k, otherwise push onto the stack
-    if line.length > 5000 {
-        quad_data.data = allocate(size_of(QuadInstanceData) * line.length);
-        quad_data.length = line.length;
+    allocation_length := line.length - line_start;
+    // Use a quick allocation for lines longer that 3.5k, otherwise push onto the stack
+    if allocation_length > line_stack_allocation_max {
+        quad_data.data = allocate(size_of(QuadInstanceData) * allocation_length);
+        quad_data.length = allocation_length;
     }
     else {
-        quad_data_storage: Array<QuadInstanceData>[line.length];
+        quad_data_storage: Array<QuadInstanceData>[allocation_length];
         quad_data = quad_data_storage;
     }
 
@@ -588,9 +593,11 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             if line_count >= lines_available
                 break;
 
-            x = x_start;
-            y -= font_texture.line_height;
-            line_count++;
+            // if i >= line_start {
+                x = x_start;
+                y -= font_texture.line_height;
+                line_count++;
+            // }
         }
 
         char := get_char(line, i);
@@ -605,7 +612,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 draw_cursor(x, y, appearance.cursor_color);
                 drawing_cursor = true;
             }
-            else if i >= visual_start && i <= visual_end {
+            else if i >= visual_start && i <= visual_end && i >= line_start {
                 font_color = appearance.visual_font_color;
                 draw_cursor(x, y, appearance.font_color);
                 drawing_cursor = true;
@@ -614,7 +621,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 if state.current_escape_code.foreground_color.w {
                     font_color = state.current_escape_code.foreground_color;
                 }
-                if state.current_escape_code.background_color.w {
+                if state.current_escape_code.background_color.w > 0.0 && i >= line_start {
                     draw_cursor(x, y, state.current_escape_code.background_color);
                 }
             }
@@ -645,7 +652,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 }
                 else if !line_color_set {
                     if is_whitespace(char) {
-                        check_for_keyword(state, quad_data, length);
+                        if i >= line_start {
+                            check_for_keyword(state, quad_data, length);
+                        }
                         escaping = false;
                     }
                     else if state.in_multi_line_string {
@@ -690,14 +699,18 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             }
                         }
                         else if single_line_comment_length > 0 && match_value_in_line(line, char, state.syntax.single_line_comment, i) {
-                            check_for_keyword(state, quad_data, length);
+                            if i >= line_start {
+                                check_for_keyword(state, quad_data, length);
+                            }
                             state.in_single_line_comment = true;
                             if !drawing_cursor {
                                 font_color = appearance.comment_color;
                             }
                         }
                         else if multi_line_comment_start_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_comment_start, i) {
-                            check_for_keyword(state, quad_data, length);
+                            if i >= line_start {
+                                check_for_keyword(state, quad_data, length);
+                            }
                             state.in_multi_line_comment = true;
                             skip = multi_line_comment_start_length - 1;
                             if !drawing_cursor {
@@ -705,7 +718,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             }
                         }
                         else if multi_line_string_boundary_length > 0 && match_value_in_line(line, char, state.syntax.multi_line_string_boundary, i) {
-                            check_for_keyword(state, quad_data, length);
+                            if i >= line_start {
+                                check_for_keyword(state, quad_data, length);
+                            }
                             state.in_multi_line_string = true;
                             skip = multi_line_string_boundary_length - 1;
                             if !drawing_cursor {
@@ -713,7 +728,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             }
                         }
                         else if state.syntax != null && state.syntax.string_boundary > 0 && char == state.syntax.string_boundary {
-                            check_for_keyword(state, quad_data, length);
+                            if i >= line_start {
+                                check_for_keyword(state, quad_data, length);
+                            }
                             state.in_string = true;
                             if !drawing_cursor {
                                 font_color = appearance.string_color;
@@ -721,7 +738,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
 
                         }
                         else if state.syntax != null && state.syntax.char_boundary > 0 && char == state.syntax.char_boundary {
-                            check_for_keyword(state, quad_data, length);
+                            if i >= line_start {
+                                check_for_keyword(state, quad_data, length);
+                            }
                             state.in_char = true;
                             if !drawing_cursor {
                                 font_color = appearance.char_color;
@@ -734,7 +753,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                             }
                             state.current_word_cursor++;
                         }
-                        else {
+                        else if i >= line_start {
                             check_for_keyword(state, quad_data, length);
                         }
 
@@ -743,7 +762,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 }
             }
 
-            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 {
+            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 && i >= line_start {
                 x_pos := x + glyph.quad_adjust.x;
                 y_pos := y - glyph.quad_adjust.y;
 
@@ -759,7 +778,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             }
         }
 
-        x += font_texture.quad_advance;
+        if i >= line_start {
+            x += font_texture.quad_advance;
+        }
     }
 
     check_for_keyword(state, quad_data, length);
@@ -781,7 +802,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
     }
 
-    if line.length > 5000 {
+    if line.length > line_stack_allocation_max {
         free_allocation(quad_data.data);
     }
 
@@ -789,6 +810,8 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
 
     return line_count, x, y;
 }
+
+line_stack_allocation_max := 3500; #const
 
 bool is_text_character(u8 char) {
     if char >= '0' && char <= '9' return true;
