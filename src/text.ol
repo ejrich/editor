@@ -303,7 +303,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, u32 
         draw_quad(line_number_quads.data, length, &font_texture.descriptor_set);
     }
 
-    return render_line(state, line, line_start, font_texture, x_start, x, y, max_x, line_number, lines_available, cursor, render_cursor, visual_start, visual_end);
+    return render_line(state, line, line_start, font_texture, x_start, x, y, max_x, line_number, max_chars_per_line, lines_available, cursor, render_cursor, visual_start, visual_end);
 }
 
 u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, float max_x, u32 line_number, u32 lines_available, int max_line_chars, int selected_line) {
@@ -317,7 +317,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, floa
         visual_end = line.length;
     }
 
-    return render_line(state, line, 0, font_texture, x, x, y, max_x, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
+    return render_line(state, line, 0, font_texture, x, x, y, max_x, max_line_chars, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
 }
 
 draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1) {
@@ -443,12 +443,12 @@ draw_line_background(FontTexture* font_texture, float x, float y, float max_x, u
     draw_quad(&current_line_quad, 1);
 }
 
-u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 line_number, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
+u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTexture* font_texture, float x_start, float x, float y, float max_x, u32 line_number, u32 max_chars_per_line, u32 lines_available, int cursor, bool render_cursor, int visual_start, int visual_end, int max_line_chars = -1) {
     line_count: u32;
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
     if state.syntax != null || state.next_escape_code != null || state.current_escape_code != null {
-        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, max_chars_per_line, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
     }
     else {
         line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
@@ -541,14 +541,14 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     return line_count, x, y;
 }
 
-u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, u32 line_start, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, u32 line_start, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 max_chars_per_line, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>;
-    allocation_length := line.length - line_start;
-    // Use a quick allocation for lines longer that 3.5k, otherwise push onto the stack
+    allocation_length := clamp(line.length - line_start, 0, lines_available * max_chars_per_line);
+    // Use a temp allocation for lines longer that 3.5k, otherwise push onto the stack
     if allocation_length > line_stack_allocation_max {
-        quad_data.data = allocate(size_of(QuadInstanceData) * allocation_length);
+        quad_data.data = temp_allocate(size_of(QuadInstanceData) * allocation_length);
         quad_data.length = allocation_length;
     }
     else {
@@ -593,11 +593,9 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             if line_count >= lines_available
                 break;
 
-            // if i >= line_start {
-                x = x_start;
-                y -= font_texture.line_height;
-                line_count++;
-            // }
+            x = x_start;
+            y -= font_texture.line_height;
+            line_count++;
         }
 
         char := get_char(line, i);
@@ -800,10 +798,6 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
             length = quads_to_draw;
         }
         draw_quad(quad_data.data, length, &font_texture.descriptor_set);
-    }
-
-    if line.length > line_stack_allocation_max {
-        free_allocation(quad_data.data);
     }
 
     reset_render_line_state(state);
