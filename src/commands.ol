@@ -127,8 +127,11 @@ string, bool toggle_hex_view() {
             buffer_window = workspace.right_window.buffer_window;
     }
 
-    buffer_window.hex_view = !buffer_window.hex_view;
-    if buffer_window.hex_view {
+
+    buffer := get_buffer_from_window(buffer_window);
+
+    buffer.hex_view = !buffer.hex_view;
+    if buffer.hex_view {
         buffer_window.start_line = 0;
         buffer_window.line = 0;
         buffer_window.cursor = 0;

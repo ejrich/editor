@@ -295,9 +295,9 @@ visual_mode(ModCode mod) {
     else {
         if edit_mode == EditMode.Normal {
             visual_mode_data.line, visual_mode_data.cursor = get_current_position();
-            buffer_window := get_current_window();
+            buffer_window, buffer := get_current_window_and_buffer();
             if buffer_window {
-                if buffer_window.hex_view {
+                if buffer.hex_view {
                     return;
                 }
 
