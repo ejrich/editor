@@ -68,6 +68,8 @@ struct Settings {
 }
 
 settings: Settings;
+settings_buffer: Buffer;
+settings_window: BufferWindow;
 
 struct AppearanceSettings {
     font_color: Vector4;
@@ -92,6 +94,12 @@ load_settings() {
     home_directory := get_environment_variable(home_environment_variable, temp_allocate);
     settings_file_path = format_string("%/Documents/%/settings", allocate, home_directory, application_name);
 
+    settings_buffer = {
+        relative_path = settings_file_path;
+        on_save = load_settings_file;
+    }
+    settings_window.static_buffer = &settings_buffer;
+
     load_settings_file();
 }
 
@@ -102,7 +110,16 @@ load_settings_file() {
     all_settings_set := true;
     settings_type := cast(StructTypeInfo*, type_of(Settings));
 
+    free_buffer(&settings_buffer, false);
+    settings_buffer = {
+        line_count = 1;
+        line_count_digits = 1;
+        lines = allocate_line();
+    }
+
     if found {
+        add_text_to_end_of_buffer(&settings_buffer, settings_file, false);
+
         settings_found: Array<bool>[settings_type.fields.length];
         each setting_found in settings_found setting_found = false;
 

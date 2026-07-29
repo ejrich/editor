@@ -590,12 +590,14 @@ close_window(bool save) {
 
     buffer_window := editor_window.buffer_window;
     while buffer_window {
-        if save {
+        if buffer_window.static_buffer == null {
             save_buffer(buffer_window.buffer_index);
         }
 
         next := buffer_window.next;
-        free_allocation(buffer_window);
+        if buffer_window.static_buffer == null {
+            free_allocation(buffer_window);
+        }
         buffer_window = next;
     }
 
@@ -616,8 +618,12 @@ bool, u32, u32, string save_buffer(int buffer_index) {
     if buffer_index < 0 || buffer_index >= workspace.buffers.length
         return true, 0, 0, empty_string;
 
-    lines_written, bytes_written: u32;
     buffer := &workspace.buffers[buffer_index];
+    return save_buffer(buffer);
+}
+
+bool, u32, u32, string save_buffer(Buffer* buffer) {
+    lines_written, bytes_written: u32;
     buffer.has_changes = false;
 
     create_directories_recursively(buffer.relative_path);
@@ -671,6 +677,10 @@ bool, u32, u32, string save_buffer(int buffer_index) {
             bytes_written += line.length + 1;
             line = line.next;
         }
+    }
+
+    if buffer.on_save != null {
+        buffer.on_save();
     }
 
     return true, lines_written, bytes_written, buffer.relative_path;
@@ -3907,9 +3917,11 @@ struct Buffer {
     escape_codes: EscapeCode*;
     escape_code_parse_state: EscapeCodeParseState;
     breakpoints: Breakpoint*;
+    on_save: OnSave;
 }
 
 interface string GetBufferTitle()
+interface OnSave()
 
 free_buffer(Buffer* buffer, bool free_pointer = true, bool free_path = false) {
     if buffer == null return;

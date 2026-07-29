@@ -20,9 +20,13 @@ string, bool open_file_command(string path) {
 
 [command, w]
 string, bool save_current_buffer() {
-    buffer_window := get_current_window();
+    buffer_window, buffer := get_current_window_and_buffer();
 
-    success, lines, bytes, file := save_buffer(buffer_window.buffer_index);
+    if buffer.read_only {
+        return "Unable to save read only buffer", false;
+    }
+
+    success, lines, bytes, file := save_buffer(buffer);
     if !success {
         error_result := format_string("Unable to open file \"%\" to write", allocate, file);
         return error_result, true;
@@ -112,6 +116,46 @@ string, bool reload_configurations() {
     reload_workspace();
 
     return "Settings reloaded", false;
+}
+
+[command, settings]
+string, bool open_settings_buffer() {
+    workspace := get_workspace();
+
+    switch workspace.current_window {
+        case SelectedWindow.Left; {
+            settings_window.next = workspace.left_window.buffer_window;
+            workspace.left_window.buffer_window = &settings_window;
+        }
+        case SelectedWindow.Right; {
+            record_jump(workspace.right_window.buffer_window);
+            settings_window.next = workspace.right_window.buffer_window;
+            workspace.right_window.buffer_window = &settings_window;
+        }
+    }
+
+    workspace.bottom_window_selected = false;
+    return empty_string, false;
+}
+
+[command, keybinds]
+string, bool open_keybinds_buffer() {
+    workspace := get_workspace();
+
+    switch workspace.current_window {
+        case SelectedWindow.Left; {
+            settings_window.next = workspace.left_window.buffer_window;
+            workspace.left_window.buffer_window = &keybinds_window;
+        }
+        case SelectedWindow.Right; {
+            record_jump(workspace.right_window.buffer_window);
+            settings_window.next = workspace.right_window.buffer_window;
+            workspace.right_window.buffer_window = &keybinds_window;
+        }
+    }
+
+    workspace.bottom_window_selected = false;
+    return empty_string, false;
 }
 
 [command, hex]

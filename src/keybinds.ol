@@ -1,6 +1,15 @@
+keybinds_buffer: Buffer;
+keybinds_window: BufferWindow;
+
 load_keybinds() {
     home_directory := get_environment_variable(home_environment_variable, temp_allocate);
     keybinds_file_path = format_string("%/Documents/%/keybinds", allocate, home_directory, application_name);
+
+    keybinds_buffer = {
+        relative_path = keybinds_file_path;
+        on_save = reload_keybinds;
+    }
+    keybinds_window.static_buffer = &keybinds_buffer;
 
     load_keybinds_file();
 }
@@ -8,12 +17,21 @@ load_keybinds() {
 load_keybinds_file() {
     found, keybinds_file := read_file(keybinds_file_path, allocate);
 
+    free_buffer(&keybinds_buffer, false);
+    keybinds_buffer = {
+        line_count = 1;
+        line_count_digits = 1;
+        lines = allocate_line();
+    }
+
     if !found {
         default_keybinds_file := temp_string(get_program_directory(), "/default_keybinds");
         found, keybinds_file = read_file(default_keybinds_file, allocate);
     }
 
     if found {
+        add_text_to_end_of_buffer(&keybinds_buffer, keybinds_file, false);
+
         parse_keybinds_file(keybinds_file);
     }
     else {
