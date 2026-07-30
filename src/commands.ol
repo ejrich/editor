@@ -122,17 +122,22 @@ string, bool reload_configurations() {
 string, bool open_settings_buffer() {
     workspace := get_workspace();
 
+    editor_window: EditorWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left; {
-            settings_window.next = workspace.left_window.buffer_window;
-            workspace.left_window.buffer_window = &settings_window;
+            editor_window = &workspace.left_window;
         }
         case SelectedWindow.Right; {
-            record_jump(workspace.right_window.buffer_window);
-            settings_window.next = workspace.right_window.buffer_window;
-            workspace.right_window.buffer_window = &settings_window;
+            editor_window = &workspace.right_window;
         }
     }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+        editor_window.buffer_window = editor_window.buffer_window.next;
+    }
+
+    settings_window.next = workspace.left_window.buffer_window;
+    editor_window.buffer_window = &settings_window;
 
     workspace.bottom_window_selected = false;
     return empty_string, false;
@@ -142,17 +147,22 @@ string, bool open_settings_buffer() {
 string, bool open_keybinds_buffer() {
     workspace := get_workspace();
 
+    editor_window: EditorWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left; {
-            settings_window.next = workspace.left_window.buffer_window;
-            workspace.left_window.buffer_window = &keybinds_window;
+            editor_window = &workspace.left_window;
         }
         case SelectedWindow.Right; {
-            record_jump(workspace.right_window.buffer_window);
-            settings_window.next = workspace.right_window.buffer_window;
-            workspace.right_window.buffer_window = &keybinds_window;
+            editor_window = &workspace.right_window;
         }
     }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+        editor_window.buffer_window = editor_window.buffer_window.next;
+    }
+
+    keybinds_window.next = editor_window.buffer_window;
+    editor_window.buffer_window = &keybinds_window;
 
     workspace.bottom_window_selected = false;
     return empty_string, false;

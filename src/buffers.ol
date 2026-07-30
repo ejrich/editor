@@ -428,22 +428,26 @@ bool is_file_binary(string file) {
 }
 
 BufferWindow* open_buffer_index(Workspace* workspace, int buffer_index) {
-    buffer_window: BufferWindow*;
+    editor_window: EditorWindow*;
     switch workspace.current_window {
         case SelectedWindow.Left; {
-            record_jump(workspace.left_window.buffer_window);
-            workspace.left_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.left_window.buffer_window);
-            buffer_window = workspace.left_window.buffer_window;
+            editor_window = &workspace.left_window;
         }
         case SelectedWindow.Right; {
-            record_jump(workspace.right_window.buffer_window);
-            workspace.right_window.buffer_window = open_or_create_buffer_window(buffer_index, workspace.right_window.buffer_window);
-            buffer_window = workspace.right_window.buffer_window;
+            editor_window = &workspace.right_window;
         }
     }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+        editor_window.buffer_window = editor_window.buffer_window.next;
+    }
+    else {
+        record_jump(editor_window.buffer_window);
+    }
+    editor_window.buffer_window = open_or_create_buffer_window(buffer_index, editor_window.buffer_window);
     workspace.bottom_window_selected = false;
 
-    return buffer_window;
+    return editor_window.buffer_window;
 }
 
 switch_or_focus_buffer(SelectedWindow window) {
@@ -528,6 +532,11 @@ swap_top_buffer() {
             editor_window = &workspace.left_window;
         case SelectedWindow.Right;
             editor_window = &workspace.right_window;
+    }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+        editor_window.buffer_window = editor_window.buffer_window.next;
+        return;
     }
 
     record_jump(editor_window.buffer_window);
