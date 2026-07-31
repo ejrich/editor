@@ -2299,7 +2299,7 @@ add_new_line(bool above, bool split = false, bool opening = false) {
     }
 
     new_line := add_new_line(buffer_window, buffer, line, above, split);
-    indent_line(buffer_window, new_line);
+    indent_line(buffer_window, buffer, new_line);
 
     calculate_line_digits(buffer);
     adjust_start_line(buffer_window);
@@ -3140,39 +3140,69 @@ move_to_syntax_match() {
     cursor := clamp(buffer_window.cursor, 0, line.length - 1);
 
     match_char, complement_char: u8;
-    forward: bool;
+    forward, in_string, in_char, escaping := false;
     while cursor < line.length {
         complement_char = get_char(line, cursor);
-        switch complement_char {
-            case '('; {
-                match_char = ')';
-                forward = true;
-                break;
+        if in_string {
+            if escaping {
+                escaping = false;
             }
-            case ')'; {
-                match_char = '(';
-                forward = false;
-                break;
+            else if complement_char == '\\' {
+                escaping = true;
             }
-            case '['; {
-                match_char = ']';
-                forward = true;
-                break;
+            else if complement_char == '"' {
+                in_string = false;
             }
-            case ']'; {
-                match_char = '[';
-                forward = false;
-                break;
+        }
+        else if in_char {
+            if escaping {
+                escaping = false;
             }
-            case '{'; {
-                match_char = '}';
-                forward = true;
-                break;
+            else if complement_char == '\\' {
+                escaping = true;
             }
-            case '}'; {
-                match_char = '{';
-                forward = false;
-                break;
+            else if complement_char == '\'' {
+                in_char = false;
+            }
+        }
+        else {
+            switch complement_char {
+                case '"'; {
+                    in_string = true;
+                }
+                case '\''; {
+                    in_char = true;
+                }
+                case '('; {
+                    match_char = ')';
+                    forward = true;
+                    break;
+                }
+                case ')'; {
+                    match_char = '(';
+                    forward = false;
+                    break;
+                }
+                case '['; {
+                    match_char = ']';
+                    forward = true;
+                    break;
+                }
+                case ']'; {
+                    match_char = '[';
+                    forward = false;
+                    break;
+                }
+                case '{'; {
+                    match_char = '}';
+                    forward = true;
+                    break;
+                }
+                case '}'; {
+                    match_char = '{';
+                    forward = false;
+                    break;
+                }
             }
         }
 
@@ -3183,31 +3213,52 @@ move_to_syntax_match() {
 
     found := false;
     nestings := 0;
-    is_string := false;
+    in_string, in_char, escaping = false;
     if forward {
         cursor++;
         while line {
             if line.length {
                 each i in cursor..line.length - 1 {
                     char := get_char(line, i);
-                    if char == '"' {
-                        if i == 0 || get_char(line, i - 1) != '\\' {
-                            is_string = !is_string;
+                    if in_string {
+                        if escaping {
+                            escaping = false;
+                        }
+                        else if char == '\\' {
+                            escaping = true;
+                        }
+                        else if char == '"' {
+                            in_string = false;
                         }
                     }
-                    else if !is_string {
-                        if char == complement_char {
-                            nestings++;
+                    else if in_char {
+                        if escaping {
+                            escaping = false;
                         }
-                        else if char == match_char {
-                            if nestings > 0 {
-                                nestings--;
-                            }
-                            else {
-                                cursor = i;
-                                found = true;
-                                break;
-                            }
+                        else if char == '\\' {
+                            escaping = true;
+                        }
+                        else if char == '\'' {
+                            in_char = false;
+                        }
+                    }
+                    else if char == '"' {
+                        in_string = true;
+                    }
+                    else if char == ''' {
+                        in_char = true;
+                    }
+                    else if char == complement_char {
+                        nestings++;
+                    }
+                    else if char == match_char {
+                        if nestings > 0 {
+                            nestings--;
+                        }
+                        else {
+                            cursor = i;
+                            found = true;
+                            break;
                         }
                     }
                 }
@@ -3234,24 +3285,33 @@ move_to_syntax_match() {
             if line.length {
                 each i in cursor {
                     char := get_char(line, cursor - i - 1);
-                    if char == '"' {
-                        if i == cursor - 1 || get_char(line, cursor - i - 2) != '\\' {
-                            is_string = !is_string;
+                    if in_string {
+                        if char == '"' && (i == cursor - 1 || get_char(line, cursor - i - 2) != '\\') {
+                            in_string = false;
                         }
                     }
-                    else if !is_string {
-                        if char == complement_char {
-                            nestings++;
+                    else if in_char {
+                        if char == '\'' && (i == cursor - 1 || get_char(line, cursor - i - 2) != '\\') {
+                            in_char = false;
                         }
-                        else if char == match_char {
-                            if nestings > 0 {
-                                nestings--;
-                            }
-                            else {
-                                cursor -= i + 1;
-                                found = true;
-                                break;
-                            }
+                    }
+                    else if char == '"' {
+                        in_string = true;
+                    }
+                    else if char == '\'' {
+                        in_char = true;
+                    }
+                    else if char == complement_char {
+                        nestings++;
+                    }
+                    else if char == match_char {
+                        if nestings > 0 {
+                            nestings--;
+                        }
+                        else {
+                            cursor -= i + 1;
+                            found = true;
+                            break;
                         }
                     }
                 }
@@ -4832,15 +4892,16 @@ delete_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 en
     }
 
     if !delete_all && indent {
-        indent_line(buffer_window, line);
+        indent_line(buffer_window, buffer, line);
     }
 }
 
 // Formatting helpers
-indent_line(BufferWindow* buffer_window, BufferLine* line) {
+indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
     indent_length := 0;
     parsing_indents := true;
     has_open_brace := false;
+    has_char_after_open_brace := false;
 
     line_to_copy_indentation := line.previous;
     while line_to_copy_indentation {
@@ -4871,24 +4932,53 @@ indent_line(BufferWindow* buffer_window, BufferLine* line) {
                     parsing_indents = false;
                 }
             }
-            else {
+
+            if !parsing_indents {
                 if char == '{' {
                     has_open_brace = true;
                 }
-                else if has_open_brace && char == '}' {
-                    has_open_brace = false;
+                else if has_open_brace {
+                    if char == '}' {
+                        has_open_brace = false;
+                        has_char_after_open_brace = false;
+                    }
+                    else if char != ' ' {
+                        has_char_after_open_brace = true;
+                    }
                 }
             }
         }
     }
 
-    if has_open_brace
-        indent_length += settings.tab_size;
+    cursor := indent_length;
+    if has_open_brace {
+        first_char_is_close_brace := false;
+        each i in line.length {
+            char := get_char(line, i);
+            if char != ' ' {
+                first_char_is_close_brace = char == '}';
+                break;
+            }
+        }
+
+        if first_char_is_close_brace {
+            if !has_char_after_open_brace {
+                new_line := add_new_line(buffer_window, buffer, line, true, false);
+                indent_line(buffer_window, new_line, indent_length + settings.tab_size);
+                cursor += settings.tab_size;
+            }
+        }
+        else {
+            indent_length += settings.tab_size;
+            cursor += settings.tab_size;
+        }
+    }
 
     if indent_length {
         indent_line(buffer_window, line, indent_length);
-        buffer_window.cursor = indent_length;
     }
+
+    buffer_window.cursor = cursor;
 }
 
 indent_line(BufferWindow* buffer_window, BufferLine* line, u32 indent_length) {
