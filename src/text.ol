@@ -317,7 +317,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, float x, float y, floa
         visual_end = line.length;
     }
 
-    return render_line(state, line, 0, font_texture, x, x, y, max_x, max_line_chars, line_number, lines_available, 0, false, visual_start, visual_end, max_line_chars);
+    return render_line(state, line, 0, font_texture, x, x, y, max_x, line_number, max_line_chars, lines_available, 0, false, visual_start, visual_end, max_line_chars);
 }
 
 draw_line_background(float x, float y, float max_x, u32 rendered_line_count = 1) {
@@ -448,7 +448,7 @@ u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTe
     text: string = { length = clamp(line.length, 0, line_buffer_length); data = line.data.data; }
 
     if state.syntax != null || state.next_escape_code != null || state.current_escape_code != null {
-        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, max_chars_per_line, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+        line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, max_chars_per_line, lines_available, visual_start, visual_end, max_line_chars);
     }
     else {
         line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
@@ -541,7 +541,7 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
     return line_count, x, y;
 }
 
-u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, u32 line_start, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 max_chars_per_line, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, RenderLineState* state, BufferLine* line, u32 line_start, float x_start, float x, float y, u32 line_number, int cursor, bool render_cursor, float max_x, u32 max_chars_per_line, u32 lines_available, int visual_start, int visual_end, int max_line_chars) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>;
@@ -556,6 +556,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
         quad_data = quad_data_storage;
     }
 
+    line_count: u32 = 1;
     length, reset_state_after, skip, quads_to_draw := 0;
     escaping, max_quads_exceeded := false;
 
@@ -760,7 +761,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
                 }
             }
 
-            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 && i >= line_start {
+            if glyph.quad_dimensions.x > 0 && glyph.quad_dimensions.y > 0 && i >= line_start && length < allocation_length {
                 x_pos := x + glyph.quad_adjust.x;
                 y_pos := y - glyph.quad_adjust.y;
 
