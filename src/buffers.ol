@@ -663,13 +663,13 @@ bool, u32, u32, string save_buffer(Buffer* buffer) {
 
                 if line.previous != null {
                     line.previous.next = null;
-                    free_allocation(line);
+                    free_line(line);
                     buffer.line_count--;
                 }
 
                 while next_line {
                     next_next_line := next_line.next;
-                    free_allocation(next_line);
+                    free_line(next_line);
                     next_line = next_next_line;
                     buffer.line_count--;
                 }
