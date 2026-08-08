@@ -2299,7 +2299,9 @@ add_new_line(bool above, bool split = false, bool opening = false) {
     }
 
     new_line := add_new_line(buffer_window, buffer, line, above, split);
-    indent_line(buffer_window, buffer, new_line);
+    if indent_line(buffer_window, buffer, new_line) && edit_mode == EditMode.Insert {
+        update_insert_mode_change(buffer, buffer_window.line + 1);
+    }
 
     calculate_line_digits(buffer);
     adjust_start_line(buffer_window);
@@ -4897,7 +4899,7 @@ delete_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 en
 }
 
 // Formatting helpers
-indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
+bool indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
     indent_length := 0;
     parsing_indents := true;
     has_open_brace := false;
@@ -4951,6 +4953,7 @@ indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
     }
 
     cursor := indent_length;
+    added_line := false;
     if has_open_brace {
         first_char_is_close_brace := false;
         each i in line.length {
@@ -4963,6 +4966,7 @@ indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
 
         if first_char_is_close_brace {
             if !has_char_after_open_brace {
+                added_line = true;
                 new_line := add_new_line(buffer_window, buffer, line, true, false);
                 indent_line(buffer_window, new_line, indent_length + settings.tab_size);
                 cursor += settings.tab_size;
@@ -4979,6 +4983,8 @@ indent_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line) {
     }
 
     buffer_window.cursor = cursor;
+
+    return added_line;
 }
 
 indent_line(BufferWindow* buffer_window, BufferLine* line, u32 indent_length) {
