@@ -353,6 +353,7 @@ init_subsystems() {
     init_display();
     load_settings();
     load_keybinds();
+    init_ssl();
 
     create_window();
     init_thread_pool();
@@ -369,6 +370,7 @@ deinit_subsystems() {
     write_settings();
     deinit_text();
     deinit_graphics();
+    deinit_ssl();
 
     close_window();
     deallocate_arenas();
