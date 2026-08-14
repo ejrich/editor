@@ -1558,16 +1558,22 @@ u32 add_text_to_line(BufferWindow* buffer_window, BufferLine* line, string text,
     }
 
     if clear {
-        // Free any child lines that extend past the new text length
-        if text.length <= line_buffer_length {
-            if line.child {
-                free_child_lines(line.child);
-                line.child = null;
-            }
+        each i in text.length {
+            set_char(line, i, text[i]);
         }
 
-        line.length = 0;
-        return add_text_to_end_of_line(line, text);
+        if text.length < line.length {
+            delete_from_line(line, text.length, line.length - 1);
+        }
+        else if text.length > line.length {
+            end_text: string = {
+                length = text.length - line.length;
+                data = text.data + line.length;
+            }
+            add_text_to_end_of_line(line, end_text);
+        }
+
+        return text.length;
     }
 
     if fill && cursor > line.length {
@@ -2365,12 +2371,14 @@ split_line(BufferWindow* buffer_window, BufferLine* line, BufferLine* next, u32 
     }
     else {
         next_cursor := 0;
-        if cursor < line_buffer_length {
+        child := line.child;
+
+        if cursor <= line_buffer_length {
             new_line_string: string = { length = line_buffer_length - cursor; data = line.data.data + cursor; }
             next_cursor = add_text_to_line(buffer_window, next, new_line_string);
+            line.child = null;
         }
 
-        child := line.child;
         i := line_buffer_length;
 
         while child {
@@ -2378,24 +2386,24 @@ split_line(BufferWindow* buffer_window, BufferLine* line, BufferLine* next, u32 
             next_i := i + child.length;
 
             // The line can be freed
-            if cursor < i {
+            if cursor <= i {
                 new_line_string: string = { length = child.length; data = child.data.data; }
                 next_cursor = add_text_to_line(buffer_window, next, new_line_string, next_cursor);
 
                 free_line(child);
             }
-            else if cursor < i + child.length {
+            // The next children will be freed
+            else if cursor <= next_i {
                 start := cursor - i;
                 new_line_string: string = { length = child.length - start; data = child.data.data + start; }
                 next_cursor = add_text_to_line(buffer_window, next, new_line_string, next_cursor);
+
+                child.length = start;
+                child.next = null;
             }
 
             child = next_child;
             i = next_i;
-        }
-
-        if cursor <= line_buffer_length {
-            line.child = null;
         }
 
         line.length = cursor;
