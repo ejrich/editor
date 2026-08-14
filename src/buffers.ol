@@ -599,7 +599,7 @@ close_window(bool save) {
 
     buffer_window := editor_window.buffer_window;
     while buffer_window {
-        if buffer_window.static_buffer == null {
+        if buffer_window.static_buffer == null && save {
             save_buffer(buffer_window.buffer_index);
         }
 
@@ -2074,26 +2074,7 @@ clear_remaining_line(bool record = false, bool inserting = false) {
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
     line := get_buffer_line(buffer, buffer_window.line);
 
-    if inserting {
-        begin_insert_mode_change(line, buffer_window.line, buffer_window.cursor);
-    }
-
-    if record {
-        begin_line_change(line, buffer_window.line, buffer_window.cursor);
-    }
-
-    if line.length == 0 {
-        buffer_window.cursor = 0;
-    }
-    else {
-        buffer_window.cursor = clamp(buffer_window.cursor, 0, line.length - 1);
-        copy_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, buffer_window.line, line.length - 1);
-        line.length = buffer_window.cursor;
-    }
-
-    if record {
-        record_line_change(buffer, line, buffer_window.line, buffer_window.cursor);
-    }
+    delete_selected(buffer_window, buffer, buffer_window.line, buffer_window.cursor, buffer_window.line, line.length - 1, true, true, true, inserting);
 }
 
 delete_from_cursor(bool back) {
@@ -2336,10 +2317,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
         if split {
             assert(buffer_window != null);
             if buffer_window.cursor <= line.length {
-                new_line_string: string = { length = line.length - buffer_window.cursor; data = line.data.data + buffer_window.cursor; }
-                line.length = buffer_window.cursor;
-
-                add_text_to_line(buffer_window, new_line, new_line_string);
+                split_line(buffer_window, line, new_line, buffer_window.curso
                 buffer_window.cursor = 0;
             }
         }
@@ -2363,12 +2341,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
 BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine* line, u32 cursor) {
     new_line := allocate_line();
 
-    if cursor <= line.length {
-        new_line_string: string = { length = line.length - cursor; data = line.data.data + cursor; }
-        line.length = cursor;
-
-        add_text_to_line(buffer_window, new_line, new_line_string);
-    }
+    split_line(buffer_window, line, new_line, cursor);
 
     if line.next {
         line.next.previous = new_line;
@@ -2379,6 +2352,54 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
 
     buffer.line_count++;
     return new_line;
+}
+
+split_line(BufferWindow* buffer_window, BufferLine* line, BufferLine* next, u32 cursor) {
+    if cursor > line.length return;
+
+    if line.length <= line_buffer_length {
+        new_line_string: string = { length = line.length - cursor; data = line.data.data + cursor; }
+        line.length = cursor;
+
+        add_text_to_line(buffer_window, next, new_line_string);
+    }
+    else {
+        next_cursor := 0;
+        if cursor < line_buffer_length {
+            new_line_string: string = { length = line_buffer_length - cursor; data = line.data.data + cursor; }
+            next_cursor = add_text_to_line(buffer_window, next, new_line_string);
+        }
+
+        child := line.child;
+        i := line_buffer_length;
+
+        while child {
+            next_child := child.next;
+            next_i := i + child.length;
+
+            // The line can be freed
+            if cursor < i {
+                new_line_string: string = { length = child.length; data = child.data.data; }
+                next_cursor = add_text_to_line(buffer_window, next, new_line_string, next_cursor);
+
+                free_line(child);
+            }
+            else if cursor < i + child.length {
+                start := cursor - i;
+                new_line_string: string = { length = child.length - start; data = child.data.data + start; }
+                next_cursor = add_text_to_line(buffer_window, next, new_line_string, next_cursor);
+            }
+
+            child = next_child;
+            i = next_i;
+        }
+
+        if cursor <= line_buffer_length {
+            line.child = null;
+        }
+
+        line.length = cursor;
+    }
 }
 
 change_indentation(bool indent, u32 indentations) {
@@ -4745,7 +4766,7 @@ bool trim_line(BufferLine* line) {
         }
     }
 
-    line.length = actual_length;
+    delete_from_line(line, actual_length, line.length - 1);
     return actual_length == 0;
 }
 
@@ -4862,7 +4883,7 @@ delete_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 en
         if delete_all {
             if line.previous == null {
                 if line.next == null {
-                    line.length = 0;
+                    delete_from_line(line, 0, line.length - 1);
                     buffer_window.cursor = 0;
                     return;
                 }
@@ -4885,14 +4906,14 @@ delete_lines(BufferWindow* buffer_window, Buffer* buffer, u32 start_line, u32 en
             adjust_start_line(buffer_window);
         }
         else {
-            line.length = 0;
+            delete_from_line(line, 0, line.length - 1);
             buffer_window.cursor = 0;
         }
     }
     else {
         buffer_window.line = start_line;
         if !delete_all {
-            line.length = 0;
+            delete_from_line(line, 0, line.length - 1);
             buffer_window.cursor = 0;
         }
 

@@ -806,7 +806,7 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     return line_count, x, y;
 }
 
-line_stack_allocation_max := 2500; #const
+line_stack_allocation_max := 1500; #const
 
 bool is_text_character(u8 char) {
     if char >= '0' && char <= '9' return true;
