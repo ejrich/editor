@@ -680,7 +680,16 @@ bool, u32, u32, string save_buffer(Buffer* buffer) {
         }
         // Write the line to the file, and go to the next
         else {
-            write_buffer_to_file(file, line.data.data, line.length);
+            write_buffer_to_file(file, line.data.data, clamp(line.length, 0, line_buffer_length));
+
+            if line.child {
+                child := line.child;
+                while child {
+                    write_buffer_to_file(file, child.data.data, child.length);
+                    child = child.next;
+                }
+            }
+
             write_to_file(file, '\n');
             lines_written++;
             bytes_written += line.length + 1;
