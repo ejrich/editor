@@ -2317,7 +2317,7 @@ BufferLine* add_new_line(BufferWindow* buffer_window, Buffer* buffer, BufferLine
         if split {
             assert(buffer_window != null);
             if buffer_window.cursor <= line.length {
-                split_line(buffer_window, line, new_line, buffer_window.curso
+                split_line(buffer_window, line, new_line, buffer_window.cursor);
                 buffer_window.cursor = 0;
             }
         }
