@@ -379,6 +379,7 @@ apply_change(BufferWindow* buffer_window, Buffer* buffer, ChangeValue change_fro
 
                 // Insert additional lines if necessary
                 if change_from.end_line < change_to.end_line {
+                    // TODO Fix as this can fail
                     line = line.previous;
                     each i in change_to.end_line - change_from.end_line {
                         line = add_new_line(buffer_window, buffer, line, false, false);
