@@ -159,6 +159,8 @@ load_models() {
             close_socket(socket);
         }
     }
+
+    exit_program(0);
 }
 
 bool, u64, u64 http_get_chunk_size(string text, u64 i) {
@@ -202,8 +204,14 @@ T parse_json<T>(string text, u64 i = 0) {
 
     result: T;
 
-    type := type_of(T);
+    type := cast(StructTypeInfo*, type_of(T));
 
+    parse_json(text, i, &result, type);
+
+    return result;
+}
+
+u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
     in_object := false;
     while i < text.length {
         char := text[i];
@@ -211,34 +219,314 @@ T parse_json<T>(string text, u64 i = 0) {
             if !in_object {
                 in_object = true;
             }
-            else {
+        }
+        else if char == '}' {
+            if in_object {
                 break;
             }
         }
-        else if char == '\"' {
-            // TODO Implement
-            // - Parse the name of the property
-            // - Get the type
-            //   - If the field is not there, skip to the next property
-            //   - If the field is in the type, parse based on the type
-            //     - bool: true or false/null
-            //     - string: Take starting from the next " to the next unescaped "
-            //     - integer or float: Add the next chars until the next ,/}/]
-            //     - enum: Get the string then look up the value
-            //     - struct: Call parse_json using the field type
-            //     - Array: Start at the next [, use this function to get the next value and array_insert, ignore if null
-            //     - otherwise assert(false)
+        else if char == '"' {
+            name: string;
+            i, name = get_json_string(text, i);
+
+            // Try to find a field with the name
+            matched_field: TypeField*;
+            each field in type.fields {
+                if field.name == name {
+                    matched_field = &field;
+                    break;
+                }
+            }
+
+            // Move past the colon and whitespace after the property name
+            while i < text.length && text[i] != ':' {
+                i++;
+            }
+            i++;
+
+            while i < text.length && text[i] == ' ' {
+                i++;
+            }
+
+            // Set the data on the matched field or skip to the next property
+            if matched_field {
+                value: string;
+                field_pointer := pointer + matched_field.offset;
+                switch matched_field.type_info.type {
+                    case TypeKind.Boolean; {
+                        i, value = get_next_json_value(text, i);
+                        bool_pointer := cast(bool*, field_pointer);
+                        *bool_pointer = value == "true";
+                    }
+                    case TypeKind.Integer; {
+                        i, value = get_next_json_value(text, i);
+                        if value != "null" {
+                            negative := false;
+                            number: u64;
+                            if value.length {
+                                j := 0;
+                                if value[0] == '-' {
+                                    negative = true;
+                                    j++;
+                                }
+
+                                while j < value.length {
+                                    number *= 10;
+                                    number += value[j++] - '0';
+                                }
+                            }
+
+                            if negative {
+                                negative_number := cast(s64, number) * -1;
+                                switch matched_field.type_info.size {
+                                    case 1; {
+                                        s8_pointer := cast(s8*, field_pointer);
+                                        *s8_pointer = negative_number;
+                                    }
+                                    case 2; {
+                                        s16_pointer := cast(s16*, field_pointer);
+                                        *s16_pointer = negative_number;
+                                    }
+                                    case 1; {
+                                        s32_pointer := cast(s32*, field_pointer);
+                                        *s32_pointer = negative_number;
+                                    }
+                                    default; {
+                                        s64_pointer := cast(s64*, field_pointer);
+                                        *s64_pointer = negative_number;
+                                    }
+                                }
+                            }
+                            else {
+                                switch matched_field.type_info.size {
+                                    case 1; {
+                                        u8_pointer := cast(u8*, field_pointer);
+                                        *u8_pointer = number;
+                                    }
+                                    case 2; {
+                                        u16_pointer := cast(u16*, field_pointer);
+                                        *u16_pointer = number;
+                                    }
+                                    case 1; {
+                                        u32_pointer := cast(u32*, field_pointer);
+                                        *u32_pointer = number;
+                                    }
+                                    default; {
+                                        u64_pointer := cast(u64*, field_pointer);
+                                        *u64_pointer = number;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    case TypeKind.Float; {
+                        i, value = get_next_json_value(text, i);
+                        if value != "null" {
+                            negative := false;
+                            number: float64;
+                            if value.length {
+                                j := 0;
+                                if value[0] == '-' {
+                                    negative = true;
+                                    j++;
+                                }
+
+                                while j < value.length {
+                                    digit := value[j++];
+                                    if digit == '.' break;
+                                    number *= 10.0;
+                                    number += digit - '0';
+                                }
+
+                                factor: float64 = 0.1;
+                                while j < value.length {
+                                    digit := value[j++];
+                                    number += (digit - '0') * factor;
+                                    factor *= 0.1;
+                                }
+
+                                if negative {
+                                    number *= -1.0;
+                                }
+                            }
+
+                            if matched_field.type_info.size == 4 {
+                                float_pointer := cast(float*, field_pointer);
+                                *float_pointer = number;
+                            }
+                            else {
+                                float64_pointer := cast(float64*, field_pointer);
+                                *float64_pointer = number;
+                            }
+                        }
+                    }
+                    case TypeKind.String; {
+                        // Handle null
+                        if text[i] == 'n' {
+                            i, value = get_next_json_value(text, i);
+                        }
+                        else {
+                            assert(text[i] == '"', "JSON string value does not begin with '\"'\n");
+                            i, value = get_json_string(text, i, true);
+                            string_pointer := cast(string*, field_pointer);
+                            *string_pointer = value;
+                        }
+                    }
+                    case TypeKind.Array; {
+                        // Handle null
+                        if text[i] == 'n' {
+                            i, value = get_next_json_value(text, i);
+                        }
+                        else {
+                            assert(text[i] == '[', "JSON array value does not begin with '['\n");
+                            // TODO Implement
+                            // Array: Start at the next [, use this function to get the next value and array_insert
+                        }
+                    }
+                    case TypeKind.Enum; {
+                        // Handle null
+                        if text[i] == 'n' {
+                            i, value = get_next_json_value(text, i);
+                        }
+                        else {
+                            assert(text[i] == '"', "JSON enum value does not begin with '\"'\n");
+                            i, value = get_json_string(text, i, true);
+
+                            enum_type := cast(EnumTypeInfo*, matched_field.type_info);
+                            raw_enum_value: s64;
+
+                            each enum_value in enum_type.values {
+                                if enum_value.name == value {
+                                    raw_enum_value = enum_value.value;
+                                    break;
+                                }
+                            }
+
+                            switch enum_type.size {
+                                case 1; {
+                                    s8_pointer := cast(s8*, field_pointer);
+                                    *s8_pointer = raw_enum_value;
+                                }
+                                case 2; {
+                                    s16_pointer := cast(s16*, field_pointer);
+                                    *s16_pointer = raw_enum_value;
+                                }
+                                case 1; {
+                                    s32_pointer := cast(s32*, field_pointer);
+                                    *s32_pointer = raw_enum_value;
+                                }
+                                default; {
+                                    s64_pointer := cast(s64*, field_pointer);
+                                    *s64_pointer = raw_enum_value;
+                                }
+                            }
+                        }
+                    }
+                    case TypeKind.Struct; {
+                        // Handle null
+                        if text[i] == 'n' {
+                            i, value = get_next_json_value(text, i);
+                        }
+                        else {
+                            assert(text[i] == '{', "JSON struct value does not begin with '{'\n");
+                            parse_json(text, i, field_pointer, cast(StructTypeInfo*, matched_field.type_info));
+                        }
+                    }
+                    default; {
+                        assert(false, format_string("Unable to parse type '%'\n", temp_allocate, matched_field.type_info.name));
+                    }
+                }
+            }
+            else {
+                char = text[i];
+                _: string;
+                if char == '"' {
+                    i, _ = get_json_string(text, i);
+                }
+                else if char == '[' {
+                    // TODO Implement skipping to the end of array
+                }
+                else if char == '{' {
+                    // TODO Implement skipping to the end of object
+                }
+                else {
+                    i, _ = get_next_json_value(text, i);
+                }
+            }
+        }
+
+        // Check for end of object after parsing
+        if in_object && text[i] == '}' {
+            break;
         }
 
         i++;
     }
 
-    return result;
+    return i;
+}
+
+// i should be the first index following the initial "
+u64, string get_json_string(string text, u64 i, bool replace = false) {
+    i++;
+    string_index := i;
+    escaping := false;
+    result: string = { data = text.data + i; }
+    while i < text.length {
+        char := text[i];
+        if escaping {
+            escaping = false;
+            if replace {
+                switch char {
+                    case 'b'; char = '\b';
+                    case 'f'; char = '\f';
+                    case 'n'; char = '\n';
+                    case 'r'; char = '\r';
+                    case 't'; char = '\t';
+                }
+
+                text[string_index++] = char;
+                result.length++;
+            }
+        }
+        else if char == '\\' {
+            escaping = true;
+        }
+        else if char == '"' {
+            i++;
+            break;
+        }
+        else {
+            if replace && string_index < i {
+                text[string_index++] = char;
+            }
+            result.length++;
+        }
+
+        i++;
+    }
+
+    return i, result;
+}
+
+u64, string get_next_json_value(string text, u64 i) {
+    result: string = { data = text.data + i; }
+
+    while i < text.length {
+        char := text[i];
+
+        if char == ',' || char == '}' || char == ']' break;
+
+        result.length++;
+        i++;
+    }
+
+    return i, result;
 }
 
 struct OpenAIModelResponse {
     object: string;
-    list: Array<OpenAIModel>;
+    data: Array<OpenAIModel>;
 }
 
 struct OpenAIModel {
