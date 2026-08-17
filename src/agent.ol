@@ -8,7 +8,7 @@ init_ssl() {
     assert(ssl_context != null, "Unable to initialize OpenSSL context");
 
     // test_stream();
-    // load_models();
+    load_models();
 }
 
 deinit_ssl() {
@@ -146,7 +146,7 @@ load_models() {
 
                 valid, index, response := parse_http_response(str);
                 if valid {
-                    print("Response: %\n", response);
+                    // print("Response: %\n", response);
                     models := parse_json<OpenAIModelResponse>(response.body);
                     print("Models: %\n", models);
                     break;
@@ -244,198 +244,14 @@ u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
             }
             i++;
 
-            while i < text.length && text[i] == ' ' {
+            while i < text.length && is_whitespace(text[i]) {
                 i++;
             }
 
             // Set the data on the matched field or skip to the next property
             if matched_field {
-                value: string;
                 field_pointer := pointer + matched_field.offset;
-                switch matched_field.type_info.type {
-                    case TypeKind.Boolean; {
-                        i, value = get_next_json_value(text, i);
-                        bool_pointer := cast(bool*, field_pointer);
-                        *bool_pointer = value == "true";
-                    }
-                    case TypeKind.Integer; {
-                        i, value = get_next_json_value(text, i);
-                        if value != "null" {
-                            negative := false;
-                            number: u64;
-                            if value.length {
-                                j := 0;
-                                if value[0] == '-' {
-                                    negative = true;
-                                    j++;
-                                }
-
-                                while j < value.length {
-                                    number *= 10;
-                                    number += value[j++] - '0';
-                                }
-                            }
-
-                            if negative {
-                                negative_number := cast(s64, number) * -1;
-                                switch matched_field.type_info.size {
-                                    case 1; {
-                                        s8_pointer := cast(s8*, field_pointer);
-                                        *s8_pointer = negative_number;
-                                    }
-                                    case 2; {
-                                        s16_pointer := cast(s16*, field_pointer);
-                                        *s16_pointer = negative_number;
-                                    }
-                                    case 1; {
-                                        s32_pointer := cast(s32*, field_pointer);
-                                        *s32_pointer = negative_number;
-                                    }
-                                    default; {
-                                        s64_pointer := cast(s64*, field_pointer);
-                                        *s64_pointer = negative_number;
-                                    }
-                                }
-                            }
-                            else {
-                                switch matched_field.type_info.size {
-                                    case 1; {
-                                        u8_pointer := cast(u8*, field_pointer);
-                                        *u8_pointer = number;
-                                    }
-                                    case 2; {
-                                        u16_pointer := cast(u16*, field_pointer);
-                                        *u16_pointer = number;
-                                    }
-                                    case 1; {
-                                        u32_pointer := cast(u32*, field_pointer);
-                                        *u32_pointer = number;
-                                    }
-                                    default; {
-                                        u64_pointer := cast(u64*, field_pointer);
-                                        *u64_pointer = number;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    case TypeKind.Float; {
-                        i, value = get_next_json_value(text, i);
-                        if value != "null" {
-                            negative := false;
-                            number: float64;
-                            if value.length {
-                                j := 0;
-                                if value[0] == '-' {
-                                    negative = true;
-                                    j++;
-                                }
-
-                                while j < value.length {
-                                    digit := value[j++];
-                                    if digit == '.' break;
-                                    number *= 10.0;
-                                    number += digit - '0';
-                                }
-
-                                factor: float64 = 0.1;
-                                while j < value.length {
-                                    digit := value[j++];
-                                    number += (digit - '0') * factor;
-                                    factor *= 0.1;
-                                }
-
-                                if negative {
-                                    number *= -1.0;
-                                }
-                            }
-
-                            if matched_field.type_info.size == 4 {
-                                float_pointer := cast(float*, field_pointer);
-                                *float_pointer = number;
-                            }
-                            else {
-                                float64_pointer := cast(float64*, field_pointer);
-                                *float64_pointer = number;
-                            }
-                        }
-                    }
-                    case TypeKind.String; {
-                        // Handle null
-                        if text[i] == 'n' {
-                            i, value = get_next_json_value(text, i);
-                        }
-                        else {
-                            assert(text[i] == '"', "JSON string value does not begin with '\"'\n");
-                            i, value = get_json_string(text, i, true);
-                            string_pointer := cast(string*, field_pointer);
-                            *string_pointer = value;
-                        }
-                    }
-                    case TypeKind.Array; {
-                        // Handle null
-                        if text[i] == 'n' {
-                            i, value = get_next_json_value(text, i);
-                        }
-                        else {
-                            assert(text[i] == '[', "JSON array value does not begin with '['\n");
-                            // TODO Implement
-                            // Array: Start at the next [, use this function to get the next value and array_insert
-                        }
-                    }
-                    case TypeKind.Enum; {
-                        // Handle null
-                        if text[i] == 'n' {
-                            i, value = get_next_json_value(text, i);
-                        }
-                        else {
-                            assert(text[i] == '"', "JSON enum value does not begin with '\"'\n");
-                            i, value = get_json_string(text, i, true);
-
-                            enum_type := cast(EnumTypeInfo*, matched_field.type_info);
-                            raw_enum_value: s64;
-
-                            each enum_value in enum_type.values {
-                                if enum_value.name == value {
-                                    raw_enum_value = enum_value.value;
-                                    break;
-                                }
-                            }
-
-                            switch enum_type.size {
-                                case 1; {
-                                    s8_pointer := cast(s8*, field_pointer);
-                                    *s8_pointer = raw_enum_value;
-                                }
-                                case 2; {
-                                    s16_pointer := cast(s16*, field_pointer);
-                                    *s16_pointer = raw_enum_value;
-                                }
-                                case 1; {
-                                    s32_pointer := cast(s32*, field_pointer);
-                                    *s32_pointer = raw_enum_value;
-                                }
-                                default; {
-                                    s64_pointer := cast(s64*, field_pointer);
-                                    *s64_pointer = raw_enum_value;
-                                }
-                            }
-                        }
-                    }
-                    case TypeKind.Struct; {
-                        // Handle null
-                        if text[i] == 'n' {
-                            i, value = get_next_json_value(text, i);
-                        }
-                        else {
-                            assert(text[i] == '{', "JSON struct value does not begin with '{'\n");
-                            parse_json(text, i, field_pointer, cast(StructTypeInfo*, matched_field.type_info));
-                        }
-                    }
-                    default; {
-                        assert(false, format_string("Unable to parse type '%'\n", temp_allocate, matched_field.type_info.name));
-                    }
-                }
+                i = parse_json_value(text, i, field_pointer, matched_field.type_info);
             }
             else {
                 char = text[i];
@@ -444,10 +260,42 @@ u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
                     i, _ = get_json_string(text, i);
                 }
                 else if char == '[' {
-                    // TODO Implement skipping to the end of array
+                    i++;
+                    depth := 0;
+                    while i < text.length {
+                        char = text[i];
+                        if char == '[' {
+                            depth++;
+                        }
+                        else if char == ']' {
+                            if depth == 0 break;
+                            depth--;
+                        }
+                        else if char == '"' {
+                            i, _ = get_json_string(text, i);
+                        }
+
+                        i++;
+                    }
                 }
                 else if char == '{' {
-                    // TODO Implement skipping to the end of object
+                    i++;
+                    depth := 0;
+                    while i < text.length {
+                        char = text[i];
+                        if char == '{' {
+                            depth++;
+                        }
+                        else if char == '}' {
+                            if depth == 0 break;
+                            depth--;
+                        }
+                        else if char == '"' {
+                            i, _ = get_json_string(text, i);
+                        }
+
+                        i++;
+                    }
                 }
                 else {
                     i, _ = get_next_json_value(text, i);
@@ -461,6 +309,236 @@ u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
         }
 
         i++;
+    }
+
+    return i;
+}
+
+u64 parse_json_value(string text, u64 i, void* pointer, TypeInfo* type_info) {
+    value: string;
+    switch type_info.type {
+        case TypeKind.Boolean; {
+            i, value = get_next_json_value(text, i);
+            bool_pointer := cast(bool*, pointer);
+            *bool_pointer = value == "true";
+        }
+        case TypeKind.Integer; {
+            i, value = get_next_json_value(text, i);
+            if value != "null" {
+                negative := false;
+                number: u64;
+                if value.length {
+                    j := 0;
+                    if value[0] == '-' {
+                        negative = true;
+                        j++;
+                    }
+
+                    while j < value.length {
+                        number *= 10;
+                        number += value[j++] - '0';
+                    }
+                }
+
+                if negative {
+                    negative_number := cast(s64, number) * -1;
+                    switch type_info.size {
+                        case 1; {
+                            s8_pointer := cast(s8*, pointer);
+                            *s8_pointer = negative_number;
+                        }
+                        case 2; {
+                            s16_pointer := cast(s16*, pointer);
+                            *s16_pointer = negative_number;
+                        }
+                        case 1; {
+                            s32_pointer := cast(s32*, pointer);
+                            *s32_pointer = negative_number;
+                        }
+                        default; {
+                            s64_pointer := cast(s64*, pointer);
+                            *s64_pointer = negative_number;
+                        }
+                    }
+                }
+                else {
+                    switch type_info.size {
+                        case 1; {
+                            u8_pointer := cast(u8*, pointer);
+                            *u8_pointer = number;
+                        }
+                        case 2; {
+                            u16_pointer := cast(u16*, pointer);
+                            *u16_pointer = number;
+                        }
+                        case 1; {
+                            u32_pointer := cast(u32*, pointer);
+                            *u32_pointer = number;
+                        }
+                        default; {
+                            u64_pointer := cast(u64*, pointer);
+                            *u64_pointer = number;
+                        }
+                    }
+                }
+            }
+        }
+        case TypeKind.Float; {
+            i, value = get_next_json_value(text, i);
+            if value != "null" {
+                negative := false;
+                number: float64;
+                if value.length {
+                    j := 0;
+                    if value[0] == '-' {
+                        negative = true;
+                        j++;
+                    }
+
+                    while j < value.length {
+                        digit := value[j++];
+                        if digit == '.' break;
+                        number *= 10.0;
+                        number += digit - '0';
+                    }
+
+                    factor: float64 = 0.1;
+                    while j < value.length {
+                        digit := value[j++];
+                        number += (digit - '0') * factor;
+                        factor *= 0.1;
+                    }
+
+                    if negative {
+                        number *= -1.0;
+                    }
+                }
+
+                if type_info.size == 4 {
+                    float_pointer := cast(float*, pointer);
+                    *float_pointer = number;
+                }
+                else {
+                    float64_pointer := cast(float64*, pointer);
+                    *float64_pointer = number;
+                }
+            }
+        }
+        case TypeKind.String; {
+            // Handle null
+            if text[i] == 'n' {
+                i, value = get_next_json_value(text, i);
+            }
+            else {
+                assert(text[i] == '"', "JSON string value does not begin with '\"'\n");
+                i, value = get_json_string(text, i, true);
+                string_pointer := cast(string*, pointer);
+                *string_pointer = value;
+            }
+        }
+        case TypeKind.Array; {
+            // Handle null
+            if text[i] == 'n' {
+                i, value = get_next_json_value(text, i);
+            }
+            else {
+                assert(text[i] == '[', "JSON array value does not begin with '['\n");
+                array_struct_type := cast(StructTypeInfo*, type_info);
+                element_pointer_type := cast(PointerTypeInfo*, array_struct_type.fields[1].type_info);
+                element_type := element_pointer_type.pointer_type;
+
+                element_buffer: Array<u8>[element_type.size];
+                i++;
+                length: s64;
+                data: void*;
+
+                while i < text.length {
+                    char := text[i];
+                    if char == ']' {
+                        i++;
+                        break;
+                    }
+                    else if !is_whitespace(char) && char != ',' {
+                        clear_memory(element_buffer.data, element_buffer.length);
+                        i = parse_json_value(text, i, element_buffer.data, element_type);
+
+                        if length % ARRAY_BLOCK_SIZE == 0 {
+                            new_blocks := length / ARRAY_BLOCK_SIZE + 1;
+
+                            if length {
+                                data = reallocate(data, length * element_type.size, element_type.size * new_blocks * ARRAY_BLOCK_SIZE);
+                            }
+                            else {
+                                data = allocate(element_type.size * new_blocks * ARRAY_BLOCK_SIZE);
+                            }
+                        }
+
+                        memory_copy(data + element_type.size * length, element_buffer.data, element_buffer.length);
+                        length++;
+                    }
+
+                    i++;
+                }
+
+                length_pointer := cast(s64*, pointer);
+                *length_pointer = length;
+
+                data_pointer := cast(void**, pointer + size_of(s64));
+                *data_pointer = data;
+            }
+        }
+        case TypeKind.Enum; {
+            // Handle null
+            if text[i] == 'n' {
+                i, value = get_next_json_value(text, i);
+            }
+            else {
+                assert(text[i] == '"', "JSON enum value does not begin with '\"'\n");
+                i, value = get_json_string(text, i, true);
+
+                enum_type := cast(EnumTypeInfo*, type_info);
+                raw_enum_value: s64;
+
+                each enum_value in enum_type.values {
+                    if enum_value.name == value {
+                        raw_enum_value = enum_value.value;
+                        break;
+                    }
+                }
+
+                switch enum_type.size {
+                    case 1; {
+                        s8_pointer := cast(s8*, pointer);
+                        *s8_pointer = raw_enum_value;
+                    }
+                    case 2; {
+                        s16_pointer := cast(s16*, pointer);
+                        *s16_pointer = raw_enum_value;
+                    }
+                    case 1; {
+                        s32_pointer := cast(s32*, pointer);
+                        *s32_pointer = raw_enum_value;
+                    }
+                    default; {
+                        s64_pointer := cast(s64*, pointer);
+                        *s64_pointer = raw_enum_value;
+                    }
+                }
+            }
+        }
+        case TypeKind.Struct; {
+            // Handle null
+            if text[i] == 'n' {
+                i, value = get_next_json_value(text, i);
+            }
+            else {
+                assert(text[i] == '{', "JSON struct value does not begin with '{'\n");
+                i = parse_json(text, i, pointer, cast(StructTypeInfo*, type_info));
+            }
+        }
+        default; {
+            assert(false, format_string("Unable to parse type '%'\n", temp_allocate, type_info.name));
+        }
     }
 
     return i;
@@ -498,8 +576,10 @@ u64, string get_json_string(string text, u64 i, bool replace = false) {
         }
         else {
             if replace && string_index < i {
-                text[string_index++] = char;
+                text[string_index] = char;
             }
+
+            string_index++;
             result.length++;
         }
 
