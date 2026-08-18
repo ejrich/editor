@@ -8,7 +8,7 @@ init_ssl() {
     assert(ssl_context != null, "Unable to initialize OpenSSL context");
 
     // test_stream();
-    load_models();
+    // load_models();
 }
 
 deinit_ssl() {
@@ -16,6 +16,18 @@ deinit_ssl() {
 }
 
 test_stream() {
+    responses_request: OpenAIResponseRequest = {
+        model = "google/gemma-4-26b-a4b-qat";
+        input = "Hello world";
+        stream = true;
+        reasoning = {
+            effort = OpenAIResponseRequestReasoningEffort.high;
+        }
+    }
+    body := serialize_json(responses_request);
+    print("Body: '%'\n", body);
+    exit_program(0);
+
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
         method = HTTPMethod.POST;
@@ -24,11 +36,13 @@ test_stream() {
         host = "evan-desktop.local";
         authorization = "Bearer sk-lm-Mukalw9D:ubAtA8TNXFzf7D5I6clm";
         content_type = "application/json";
-        body = "{ \"model\": \"google/gemma-4-26b-a4b-qat\", \"input\": \"hello world\", \"stream\": true }";
+        // body = "{ \"model\": \"google/gemma-4-26b-a4b-qat\", \"input\": \"hello world\", \"stream\": true }";
+        body = body;
+
     }
 
     r := serialize_http_request(request);
-    print("% %", r.length, r);
+    // print("% %", r.length, r);
 
     success, address_info := lookup_ip_address_tcp("evan-desktop.local", "1234");
     if success {
@@ -36,13 +50,15 @@ test_stream() {
 
         connected, socket := connect_socket(address_info);
         if connected {
-            print("Connected to socket\n", socket);
+            // print("Connected to socket\n", socket);
             sent := socket_send(socket, r.data, r.length);
-            print("Data sent %\n", sent);
+            // print("Data sent %\n", sent);
 
             response_parsed := false;
             receiving_chunks := true;
             carry := 0;
+            event := OpenAIResponseEvent.None;
+            response_id: string;
             while true {
                 length := socket_receive(socket, response_buffer.data + carry, response_buffer.length - carry);
                 str: string = { length = length + carry; data = response_buffer.data; }
@@ -50,9 +66,8 @@ test_stream() {
                 chunk_start := 0;
                 if !response_parsed {
                     valid, index, response := parse_http_response(str);
+                    // print("Response: %\n", response);
                     if valid {
-                        print("Response: %\n", response);
-
                         response_parsed = true;
                         carry = 0;
                         if response.transfer_encoding == "chunked" {
@@ -77,14 +92,14 @@ test_stream() {
                         valid, index, chunk_size := http_get_chunk_size(str, i);
                         if !valid {
                             memory_copy(response_buffer.data, str.data + i, carry);
-                            print("Unable to determine the chunk size\n");
+                            // print("Unable to determine the chunk size\n");
                             break;
                         }
 
                         if index + chunk_size >= str.length {
                             carry = str.length - i;
                             memory_copy(response_buffer.data, str.data + i, carry);
-                            print("Carrying chunk into the next buffer read\n");
+                            // print("Carrying chunk into the next buffer read\n");
                             break;
                         }
 
@@ -94,11 +109,84 @@ test_stream() {
                         if valid {
                             if chunk_size {
                                 chunk: string = { length = chunk_size; data = str.data + i; }
-                                print("Chunk Size: %, Data: '%'\n", chunk_size, chunk);
+                                if starts_with(chunk, "event: ") {
+                                    start := 7;
+                                    while start < chunk.length && is_whitespace(chunk[start]) {
+                                        start++;
+                                    }
+
+                                    event_name: string = { data = chunk.data + start; }
+                                    while start < chunk.length && !is_whitespace(chunk[start++]) {
+                                        event_name.length++;
+                                    }
+
+                                    name_parts := split_string(event_name, '.');
+                                    assert(name_parts.length >= 2);
+
+                                    if name_parts[1] == "created" {
+                                        event = OpenAIResponseEvent.Created;
+                                    }
+                                    else if name_parts[1] == "in_progress" {
+                                        event = OpenAIResponseEvent.InProgress;
+                                    }
+                                    else if name_parts[1] == "output_item" {
+                                        assert(name_parts.length >= 3);
+                                        if name_parts[2] == "added" {
+                                            event = OpenAIResponseEvent.OutputItemAdded;
+                                        }
+                                        else if name_parts[2] == "done" {
+                                            event = OpenAIResponseEvent.OutputItemDone;
+                                        }
+                                    }
+                                    else if name_parts[1] == "content_part" {
+                                        assert(name_parts.length >= 3);
+                                        if name_parts[2] == "added" {
+                                            event = OpenAIResponseEvent.ContentPartAdded;
+                                        }
+                                        else if name_parts[2] == "done" {
+                                            event = OpenAIResponseEvent.ContentPartDone;
+                                        }
+                                    }
+                                    else if name_parts[1] == "reasoning_text" {
+                                        assert(name_parts.length >= 3);
+                                        if name_parts[2] == "delta" {
+                                            event = OpenAIResponseEvent.ReasoningTextDelta;
+                                        }
+                                        else if name_parts[2] == "done" {
+                                            event = OpenAIResponseEvent.ReasoningTextDone;
+                                            print("\n\n");
+                                        }
+                                    }
+                                    else if name_parts[1] == "output_text" {
+                                        assert(name_parts.length >= 3);
+                                        if name_parts[2] == "delta" {
+                                            event = OpenAIResponseEvent.ReasoningTextDelta;
+                                        }
+                                        else if name_parts[2] == "done" {
+                                            event = OpenAIResponseEvent.ReasoningTextDone;
+                                        }
+                                    }
+                                    else if name_parts[1] == "completed" {
+                                        event = OpenAIResponseEvent.Completed;
+                                    }
+                                }
+                                else if starts_with(chunk, "data: ") {
+                                    switch event {
+                                        case OpenAIResponseEvent.Created; {
+                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                            allocate_strings(&event_data.response.id);
+                                            response_id = event_data.response.id;
+                                        }
+                                        case OpenAIResponseEvent.ReasoningTextDelta;
+                                        case OpenAIResponseEvent.OutputTextDelta; {
+                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                            print(event_data.delta);
+                                        }
+                                    }
+                                }
                                 i += chunk_size + 2;
                             }
                             else {
-                                print("End Chunk\n");
                                 has_end_chunk = true;
                                 break;
                             }
@@ -109,6 +197,8 @@ test_stream() {
                         break;
                 }
             }
+
+            // print("\n\nResponse ID: %\n", response_id);
 
             close_socket(socket);
         }
@@ -197,6 +287,162 @@ bool, u64, u64 http_get_chunk_size(string text, u64 i) {
 }
 
 response_buffer: Array<u8>[2000];
+
+
+string serialize_json<T>(T object) {
+    #assert type_of(T).type == TypeKind.Struct;
+
+    type := cast(StructTypeInfo*, type_of(T));
+
+    buffer: Array<u8>[1000];
+    string_buffer: StringBuffer = { buffer = buffer; }
+
+    serialize_json(&object, type, &string_buffer);
+
+    value: string;
+    if string_buffer.length > string_buffer.buffer.length {
+        value = { length = string_buffer.length; data = allocate(string_buffer.length); }
+        string_buffer.length = 0;
+        string_buffer.buffer.length = value.length;
+        string_buffer.buffer.data = value.data;
+        serialize_json(&object, type, &string_buffer);
+    }
+    else {
+        value = { length = string_buffer.length; data = allocate(string_buffer.length); }
+        memory_copy(value.data, buffer.data, string_buffer.length);
+    }
+
+    return value;
+}
+
+serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
+    switch type.type {
+        case TypeKind.Boolean; {
+            value := *cast(bool*, data);
+            if value add_to_string_buffer(buffer, "true");
+            else add_to_string_buffer(buffer, "false");
+        }
+        case TypeKind.Integer; {
+            type_info := cast(IntegerTypeInfo*, type);
+            format: IntFormat = { signed = type_info.signed; }
+
+            if type_info.signed {
+                switch type_info.size {
+                    case 1;  format.value.signed = *cast(s8*, data);
+                    case 2;  format.value.signed = *cast(s16*, data);
+                    case 4;  format.value.signed = *cast(s32*, data);
+                    default; format.value.signed = *cast(s64*, data);
+                }
+            }
+            else {
+                switch type_info.size {
+                    case 1;  format.value.unsigned = *cast(u8*, data);
+                    case 2;  format.value.unsigned = *cast(u16*, data);
+                    case 4;  format.value.unsigned = *cast(u32*, data);
+                    default; format.value.unsigned = *cast(u64*, data);
+                }
+            }
+
+            write_integer(buffer, format);
+        }
+        case TypeKind.Float; {
+            format: FloatFormat;
+            if type.size == 4 format.value = *cast(float*, data);
+            else format.value = *cast(float64*, data);
+
+            write_float(buffer, format);
+        }
+        case TypeKind.String; {
+            value := *cast(string*, data);
+
+            if string_is_empty(value) {
+                add_to_string_buffer(buffer, "null");
+            }
+            else {
+                add_char_to_string_buffer(buffer, '"');
+                each i in value.length {
+                    char := value[i];
+                    switch char {
+                        case '\b'; add_to_string_buffer(buffer, "\\b");
+                        case '\f'; add_to_string_buffer(buffer, "\\f");
+                        case '\n'; add_to_string_buffer(buffer, "\\n");
+                        case '\r'; add_to_string_buffer(buffer, "\\r");
+                        case '\t'; add_to_string_buffer(buffer, "\\t");
+                        case '"';  add_to_string_buffer(buffer, "\\\"");
+                        case '\\'; add_to_string_buffer(buffer, "\\\\");
+                        default;   add_char_to_string_buffer(buffer, char);
+                    }
+                }
+                add_char_to_string_buffer(buffer, '"');
+            }
+        }
+        case TypeKind.Array; {
+            type_info := cast(StructTypeInfo*, type);
+            pointer_field := type_info.fields[1];
+            pointer_type_info := cast(PointerTypeInfo*, pointer_field.type_info);
+            element_type := pointer_type_info.pointer_type;
+
+            array := cast(Array<void*>*, data);
+            // TODO Implement for json
+            write_array_to_buffer(buffer, element_type, array.data, array.length);
+        }
+        case TypeKind.Enum; {
+            type_info := cast(EnumTypeInfo*, type);
+            value: s64;
+            switch type_info.size {
+                case 1;  value = *cast(s8*, data);
+                case 2;  value = *cast(s16*, data);
+                case 4;  value = *cast(s32*, data);
+                default; value = *cast(s64*, data);
+            }
+
+            found := false;
+            each enum_value in type_info.values {
+                if enum_value.value == value {
+                    add_char_to_string_buffer(buffer, '"');
+                    add_to_string_buffer(buffer, enum_value.name);
+                    add_char_to_string_buffer(buffer, '"');
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                add_to_string_buffer(buffer, "null");
+            }
+        }
+        case TypeKind.Struct; {
+            type_info := cast(StructTypeInfo*, type);
+            serialize_json_struct(data, type_info, buffer);
+        }
+        default; {
+            assert(false, format_string("Unable to serialize type '%'\n", temp_allocate, type.name));
+        }
+    }
+}
+
+serialize_json_struct(void* data, StructTypeInfo* type_info, StringBuffer* buffer) {
+    add_char_to_string_buffer(buffer, '{');
+
+    length := type_info.fields.length;
+    each field, i in type_info.fields {
+        add_char_to_string_buffer(buffer, '"');
+        add_to_string_buffer(buffer, field.name);
+        add_to_string_buffer(buffer, "\":");
+
+        element_data := data + field.offset;
+        serialize_json(element_data, field.type_info, buffer);
+
+        if i == length - 1
+            add_char_to_string_buffer(buffer, '}');
+        else
+            add_char_to_string_buffer(buffer, ',');
+    }
+
+    if length == 0 {
+        add_char_to_string_buffer(buffer, '}');
+    }
+}
 
 
 T parse_json<T>(string text, u64 i = 0) {
@@ -621,8 +867,8 @@ struct OpenAIResponseRequest {
     model: string;
     input: string; // TODO Add support for input arrays
     instructions: string;
-    max_output_tokens: u32;
-    max_tool_calls: u32;
+    // max_output_tokens: u32;
+    // max_tool_calls: u32;
     previous_response_id: string;
     reasoning: OpenAIResponseRequestReasoning;
     stream: bool;
@@ -696,7 +942,7 @@ struct OpenAIResponseOutput {
     // Function call fields
     name: string;
     call_id: string;
-    arguments: Any; // TODO Figure this out
+    // arguments: Any; // TODO Figure this out
 }
 
 enum OpenAIResponseOutputType {
@@ -742,6 +988,21 @@ struct OpenAIResponseUsageInputDetails {
 
 struct OpenAIResponseUsageOutputDetails {
     reasoning_tokens: u32;
+}
+
+enum OpenAIResponseEvent {
+    None;
+    Created;
+    InProgress;
+    OutputItemAdded;
+    OutputItemDone;
+    ContentPartAdded;
+    ContentPartDone;
+    ReasoningTextDelta;
+    ReasoningTextDone;
+    OutputTextDelta;
+    OutputTextDone;
+    Completed;
 }
 
 struct OpenAIResponseEventData {
