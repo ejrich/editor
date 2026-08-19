@@ -29,14 +29,26 @@ test_stream() {
                 type = "function";
                 name = "do_something";
                 description = "Does something";
-                // strict: bool;
-                // parameters: JsonSchema;
+                strict = true;
+                parameters = {
+                    type = "object";
+                    properties = [
+                        {
+                            name = "foo";
+                            type = JsonSchemaPropertyType.string;
+                            description = "An argument";
+                            enum_names = ["test"]
+                        }
+                    ]
+                    required = ["foo"]
+                    additionalProperties = false;
+                }
             }
         ]
     }
     body := serialize_json(responses_request);
     print("Body: '%'\n", body);
-    // exit_program(0);
+    exit_program(0);
 
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
@@ -79,7 +91,7 @@ test_stream() {
                 chunk_start := 0;
                 if !response_parsed {
                     valid, index, response := parse_http_response(str);
-                    // print("Response: %\n", response);
+                    print("Response: %\n", response);
                     if valid {
                         response_parsed = true;
                         carry = 0;
@@ -217,6 +229,7 @@ test_stream() {
                                                 call_id = call_id;
                                                 arguments = event_data.arguments;
                                             }
+                                            print("%\n", function_call);
                                             array_insert(&function_calls, function_call, allocate, reallocate);
                                         }
                                     }
@@ -353,6 +366,51 @@ string serialize_json<T>(T object) {
 }
 
 serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
+    if type == type_of(JsonSchema) {
+        json_schema := *cast(JsonSchema*, data);
+        add_char_to_string_buffer(buffer, '{');
+
+        add_to_string_buffer(buffer, "\"type\":\"");
+        add_to_string_buffer(buffer, json_schema.type);
+
+        add_to_string_buffer(buffer, "\",\"required\":");
+        serialize_json_array(&json_schema.required, type_of(string), buffer);
+
+        add_to_string_buffer(buffer, "\",\"additionalProperties\":");
+        if json_schema.additionalProperties
+             add_to_string_buffer(buffer, "true");
+        else
+             add_to_string_buffer(buffer, "false");
+
+        add_to_string_buffer(buffer, ",\"properties\":{");
+        length := json_schema.properties.length;
+        each property, i in json_schema.properties {
+            add_char_to_string_buffer(buffer, '"');
+            add_to_string_buffer(buffer, property.name);
+            add_to_string_buffer(buffer, "\":{\"type\":");
+
+            serialize_json_enum(&property.type, cast(EnumTypeInfo*, type_of(JsonSchemaPropertyType)), buffer);
+
+            if !string_is_empty(property.description) {
+                add_to_string_buffer(buffer, ",\"description\":");
+                serialize_json_string(property.description, buffer);
+            }
+
+            if property.enum_names.length {
+                add_to_string_buffer(buffer, ",\"enum\":");
+                serialize_json_array(&property.enum_names, type_of(JsonSchemaPropertyType), buffer);
+            }
+
+            add_char_to_string_buffer(buffer, '}');
+            if i < length - 1
+                add_char_to_string_buffer(buffer, ',');
+        }
+
+        add_char_to_string_buffer(buffer, '}');
+        add_char_to_string_buffer(buffer, '}');
+        return;
+    }
+
     switch type.type {
         case TypeKind.Boolean; {
             value := *cast(bool*, data);
@@ -391,27 +449,7 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
         }
         case TypeKind.String; {
             value := *cast(string*, data);
-
-            if string_is_empty(value) {
-                add_to_string_buffer(buffer, "null");
-            }
-            else {
-                add_char_to_string_buffer(buffer, '"');
-                each i in value.length {
-                    char := value[i];
-                    switch char {
-                        case '\b'; add_to_string_buffer(buffer, "\\b");
-                        case '\f'; add_to_string_buffer(buffer, "\\f");
-                        case '\n'; add_to_string_buffer(buffer, "\\n");
-                        case '\r'; add_to_string_buffer(buffer, "\\r");
-                        case '\t'; add_to_string_buffer(buffer, "\\t");
-                        case '"';  add_to_string_buffer(buffer, "\\\"");
-                        case '\\'; add_to_string_buffer(buffer, "\\\\");
-                        default;   add_char_to_string_buffer(buffer, char);
-                    }
-                }
-                add_char_to_string_buffer(buffer, '"');
-            }
+            serialize_json_string(value, buffer);
         }
         case TypeKind.Array; {
             type_info := cast(StructTypeInfo*, type);
@@ -419,48 +457,11 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
             pointer_type_info := cast(PointerTypeInfo*, pointer_field.type_info);
             element_type := pointer_type_info.pointer_type;
 
-            array := cast(Array<void*>*, data);
-            if array.length == 0 {
-                add_to_string_buffer(buffer, "null");
-            }
-            else {
-                add_char_to_string_buffer(buffer, '[');
-
-                each i in array.length {
-                    element_data := array.data + element_type.size * i;
-                    serialize_json(element_data, element_type, buffer);
-
-                    if i == array.length - 1
-                        add_char_to_string_buffer(buffer, ']');
-                    else
-                        add_char_to_string_buffer(buffer, ',');
-                }
-            }
+            serialize_json_array(data, element_type, buffer);
         }
         case TypeKind.Enum; {
             type_info := cast(EnumTypeInfo*, type);
-            value: s64;
-            switch type_info.size {
-                case 1;  value = *cast(s8*, data);
-                case 2;  value = *cast(s16*, data);
-                case 4;  value = *cast(s32*, data);
-                default; value = *cast(s64*, data);
-            }
-
-            found := false;
-            each enum_value in type_info.values {
-                if enum_value.value == value {
-                    add_char_to_string_buffer(buffer, '"');
-                    add_to_string_buffer(buffer, enum_value.name);
-                    add_char_to_string_buffer(buffer, '"');
-                    found = true;
-                    break;
-                }
-            }
-
-            if !found {
-                add_to_string_buffer(buffer, "null");
-            }
+            serialize_json_enum(data, type_info, buffer);
         }
         case TypeKind.Struct; {
             type_info := cast(StructTypeInfo*, type);
@@ -488,6 +489,74 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
         default; {
             assert(false, format_string("Unable to serialize type '%'\n", temp_allocate, type.name));
         }
+    }
+}
+
+serialize_json_string(string value, StringBuffer* buffer) {
+    if string_is_empty(value) {
+        add_to_string_buffer(buffer, "null");
+    }
+    else {
+        add_char_to_string_buffer(buffer, '"');
+        each i in value.length {
+            char := value[i];
+            switch char {
+                case '\b'; add_to_string_buffer(buffer, "\\b");
+                case '\f'; add_to_string_buffer(buffer, "\\f");
+                case '\n'; add_to_string_buffer(buffer, "\\n");
+                case '\r'; add_to_string_buffer(buffer, "\\r");
+                case '\t'; add_to_string_buffer(buffer, "\\t");
+                case '"';  add_to_string_buffer(buffer, "\\\"");
+                case '\\'; add_to_string_buffer(buffer, "\\\\");
+                default;   add_char_to_string_buffer(buffer, char);
+            }
+        }
+        add_char_to_string_buffer(buffer, '"');
+    }
+}
+
+serialize_json_enum(void* data, EnumTypeInfo* type_info, StringBuffer* buffer) {
+    value: s64;
+    switch type_info.size {
+        case 1;  value = *cast(s8*, data);
+        case 2;  value = *cast(s16*, data);
+        case 4;  value = *cast(s32*, data);
+        default; value = *cast(s64*, data);
+    }
+
+    found := false;
+    each enum_value in type_info.values {
+        if enum_value.value == value {
+            add_char_to_string_buffer(buffer, '"');
+            add_to_string_buffer(buffer, enum_value.name);
+            add_char_to_string_buffer(buffer, '"');
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        add_to_string_buffer(buffer, "null");
+    }
+}
+
+serialize_json_array(void* data, TypeInfo* element_type, StringBuffer* buffer) {
+    array := cast(Array<void*>*, data);
+    if array.length == 0 {
+        add_to_string_buffer(buffer, "null");
+    }
+    else {
+        add_char_to_string_buffer(buffer, '[');
+
+        each i in array.length {
+            element_data := array.data + element_type.size * i;
+            serialize_json(element_data, element_type, buffer);
+
+            if i < array.length - 1
+                add_char_to_string_buffer(buffer, ',');
+        }
+
+        add_char_to_string_buffer(buffer, ']');
     }
 }
 
@@ -948,7 +1017,7 @@ struct OpenAIResponseRequestTool {
     name: string;
     description: string;
     strict: bool;
-    // parameters: JsonSchema;
+    parameters: JsonSchema;
 }
 
 struct JsonSchema {
