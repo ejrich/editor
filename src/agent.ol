@@ -18,12 +18,22 @@ deinit_ssl() {
 test_stream() {
     responses_request: OpenAIResponseRequest = {
         model = "google/gemma-4-26b-a4b-qat";
+        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
         // input = "Hello world";
-        input = "Call the do_something tool";
+        // input = "What is the derivative of x^2, please explain how this works.";
+        input = "Call the do_something tool with a random string as the argument";
+        // input_array = [
+        //     {
+        //         type = OpenAIResponseOutputType.function_call_output;
+        //         call_id = "call_2690955752160002";
+        //         output = "foobar";
+        //     }
+        // ]
+        // previous_response_id = "resp_86f6dfb0910bc9a9ab8a36f91e73fa8d8eabdb75063ea7fa";
         stream = true;
-        reasoning = {
-            effort = OpenAIResponseRequestReasoningEffort.high;
-        }
+        // reasoning = {
+        //     effort = OpenAIResponseRequestReasoningEffort.high;
+        // }
         tools = [
             {
                 type = "function";
@@ -34,21 +44,26 @@ test_stream() {
                     type = "object";
                     properties = [
                         {
-                            name = "foo";
+                            name = "arg";
                             type = JsonSchemaPropertyType.string;
                             description = "An argument";
-                            enum_names = ["test"]
+                            // enum_names = ["test"]
+                            enum_names = []
                         }
                     ]
-                    required = ["foo"]
+                    required = ["arg"]
                     additionalProperties = false;
                 }
             }
         ]
     }
+
+    // print("Request: '%'\n", responses_request);
+    // exit_program(0);
+
     body := serialize_json(responses_request);
     print("Body: '%'\n", body);
-    exit_program(0);
+    // exit_program(0);
 
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
@@ -85,13 +100,26 @@ test_stream() {
             name: string;
             call_id: string;
             while true {
+                if carry == response_buffer.length {
+                    previous_length := response_buffer.length;
+                    new_length := previous_length + 1000;
+
+                    new_buffer := allocate(new_length);
+                    memory_copy(new_buffer, response_buffer.data, previous_length);
+                    free_allocation(response_buffer.data);
+
+                    response_buffer.data = new_buffer;
+                    response_buffer.length = new_length;
+                }
+
+                // print("Carry: %\n", carry);
                 length := socket_receive(socket, response_buffer.data + carry, response_buffer.length - carry);
                 str: string = { length = length + carry; data = response_buffer.data; }
 
                 chunk_start := 0;
                 if !response_parsed {
                     valid, index, response := parse_http_response(str);
-                    print("Response: %\n", response);
+                    // print("Response: %\n", response);
                     if valid {
                         response_parsed = true;
                         carry = 0;
@@ -248,7 +276,7 @@ test_stream() {
                 }
             }
 
-            // print("\n\nResponse ID: %\n", response_id);
+            print("\n\nResponse ID: %\n", response_id);
 
             close_socket(socket);
         }
@@ -336,7 +364,9 @@ bool, u64, u64 http_get_chunk_size(string text, u64 i) {
     return false, i, 0;
 }
 
-response_buffer: Array<u8>[2000];
+// response_buffer: Array<u8>[2000];
+// response_buffer: Array<u8>[5000];
+response_buffer: Array<u8>;
 
 
 string serialize_json<T>(T object) {
@@ -376,7 +406,7 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
         add_to_string_buffer(buffer, "\",\"required\":");
         serialize_json_array(&json_schema.required, type_of(string), buffer);
 
-        add_to_string_buffer(buffer, "\",\"additionalProperties\":");
+        add_to_string_buffer(buffer, ",\"additionalProperties\":");
         if json_schema.additionalProperties
              add_to_string_buffer(buffer, "true");
         else
@@ -468,28 +498,65 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
             add_char_to_string_buffer(buffer, '{');
 
             length := type_info.fields.length;
+            serialized_field_count := 0;
             each field, i in type_info.fields {
+                field_data := data + field.offset;
+                if !should_serialize_json_struct_field(field_data, field.type_info) continue;
+
+                if serialized_field_count++
+                    add_char_to_string_buffer(buffer, ',');
+
                 add_char_to_string_buffer(buffer, '"');
-                add_to_string_buffer(buffer, field.name);
+                if field.attributes.length {
+                    add_to_string_buffer(buffer, field.attributes[0]);
+                }
+                else {
+                    add_to_string_buffer(buffer, field.name);
+                }
                 add_to_string_buffer(buffer, "\":");
 
-                field_data := data + field.offset;
                 serialize_json(field_data, field.type_info, buffer);
-
-                if i == length - 1
-                    add_char_to_string_buffer(buffer, '}');
-                else
-                    add_char_to_string_buffer(buffer, ',');
             }
 
-            if length == 0 {
-                add_char_to_string_buffer(buffer, '}');
-            }
+            add_char_to_string_buffer(buffer, '}');
         }
         default; {
             assert(false, format_string("Unable to serialize type '%'\n", temp_allocate, type.name));
         }
     }
+}
+
+bool should_serialize_json_struct_field(void* data, TypeInfo* type) {
+    switch type.type {
+        case TypeKind.Boolean;
+        case TypeKind.Integer;
+        case TypeKind.Float;
+        case TypeKind.Struct;
+            return true;
+        case TypeKind.String; {
+            value := *cast(string*, data);
+            return !string_is_empty(value);
+        }
+        case TypeKind.Array; {
+            value := *cast(Array<void*>*, data);
+            return value.length > 0;
+        }
+        case TypeKind.Enum; {
+            value: s64;
+            switch type.size {
+                case 1;  value = *cast(s8*, data);
+                case 2;  value = *cast(s16*, data);
+                case 4;  value = *cast(s32*, data);
+                default; value = *cast(s64*, data);
+            }
+            return value != 0;
+        }
+        default; {
+            assert(false, format_string("Unable to serialize type '%'\n", temp_allocate, type.name));
+        }
+    }
+
+    return false;
 }
 
 serialize_json_string(string value, StringBuffer* buffer) {
@@ -982,6 +1049,8 @@ struct OpenAIModel {
 struct OpenAIResponseRequest {
     model: string;
     input: string; // TODO Add support for input arrays
+    [input]
+    input_array: Array<OpenAIResponseOutput>;
     instructions: string;
     // max_output_tokens: u32;
     // max_tool_calls: u32;
@@ -997,7 +1066,7 @@ struct OpenAIResponseRequestReasoning {
 }
 
 enum OpenAIResponseRequestReasoningEffort {
-    none;
+    none = 1;
     minimal;
     low;
     medium;
@@ -1007,8 +1076,8 @@ enum OpenAIResponseRequestReasoningEffort {
 }
 
 enum OpenAIResponseRequestToolChoice {
+    none = 1;
     auto;
-    none;
     required;
 }
 
@@ -1035,8 +1104,7 @@ struct JsonSchemaProperty {
 }
 
 enum JsonSchemaPropertyType {
-    None;
-    array;
+    array = 1;
     boolean;
     integer;
     number;
@@ -1076,24 +1144,26 @@ struct OpenAIResponseOutput {
     name: string;
     call_id: string;
     arguments: string;
+
+    // Function call output fields
+    output: string;
 }
 
 enum OpenAIResponseOutputType {
-    None;
-    message;
+    message = 1;
     reasoning;
     function_call;
     function_call_output;
 }
 
 enum OpenAIResponseOutputStatus {
-    in_progress;
+    in_progress = 1;
     completed;
     incomplete;
 }
 
 enum OpenAIResponseStatus {
-    in_progress;
+    in_progress = 1;
     queued;
     failed;
     cancelled;
