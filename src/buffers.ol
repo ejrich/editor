@@ -195,7 +195,10 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
         // Render the file text
         render_line_state := init_render_line_state(&buffer);
         while line != null && available_lines_to_render > 0 {
-            if line_number > start_line {
+            if (line.flags & BufferLineFlags.Thinking) == BufferLineFlags.Thinking && !workspace.agent_data.display_thinking {
+                // Don't render thinking when disabled
+            }
+            else if line_number > start_line {
                 cursor, visual_start, visual_end := -1;
 
                 if window == get_terminal_window(workspace) &&
@@ -498,6 +501,9 @@ switch_to_buffer(SelectedWindow window) {
         assert(original_window != null && new_window != null);
 
         if !new_window.displayed {
+            if original_window.buffer_window.static_buffer {
+                return;
+            }
             if new_window.buffer_window == null
                 new_window.buffer_window = copy_buffer_window_stack(original_window.buffer_window);
             new_window.displayed = true;
@@ -1374,10 +1380,12 @@ end_insert_mode() {
     record_insert_mode_change(buffer, buffer_window.line, buffer_window.cursor);
 }
 
-BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes) {
+BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_escape_codes, BufferLineFlags line_flags = BufferLineFlags.None) {
     line := get_buffer_line(buffer, buffer.line_count - 1);
     text: string;
     tab := create_empty_string(settings.tab_size);
+
+    line.flags = line_flags;
 
     each i in value.length {
         char := value[i];
@@ -1454,6 +1462,7 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
             }
 
             line = add_new_line(null, buffer, line, false, false);
+            line.flags = line_flags;
             calculate_line_digits(buffer);
 
             text = { length = 0; data = value.data + i + 1; }
@@ -4105,12 +4114,19 @@ struct BufferLine {
     allocated: bool;
     arena_index: u8;
     index: u16;
-    length: u32;
+    flags: BufferLineFlags;
+    length: u64;
     data: string;
     previous: BufferLine*;
     next: BufferLine*;
     parent: BufferLine*;
     child: BufferLine*;
+}
+
+[flags]
+enum BufferLineFlags : u16 {
+    None     = 0x0;
+    Thinking = 0x1;
 }
 
 struct EscapeCode {

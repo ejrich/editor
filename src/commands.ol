@@ -204,6 +204,54 @@ string, bool print_working_directory() {
     return workspace.directory, false;
 }
 
+[command, agent]
+string, bool open_agent_window() {
+    workspace := get_workspace();
+
+    editor_window: EditorWindow*;
+    switch workspace.current_window {
+        case SelectedWindow.Left; {
+            editor_window = &workspace.left_window;
+        }
+        case SelectedWindow.Right; {
+            editor_window = &workspace.right_window;
+        }
+    }
+
+    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+        editor_window.buffer_window = editor_window.buffer_window.next;
+    }
+
+    workspace.agent_data.buffer_window.next = workspace.left_window.buffer_window;
+    editor_window.buffer_window = &workspace.agent_data.buffer_window;
+
+    return empty_string, false;
+}
+
+[command, agent_message]
+string, bool send_agent_message_command(string message) {
+    allocate_strings(&message);
+    workspace := get_workspace();
+
+    data: JobData;
+    data.multiple = {
+        value1 = message;
+        value2 = workspace;
+    }
+    queue_work(&low_priority_queue, send_agent_message, data);
+
+    return empty_string, false;
+}
+
+[command, thinking]
+string, bool toggle_thinking() {
+    workspace := get_workspace();
+    workspace.agent_data.display_thinking = !workspace.agent_data.display_thinking;
+    // TODO Adjust line/start_line
+
+    return empty_string, false;
+}
+
 start_command_mode() {
     clear_buffer(CommandMode.Command);
 }

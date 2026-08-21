@@ -16,6 +16,7 @@ struct Workspace {
     excluded_extensions: Array<string>;
     command_keybinds: Array<CommandKeybind>;
     sub_directories: Array<Directory*>;
+    agent_data: AgentData;
 }
 
 init_workspaces() {
@@ -26,6 +27,7 @@ init_workspaces() {
         workspace.run_data.buffer_window.static_buffer = &workspace.run_data.buffer;
         workspace.terminal_data.buffer_window.static_buffer = &workspace.terminal_data.buffer;
         workspace.debugger_data.buffer_window.static_buffer = &workspace.debugger_data.buffer;
+        workspace.agent_data.buffer_window.static_buffer = &workspace.agent_data.buffer;
 
         create_semaphore(&workspace.run_data.run_mutex, initial_value = 1);
         create_semaphore(&workspace.debugger_data.send_mutex, initial_value = 1);
@@ -230,6 +232,7 @@ init_workspace(Workspace* workspace) {
 
     load_local_settings(workspace);
     clear_terminal_buffer_window(workspace);
+    clear_buffer_and_window(&workspace.agent_data.buffer, &workspace.agent_data.buffer_window);
     workspace.terminal_data.directory = workspace.directory;
 }
 
