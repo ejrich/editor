@@ -451,14 +451,14 @@ u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTe
         line_count, x, y = render_line_with_cursor_and_state(font_texture, state, line, line_start, x_start, x, y, line_number, cursor, render_cursor, max_x, max_chars_per_line, lines_available, visual_start, visual_end, max_line_chars);
     }
     else {
-        line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars);
+        line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, max_line_chars = max_line_chars, flags = line.flags);
 
         if line.child {
             child := line.child;
             index := text.length;
             while child {
                 text = { length = child.length; data = child.data.data; }
-                line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars);
+                line_count, x, y = render_line_with_cursor(font_texture, text, line_start, x_start, x, y, cursor, render_cursor, max_x, lines_available, visual_start, visual_end, line_count, index, max_line_chars, line.flags);
 
                 index += child.length;
                 child = child.next;
@@ -469,11 +469,19 @@ u32 render_line(RenderLineState* state, BufferLine* line, u32 line_start, FontTe
     return line_count;
 }
 
-u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, u32 line_start, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1) {
+u32, float, float render_line_with_cursor(FontTexture* font_texture, string text, u32 line_start, float x_start, float x, float y, int cursor, bool render_cursor, float max_x, u32 lines_available, int visual_start = -1, int visual_end = -1, u32 line_count = 1, u32 index = 0, int max_line_chars = -1, BufferLineFlags flags = BufferLineFlags.None) {
     // Create the glyphs for the text string
     glyphs := font_texture.glyphs;
     quad_data: Array<QuadInstanceData>[text.length];
     length := 0;
+    text_color := appearance.font_color;
+
+    if flags == BufferLineFlags.Thinking {
+        text_color = appearance.syntax_colors[cast(u8, SyntaxColor.Purple)];
+    }
+    else if flags == BufferLineFlags.Message {
+        text_color = appearance.syntax_colors[cast(u8, SyntaxColor.Yellow)];
+    }
 
     each i in text.length {
         if max_line_chars != -1 && index >= max_line_chars {
@@ -489,7 +497,7 @@ u32, float, float render_line_with_cursor(FontTexture* font_texture, string text
             line_count++;
         }
 
-        font_color := appearance.font_color;
+        font_color := text_color;
         if index == cursor && render_cursor {
             font_color = appearance.cursor_font_color;
             draw_cursor(x, y, appearance.cursor_color);

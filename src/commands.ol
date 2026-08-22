@@ -246,8 +246,16 @@ string, bool send_agent_message_command(string message) {
 [command, thinking]
 string, bool toggle_thinking() {
     workspace := get_workspace();
-    workspace.agent_data.display_thinking = !workspace.agent_data.display_thinking;
+
     // TODO Adjust line/start_line
+    if workspace.agent_data.display_thinking {
+
+    }
+    else {
+
+    }
+
+    workspace.agent_data.display_thinking = !workspace.agent_data.display_thinking;
 
     return empty_string, false;
 }

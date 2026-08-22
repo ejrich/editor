@@ -194,11 +194,21 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 
         // Render the file text
         render_line_state := init_render_line_state(&buffer);
+        thinking_count := 0;
         while line != null && available_lines_to_render > 0 {
             if (line.flags & BufferLineFlags.Thinking) == BufferLineFlags.Thinking && !workspace.agent_data.display_thinking {
                 // Don't render thinking when disabled
+                thinking_count++;
             }
             else if line_number > start_line {
+                if thinking_count {
+                    thinking_count_x := x + (buffer.line_count_digits  + 1) * global_font_config.quad_advance;
+                    render_text(settings.font_size, thinking_count_x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Purple)], vec4(), "% lines of thinking", thinking_count);
+                    y -= global_font_config.line_height;
+                    available_lines_to_render--;
+                    thinking_count = 0;
+                }
+
                 cursor, visual_start, visual_end := -1;
 
                 if window == get_terminal_window(workspace) &&
@@ -294,11 +304,18 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                 available_lines_to_render -= lines;
             }
             else {
+                thinking_count = 0;
                 evaluate_line_without_rendering(&render_line_state, line, line_number);
             }
 
             line = line.next;
             line_number++;
+        }
+
+        if thinking_count > 0 && available_lines_to_render > 0 {
+            thinking_count_x := x + (buffer.line_count_digits  + 1) * global_font_config.quad_advance;
+            render_text(settings.font_size, thinking_count_x, y, appearance.syntax_colors[cast(u8, SyntaxColor.Purple)], vec4(), "% lines of thinking", thinking_count);
+            thinking_count = 0;
         }
     }
 
@@ -4127,6 +4144,7 @@ struct BufferLine {
 enum BufferLineFlags : u16 {
     None     = 0x0;
     Thinking = 0x1;
+    Message  = 0x2;
 }
 
 struct EscapeCode {
@@ -4354,6 +4372,11 @@ u32, u32 get_current_position() {
 }
 
 adjust_start_line(BufferWindow* window) {
+    workspace := get_workspace();
+    adjust_start_line(window, workspace);
+}
+
+adjust_start_line(BufferWindow* window, Workspace* workspace, bool skip_thinking = false) {
     if window == null return;
 
     if window.buffer_index < 0 && window.static_buffer == null {
@@ -4362,7 +4385,7 @@ adjust_start_line(BufferWindow* window) {
         return;
     }
 
-    max_lines, scroll_offset := determine_max_lines_and_scroll_offset(window);
+    max_lines, scroll_offset := determine_max_lines_and_scroll_offset(window, workspace);
     if scroll_offset > max_lines {
         window.start_line = window.line;
         return;
@@ -4372,7 +4395,6 @@ adjust_start_line(BufferWindow* window) {
 
     buffer := window.static_buffer;
     if buffer == null {
-        workspace := get_workspace();
         buffer = &workspace.buffers[window.buffer_index];
     }
 
@@ -4385,8 +4407,9 @@ adjust_start_line(BufferWindow* window) {
 
     if starting_line == null return;
 
+    // TODO Implement skip_thinking
     current_line := starting_line;
-    max_chars := calculate_max_chars_per_line(window, buffer.line_count_digits);
+    max_chars := calculate_max_chars_per_line(window, workspace, buffer.line_count_digits);
     rendered_lines: u32;
     while current_line != null {
         if line_number == window.line {
@@ -5162,7 +5185,10 @@ u32 get_max_chars_per_line(BufferWindow* window) {
 
 u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {
     workspace := get_workspace();
+    return calculate_max_chars_per_line(window, workspace, digits);
+}
 
+u32 calculate_max_chars_per_line(BufferWindow* window, Workspace* workspace, u32 digits) {
     if window == get_debugger_window(workspace) {
         return global_font_config.max_chars_per_line - digits - 1;
     }
@@ -5177,6 +5203,10 @@ u32 calculate_max_chars_per_line(BufferWindow* window, u32 digits) {
 
 u32, u32 determine_max_lines_and_scroll_offset(BufferWindow* buffer_window) {
     workspace := get_workspace();
+    return determine_max_lines_and_scroll_offset(buffer_window, workspace);
+}
+
+u32, u32 determine_max_lines_and_scroll_offset(BufferWindow* buffer_window, Workspace* workspace) {
     debugger_window := get_debugger_window(workspace);
     run_window := get_run_window(workspace);
     terminal_window := get_terminal_window(workspace);
