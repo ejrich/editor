@@ -34,6 +34,9 @@ send_agent_message(int thread, JobData data) {
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
 
+    add_text_to_end_of_buffer(&workspace.agent_data.buffer, message, false);
+    add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n\n", false);
+
     responses_request: OpenAIResponseRequest = {
         model = "google/gemma-4-26b-a4b-qat";
         instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
@@ -142,6 +145,9 @@ send_agent_message(int thread, JobData data) {
                             else if starts_with(chunk, "data: ") {
                                 switch event {
                                     case OpenAIResponseEvent.Created; {
+                                        if workspace.agent_data.buffer.line_count > 1 {
+
+                                        }
                                         event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                         allocate_strings(&event_data.response.id);
                                         response_id = event_data.response.id;
@@ -170,8 +176,7 @@ send_agent_message(int thread, JobData data) {
                                     }
                                     case OpenAIResponseEvent.ReasoningTextDone; {
                                         workspace.agent_data.status = AgentStatus.ThinkingComplete;
-                                        add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n", false, BufferLineFlags.Thinking);
-                                        add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n", false);
+                                        add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n\n", false, BufferLineFlags.Thinking);
                                         trigger_window_update();
                                     }
                                     case OpenAIResponseEvent.FunctionCallArgumentsDone; {
@@ -185,7 +190,7 @@ send_agent_message(int thread, JobData data) {
                                         array_insert(&function_calls, function_call, allocate, reallocate);
                                     }
                                     case OpenAIResponseEvent.Completed; {
-                                        // add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n", false);
+                                        add_text_to_end_of_buffer(&workspace.agent_data.buffer, "\n", false);
                                         trigger_window_update();
                                     }
                                 }
@@ -1428,10 +1433,10 @@ OpenAIResponseEvent parse_openai_event_name(string chunk) {
     else if name_parts[1] == "output_text" {
         assert(name_parts.length >= 3);
         if name_parts[2] == "delta" {
-            event = OpenAIResponseEvent.ReasoningTextDelta;
+            event = OpenAIResponseEvent.OutputTextDelta;
         }
         else if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.ReasoningTextDone;
+            event = OpenAIResponseEvent.OutputTextDone;
         }
     }
     else if name_parts[1] == "function_call_arguments" {
