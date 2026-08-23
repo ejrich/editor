@@ -207,6 +207,7 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
                     y -= global_font_config.line_height;
                     available_lines_to_render--;
                     thinking_count = 0;
+                    if available_lines_to_render == 0 break;
                 }
 
                 cursor, visual_start, visual_end := -1;
@@ -4373,7 +4374,7 @@ u32, u32 get_current_position() {
 
 adjust_start_line(BufferWindow* window) {
     workspace := get_workspace();
-    adjust_start_line(window, workspace);
+    adjust_start_line(window, workspace, !workspace.agent_data.display_thinking);
 }
 
 adjust_start_line(BufferWindow* window, Workspace* workspace, bool skip_thinking = false) {
@@ -4407,24 +4408,40 @@ adjust_start_line(BufferWindow* window, Workspace* workspace, bool skip_thinking
 
     if starting_line == null return;
 
-    // TODO Implement skip_thinking
     current_line := starting_line;
     max_chars := calculate_max_chars_per_line(window, workspace, buffer.line_count_digits);
     rendered_lines: u32;
+    thinking := false;
     while current_line != null {
-        if line_number == window.line {
-            lines := calculate_rendered_lines(max_chars, current_line.length, window.cursor);
-            // Handle when the line takes up the whole screen
-            if lines >= max_lines {
-                window.start_line = line_number;
-                return;
+        if skip_thinking {
+            if current_line.flags == BufferLineFlags.Thinking {
+                if !thinking {
+                    rendered_lines++;
+                    thinking = true;
+                }
             }
+            else {
+                thinking = false;
+            }
+        }
 
-            rendered_lines += lines;
+        if line_number == window.line {
+            if !thinking {
+                lines := calculate_rendered_lines(max_chars, current_line.length, window.cursor);
+                // Handle when the line takes up the whole screen
+                if lines >= max_lines {
+                    window.start_line = line_number;
+                    return;
+                }
+
+                rendered_lines += lines;
+            }
             break;
         }
 
-        rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+        if !thinking {
+            rendered_lines += calculate_rendered_lines(max_chars, current_line.length);
+        }
         current_line = current_line.next;
         line_number++;
     }
@@ -4441,7 +4458,21 @@ adjust_start_line(BufferWindow* window, Workspace* workspace, bool skip_thinking
         end_line := current_line.next;
         rendered_lines_after_current: u32;
         while end_line != null {
-            rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
+            if skip_thinking {
+                if end_line.flags == BufferLineFlags.Thinking {
+                    if !thinking {
+                        rendered_lines++;
+                        thinking = true;
+                    }
+                }
+                else {
+                    thinking = false;
+                }
+            }
+
+            if !thinking {
+                rendered_lines_after_current += calculate_rendered_lines(max_chars, end_line.length);
+            }
             end_line = end_line.next;
 
             if rendered_lines_after_current >= scroll_offset {
@@ -4454,9 +4485,26 @@ adjust_start_line(BufferWindow* window, Workspace* workspace, bool skip_thinking
             allowed_scroll_offset = rendered_lines_after_current;
         }
 
+        thinking = skip_thinking && starting_line.flags == BufferLineFlags.Thinking;
         while starting_line != null && rendered_lines + allowed_scroll_offset > max_lines {
             window.start_line++;
-            rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
+            if skip_thinking {
+                if thinking {
+                    if starting_line.next != null && starting_line.next.flags != BufferLineFlags.Thinking {
+                        thinking = false;
+                        rendered_lines--;
+                    }
+                }
+                else if starting_line.flags == BufferLineFlags.Thinking {
+                    thinking = true;
+                }
+                else {
+                    rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
+                }
+            }
+            else {
+                rendered_lines -= calculate_rendered_lines(max_chars, starting_line.length);
+            }
             starting_line = starting_line.next;
         }
     }

@@ -247,15 +247,21 @@ string, bool send_agent_message_command(string message) {
 string, bool toggle_thinking() {
     workspace := get_workspace();
 
-    // TODO Adjust line/start_line
     if workspace.agent_data.display_thinking {
+        line_number := workspace.agent_data.buffer_window.line;
+        line := get_buffer_line(&workspace.agent_data.buffer, workspace.agent_data.buffer_window.line);
 
-    }
-    else {
+        while line.next != null && line.flags == BufferLineFlags.Thinking {
+            line_number++;
+            line = line.next;
+        }
 
+        workspace.agent_data.buffer_window.start_line = 0;
+        workspace.agent_data.buffer_window.line = line_number;
     }
 
     workspace.agent_data.display_thinking = !workspace.agent_data.display_thinking;
+    adjust_start_line(&workspace.agent_data.buffer_window, workspace, !workspace.agent_data.display_thinking);
 
     return empty_string, false;
 }
