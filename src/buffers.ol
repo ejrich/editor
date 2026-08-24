@@ -2720,6 +2720,7 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
         return;
     }
 
+    workspace := get_workspace();
     if with_wrap {
         max_chars := calculate_max_chars_per_line(buffer_window, buffer.line_count_digits);
         line := get_buffer_line(buffer, buffer_window.line);
@@ -2770,9 +2771,30 @@ move_line(bool up, bool with_wrap, u32 line_changes, bool move_to_first = false)
 
         buffer_window.cursor = current_cursor;
     }
-    else {
+    else if buffer != &workspace.agent_data.buffer || workspace.agent_data.display_thinking {
         if up buffer_window.line -= line_changes;
         else  buffer_window.line += line_changes;
+    }
+    else {
+        line := get_buffer_line(buffer, buffer_window.line);
+        if up {
+            while line.previous != null && line_changes > 0 {
+                line = line.previous;
+                if line.flags != BufferLineFlags.Thinking {
+                    line_changes--;
+                }
+                buffer_window.line--;
+            }
+        }
+        else {
+            while line.next != null && line_changes > 0 {
+                line = line.next;
+                if line.flags != BufferLineFlags.Thinking {
+                    line_changes--;
+                }
+                buffer_window.line++;
+            }
+        }
     }
 
     buffer_window.line = clamp(buffer_window.line, 0, buffer.line_count - 1);
