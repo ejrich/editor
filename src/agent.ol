@@ -1,11 +1,11 @@
 #import openssl
 
-init_ssl() {
+init_agent() {
     // TODO Figure out why this is causing hang/additional allocations
     // queue_work(&low_priority_queue, init_ssl_job);
 }
 
-deinit_ssl() {
+deinit_agent() {
     if ssl_initialized {
         SSL_CTX_free(ssl_context);
     }
@@ -14,6 +14,7 @@ deinit_ssl() {
 struct AgentData {
     buffer: Buffer = { read_only = true; title = get_agent_title; }
     buffer_window: BufferWindow;
+    socket: Socket;
     request_buffer: Array<u8>;
     response_buffer: Array<u8>;
     status: AgentStatus;
@@ -22,6 +23,8 @@ struct AgentData {
 
 enum AgentStatus {
     Ready;
+    UnableToConnect;
+    Disconnected;
     Pending;
     Thinking;
     ThinkingComplete;
@@ -68,149 +71,179 @@ send_agent_message(int thread, JobData data) {
 
     workspace.agent_data.status = AgentStatus.Ready;
 
-    success, address_info := lookup_ip_address_tcp("evan-desktop.local", "1234");
-    if success {
-        defer close_ip_address(address_info);
+    // TODO Don't hard code domain/port
+    domain := "evan-desktop.local";
+    port := "1234";
 
-        connected, socket := connect_socket(address_info);
-        if connected {
-            // TODO Replace with pointer to either socket_send or SSL_write_ex
-            sent := socket_send(socket, r.data, r.length);
-            workspace.agent_data.status = AgentStatus.Pending;
+    if !socket_is_connected(workspace.agent_data.socket) {
+        success, socket := connect_to_socket_with_retry(domain, port);
+        if !success {
+            workspace.agent_data.status = AgentStatus.UnableToConnect;
+            return;
+        }
+        workspace.agent_data.socket = socket;
+    }
 
-            response_parsed := false;
-            receiving_chunks := false;
-            carry := 0;
-            event := OpenAIResponseEvent.None;
+    // TODO Replace with pointer to either socket_send or SSL_write_ex
+    sent, sent_length := socket_send(workspace.agent_data.socket, r.data, r.length);
+    if !sent {
+        workspace.agent_data.status = AgentStatus.Disconnected;
+        return;
+    }
+    workspace.agent_data.status = AgentStatus.Pending;
 
-            // TODO Store this
-            response_id: string;
+    response_parsed := false;
+    receiving_chunks := false;
+    carry := 0;
+    event := OpenAIResponseEvent.None;
 
-            // TODO Handle function calls and free after handling all results
-            function_calls: Array<OpenAIResponseOutput>;
-            name: string;
-            call_id: string;
+    // TODO Store this
+    response_id: string;
 
-            while true {
-                if carry == workspace.agent_data.response_buffer.length {
-                    previous_length := workspace.agent_data.response_buffer.length;
-                    new_length := previous_length + 1000; // TODO Check that this size is appropriate
+    // TODO Handle function calls and free after handling all results
+    function_calls: Array<OpenAIResponseOutput>;
+    name: string;
+    call_id: string;
 
-                    new_buffer := allocate(new_length);
-                    if workspace.agent_data.response_buffer.length {
-                        memory_copy(new_buffer, workspace.agent_data.response_buffer.data, previous_length);
-                        free_allocation(workspace.agent_data.response_buffer.data);
-                    }
+    while true {
+        if carry == workspace.agent_data.response_buffer.length {
+            previous_length := workspace.agent_data.response_buffer.length;
+            new_length := previous_length + 1000; // TODO Check that this size is appropriate
 
-                    workspace.agent_data.response_buffer.data = new_buffer;
-                    workspace.agent_data.response_buffer.length = new_length;
+            new_buffer := allocate(new_length);
+            if workspace.agent_data.response_buffer.length {
+                memory_copy(new_buffer, workspace.agent_data.response_buffer.data, previous_length);
+                free_allocation(workspace.agent_data.response_buffer.data);
+            }
+
+            workspace.agent_data.response_buffer.data = new_buffer;
+            workspace.agent_data.response_buffer.length = new_length;
+        }
+
+        // TODO Replace with pointer to either socket_receive or SSL_read_ex
+        received, length := socket_receive(workspace.agent_data.socket, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+        if !received {
+            // Reconnect and resend if the socket was closed
+            if !response_parsed {
+                success, socket := connect_to_socket_with_retry(domain, port);
+                if !success {
+                    workspace.agent_data.status = AgentStatus.UnableToConnect;
+                    return;
+                }
+                close_socket(workspace.agent_data.socket);
+                workspace.agent_data.socket = socket;
+                sent, sent_length = socket_send(workspace.agent_data.socket, r.data, r.length);
+                if !sent {
+                    workspace.agent_data.status = AgentStatus.Disconnected;
+                    return;
+                }
+                carry = 0;
+                continue;
+            }
+
+            close_socket(workspace.agent_data.socket);
+            workspace.agent_data.status = AgentStatus.Disconnected;
+            return;
+        }
+
+        response: string = { length = length + carry; data = workspace.agent_data.response_buffer.data; }
+
+        if !response_parsed {
+            valid, index, http_response := parse_http_response(response);
+            if valid {
+                response_parsed = true;
+                carry = 0;
+                if http_response.transfer_encoding == "chunked" {
+                    receiving_chunks = true;
+                    response = { length = response.length - index; data = response.data + index; }
+                }
+                else {
+                    break;
+                }
+            }
+            else {
+                carry = response.length;
+            }
+        }
+
+        if receiving_chunks {
+            i := 0;
+            has_end_chunk := false;
+            while i < response.length {
+                valid, index, chunk_size := http_get_chunk_size(response, i);
+                if !valid || index + chunk_size >= response.length {
+                    carry = response.length - i;
+                    memory_copy(workspace.agent_data.response_buffer.data, response.data + i, carry);
+                    break;
                 }
 
-                // TODO Replace with pointer to either socket_receive or SSL_read_ex
-                length := socket_receive(socket, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
-                response: string = { length = length + carry; data = workspace.agent_data.response_buffer.data; }
+                carry = 0;
+                i = index;
 
-                if !response_parsed {
-                    valid, index, http_response := parse_http_response(response);
-                    if valid {
-                        response_parsed = true;
-                        carry = 0;
-                        if http_response.transfer_encoding == "chunked" {
-                            receiving_chunks = true;
-                            response = { length = response.length - index; data = response.data + index; }
-                        }
-                        else {
-                            break;
-                        }
+                if chunk_size {
+                    chunk: string = { length = chunk_size; data = response.data + i; }
+                    if starts_with(chunk, "event: ") {
+                        event = parse_openai_event_name(chunk);
                     }
-                    else {
-                        carry = response.length;
-                    }
-                }
+                    else if starts_with(chunk, "data: ") {
+                        switch event {
+                            case OpenAIResponseEvent.Created; {
+                                if workspace.agent_data.buffer.line_count > 1 {
 
-                if receiving_chunks {
-                    i := 0;
-                    has_end_chunk := false;
-                    while i < response.length {
-                        valid, index, chunk_size := http_get_chunk_size(response, i);
-                        if !valid || index + chunk_size >= response.length {
-                            carry = response.length - i;
-                            memory_copy(workspace.agent_data.response_buffer.data, response.data + i, carry);
-                            break;
-                        }
-
-                        carry = 0;
-                        i = index;
-
-                        if chunk_size {
-                            chunk: string = { length = chunk_size; data = response.data + i; }
-                            if starts_with(chunk, "event: ") {
-                                event = parse_openai_event_name(chunk);
+                                }
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                allocate_strings(&event_data.response.id);
+                                response_id = event_data.response.id;
                             }
-                            else if starts_with(chunk, "data: ") {
-                                switch event {
-                                    case OpenAIResponseEvent.Created; {
-                                        if workspace.agent_data.buffer.line_count > 1 {
-
-                                        }
-                                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                        allocate_strings(&event_data.response.id);
-                                        response_id = event_data.response.id;
-                                    }
-                                    case OpenAIResponseEvent.OutputItemAdded; {
-                                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                        if event_data.item.type == OpenAIResponseOutputType.function_call {
-                                            pointer := allocate_strings(&event_data.item.name, &event_data.item.call_id);
-                                            name = event_data.item.name;
-                                            call_id = event_data.item.call_id;
-                                        }
-                                    }
-                                    case OpenAIResponseEvent.ReasoningTextDelta; {
-                                        workspace.agent_data.status = AgentStatus.Thinking;
-                                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                        add_to_agent_buffer(workspace, event_data.delta, BufferLineFlags.Thinking);
-                                    }
-                                    case OpenAIResponseEvent.OutputTextDelta; {
-                                        workspace.agent_data.status = AgentStatus.Outputting;
-                                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                        add_to_agent_buffer(workspace, event_data.delta);
-                                    }
-                                    case OpenAIResponseEvent.ReasoningTextDone; {
-                                        workspace.agent_data.status = AgentStatus.ThinkingComplete;
-                                        add_to_agent_buffer(workspace, "\n", BufferLineFlags.Thinking);
-                                        add_to_agent_buffer(workspace, "\n");
-                                        trigger_window_update();
-                                    }
-                                    case OpenAIResponseEvent.FunctionCallArgumentsDone; {
-                                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                        arguments_pointer := allocate_strings(&event_data.arguments);
-                                        function_call: OpenAIResponseOutput = {
-                                            name = name;
-                                            call_id = call_id;
-                                            arguments = event_data.arguments;
-                                        }
-                                        array_insert(&function_calls, function_call, allocate, reallocate);
-                                    }
-                                    case OpenAIResponseEvent.Completed; {
-                                        add_to_agent_buffer(workspace, "\n");
-                                        trigger_window_update();
-                                    }
+                            case OpenAIResponseEvent.OutputItemAdded; {
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                if event_data.item.type == OpenAIResponseOutputType.function_call {
+                                    pointer := allocate_strings(&event_data.item.name, &event_data.item.call_id);
+                                    name = event_data.item.name;
+                                    call_id = event_data.item.call_id;
                                 }
                             }
-                            i += chunk_size + 2;
-                        }
-                        else {
-                            has_end_chunk = true;
-                            break;
+                            case OpenAIResponseEvent.ReasoningTextDelta; {
+                                workspace.agent_data.status = AgentStatus.Thinking;
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                add_to_agent_buffer(workspace, event_data.delta, BufferLineFlags.Thinking);
+                            }
+                            case OpenAIResponseEvent.OutputTextDelta; {
+                                workspace.agent_data.status = AgentStatus.Outputting;
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                add_to_agent_buffer(workspace, event_data.delta);
+                            }
+                            case OpenAIResponseEvent.ReasoningTextDone; {
+                                workspace.agent_data.status = AgentStatus.ThinkingComplete;
+                                add_to_agent_buffer(workspace, "\n", BufferLineFlags.Thinking);
+                                add_to_agent_buffer(workspace, "\n");
+                                trigger_window_update();
+                            }
+                            case OpenAIResponseEvent.FunctionCallArgumentsDone; {
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                arguments_pointer := allocate_strings(&event_data.arguments);
+                                function_call: OpenAIResponseOutput = {
+                                    name = name;
+                                    call_id = call_id;
+                                    arguments = event_data.arguments;
+                                }
+                                array_insert(&function_calls, function_call, allocate, reallocate);
+                            }
+                            case OpenAIResponseEvent.Completed; {
+                                add_to_agent_buffer(workspace, "\n");
+                            }
                         }
                     }
-
-                    if has_end_chunk
-                        break;
+                    i += chunk_size + 2;
+                }
+                else {
+                    has_end_chunk = true;
+                    break;
                 }
             }
 
-            close_socket(socket);
+            if has_end_chunk
+                break;
         }
     }
 
@@ -1363,11 +1396,72 @@ struct OpenAIResponseEventData {
 
 #private
 
+bool socket_is_connected(Socket socket) {
+    connected: bool;
+
+    #if os == OS.Linux {
+        connected = socket.socket > 0;
+    }
+    #if os == OS.Windows {
+        connected = socket.socket != null;
+    }
+
+    if connected {
+        byte: u8;
+        success, bytes := socket_send(socket, &byte, 0);
+        connected = success;
+    }
+
+    return connected;
+}
+
+bool, Socket connect_to_socket_with_retry(string domain, string port) {
+    socket: Socket;
+    success, address_info := lookup_address(domain, port);
+    if !success return false, socket;
+
+    each i in 5 {
+        success, socket = connect_socket(address_info);
+        if success break;
+        sleep(500);
+    }
+
+    return success, socket;
+}
+
+struct AddressInfoRecord {
+    domain: string;
+    port: string;
+    address_info: AddressInfo;
+}
+
+address_infos: Array<AddressInfoRecord>;
+
+bool, AddressInfo lookup_address(string domain, string port) {
+    each record in address_infos {
+        if record.domain == domain && record.port == port {
+            return true, record.address_info;
+        }
+    }
+
+    success, address_info := lookup_ip_address_tcp(domain, port);
+    if success {
+        record: AddressInfoRecord = {
+            domain = domain; port = port; address_info = address_info;
+        }
+        array_insert(&address_infos, record, allocate, reallocate);
+    }
+
+    return success, address_info;
+}
+
 string get_agent_title() {
     workspace := get_workspace();
 
     switch workspace.agent_data.status {
         case AgentStatus.Ready;            return "Ready";
+        case AgentStatus.UnableToConnect;  return "Unable to connect";
+        case AgentStatus.Disconnected;     return "Disconnected";
         case AgentStatus.Pending;          return "Pending...";
         case AgentStatus.Thinking;         return "Thinking...";
         case AgentStatus.ThinkingComplete; return "Pending...";
