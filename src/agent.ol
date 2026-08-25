@@ -19,6 +19,7 @@ struct AgentData {
     response_buffer: Array<u8>;
     status: AgentStatus;
     display_thinking: bool;
+    previous_response_id: string;
 }
 
 enum AgentStatus {
@@ -45,9 +46,15 @@ send_agent_message(int thread, JobData data) {
     // TODO Use the selected model
     responses_request: OpenAIResponseRequest = {
         model = "google/gemma-4-26b-a4b-qat";
-        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
         input = data.multiple.value1;
         stream = true;
+    }
+
+    if string_is_empty(workspace.agent_data.previous_response_id) {
+        responses_request.instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
+    }
+    else {
+        responses_request.previous_response_id = workspace.agent_data.previous_response_id;
     }
 
     // TODO Use workspace request buffer
@@ -97,7 +104,6 @@ send_agent_message(int thread, JobData data) {
     carry := 0;
     event := OpenAIResponseEvent.None;
 
-    // TODO Store this
     response_id: string;
 
     // TODO Handle function calls and free after handling all results
@@ -141,6 +147,9 @@ send_agent_message(int thread, JobData data) {
                 continue;
             }
 
+            if !string_is_empty(response_id) {
+                free_allocation(response_id.data);
+            }
             close_socket(workspace.agent_data.socket);
             workspace.agent_data.status = AgentStatus.Disconnected;
             return;
@@ -247,219 +256,17 @@ send_agent_message(int thread, JobData data) {
         }
     }
 
-    workspace.agent_data.status = AgentStatus.Done;
+    if !string_is_empty(workspace.agent_data.previous_response_id) {
+        free_allocation(workspace.agent_data.previous_response_id.data);
+    }
+
+    workspace.agent_data = {
+        status = AgentStatus.Done;
+        previous_response_id = response_id;
+    }
 }
 
 /*
-test_stream() {
-    responses_request: OpenAIResponseRequest = {
-        model = "google/gemma-4-26b-a4b-qat";
-        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
-        // input = "Hello world";
-        input = "What is the derivative of x^2, please explain how this works.";
-        // input = "Call the do_something tool with a random string as the argument";
-        // input_array = [
-        //     {
-        //         type = OpenAIResponseOutputType.function_call_output;
-        //         call_id = "call_2690955752160002";
-        //         output = "foobar";
-        //     }
-        // ]
-        // previous_response_id = "resp_86f6dfb0910bc9a9ab8a36f91e73fa8d8eabdb75063ea7fa";
-        stream = true;
-        // reasoning = {
-        //     effort = OpenAIResponseRequestReasoningEffort.high;
-        // }
-        tools = [
-            {
-                type = "function";
-                name = "do_something";
-                description = "Does something";
-                strict = true;
-                parameters = {
-                    type = "object";
-                    properties = [
-                        {
-                            name = "arg";
-                            type = JsonSchemaPropertyType.string;
-                            description = "An argument";
-                            // enum_names = ["test"]
-                            enum_names = []
-                        }
-                    ]
-                    required = ["arg"]
-                    additionalProperties = false;
-                }
-            }
-        ]
-    }
-
-    // print("Request: '%'\n", responses_request);
-    // exit_program(0);
-
-    body := serialize_json(responses_request);
-    print("Body: '%'\n", body);
-    // exit_program(0);
-
-    request: HTTPRequest = {
-        version = HTTPVersion.HTTP1_1;
-        method = HTTPMethod.POST;
-        connection = HTTPConnection.KeepAlive;
-        resource = "/v1/responses";
-        host = "evan-desktop.local";
-        authorization = "Bearer sk-lm-Mukalw9D:ubAtA8TNXFzf7D5I6clm";
-        content_type = "application/json";
-        // body = "{ \"model\": \"google/gemma-4-26b-a4b-qat\", \"input\": \"hello world\", \"stream\": true }";
-        body = body;
-
-    }
-
-    r := serialize_http_request(request);
-    // print("% %", r.length, r);
-
-    success, address_info := lookup_ip_address_tcp("evan-desktop.local", "1234");
-    if success {
-        defer close_ip_address(address_info);
-
-        connected, socket := connect_socket(address_info);
-        if connected {
-            // print("Connected to socket\n", socket);
-            sent := socket_send(socket, r.data, r.length);
-            // print("Data sent %\n", sent);
-
-            response_parsed := false;
-            receiving_chunks := true;
-            carry := 0;
-            event := OpenAIResponseEvent.None;
-            response_id: string;
-            function_calls: Array<OpenAIResponseOutput>;
-            name: string;
-            call_id: string;
-
-            workspace := get_workspace();
-            while true {
-                if carry == response_buffer.length {
-                    previous_length := response_buffer.length;
-                    new_length := previous_length + 1000;
-
-                    new_buffer := allocate(new_length);
-                    memory_copy(new_buffer, response_buffer.data, previous_length);
-                    free_allocation(response_buffer.data);
-
-                    response_buffer.data = new_buffer;
-                    response_buffer.length = new_length;
-                }
-
-                // print("Carry: %\n", carry);
-                length := socket_receive(socket, response_buffer.data + carry, response_buffer.length - carry);
-                str: string = { length = length + carry; data = response_buffer.data; }
-
-                chunk_start := 0;
-                if !response_parsed {
-                    valid, index, response := parse_http_response(str);
-                    // print("Response: %\n", response);
-                    if valid {
-                        response_parsed = true;
-                        carry = 0;
-                        if response.transfer_encoding == "chunked" {
-                            receiving_chunks = true;
-                            chunk_start = index;
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    else {
-                        carry = str.length;
-                    }
-                }
-
-                if receiving_chunks {
-                    str = { length = str.length - chunk_start; data = str.data + chunk_start; }
-
-                    i := 0;
-                    has_end_chunk := false;
-                    while i < str.length {
-                        valid, index, chunk_size := http_get_chunk_size(str, i);
-                        if !valid {
-                            memory_copy(response_buffer.data, str.data + i, carry);
-                            // print("Unable to determine the chunk size\n");
-                            break;
-                        }
-
-                        if index + chunk_size >= str.length {
-                            carry = str.length - i;
-                            memory_copy(response_buffer.data, str.data + i, carry);
-                            // print("Carrying chunk into the next buffer read\n");
-                            break;
-                        }
-
-                        carry = 0;
-                        i = index;
-
-                        if valid {
-                            if chunk_size {
-                                chunk: string = { length = chunk_size; data = str.data + i; }
-                                if starts_with(chunk, "event: ") {
-                                    event := parse_openai_event_name(chunk);
-                                }
-                                else if starts_with(chunk, "data: ") {
-                                    switch event {
-                                        case OpenAIResponseEvent.Created; {
-                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                            allocate_strings(&event_data.response.id);
-                                            response_id = event_data.response.id;
-                                        }
-                                        case OpenAIResponseEvent.OutputItemAdded; {
-                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                            if event_data.item.type == OpenAIResponseOutputType.function_call {
-                                                pointer := allocate_strings(&event_data.item.name, &event_data.item.call_id);
-                                                name = event_data.item.name;
-                                                call_id = event_data.item.call_id;
-                                            }
-                                        }
-                                        case OpenAIResponseEvent.ReasoningTextDelta;
-                                        case OpenAIResponseEvent.OutputTextDelta; {
-                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                            print(event_data.delta);
-                                            add_text_to_end_of_buffer(&workspace.agent_data.buffer, event_data.delta, false);
-                                        }
-                                        case OpenAIResponseEvent.FunctionCallArgumentsDone; {
-                                            event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                            arguments_pointer := allocate_strings(&event_data.arguments);
-                                            function_call: OpenAIResponseOutput = {
-                                                name = name;
-                                                call_id = call_id;
-                                                arguments = event_data.arguments;
-                                            }
-                                            // print("%\n", function_call);
-                                            array_insert(&function_calls, function_call, allocate, reallocate);
-                                        }
-                                    }
-                                }
-                                i += chunk_size + 2;
-                            }
-                            else {
-                                has_end_chunk = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    if has_end_chunk
-                        break;
-                }
-            }
-
-            // print("\n\nResponse ID: %\n", response_id);
-
-            close_socket(socket);
-        }
-    }
-
-    // exit_program(0);
-}
-
 load_models() {
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
