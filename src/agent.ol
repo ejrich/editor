@@ -20,6 +20,7 @@ struct AgentData {
     status: AgentStatus;
     display_thinking: bool;
     previous_response_id: string;
+    context: u32;
 }
 
 enum AgentStatus {
@@ -34,6 +35,7 @@ enum AgentStatus {
     Done;
 }
 
+// TODO Prevent multiple requests at the same time
 send_agent_message(int thread, JobData data) {
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
@@ -61,12 +63,16 @@ send_agent_message(int thread, JobData data) {
     body := serialize_json(responses_request);
     defer free_allocation(body.data);
 
+    // TODO Don't hard code domain/port
+    domain := "evan-desktop.local";
+    port := "1234";
+
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
         method = HTTPMethod.POST;
         connection = HTTPConnection.KeepAlive;
         resource = "/v1/responses";
-        host = "evan-desktop.local";
+        host = domain;
         authorization = "Bearer sk-lm-Mukalw9D:ubAtA8TNXFzf7D5I6clm";
         content_type = "application/json";
         body = body;
@@ -78,9 +84,6 @@ send_agent_message(int thread, JobData data) {
 
     workspace.agent_data.status = AgentStatus.Ready;
 
-    // TODO Don't hard code domain/port
-    domain := "evan-desktop.local";
-    port := "1234";
 
     if !socket_is_connected(workspace.agent_data.socket) {
         success, socket := connect_to_socket_with_retry(domain, port);
@@ -196,14 +199,6 @@ send_agent_message(int thread, JobData data) {
                     }
                     else if starts_with(chunk, "data: ") {
                         switch event {
-                            case OpenAIResponseEvent.Created; {
-                                if workspace.agent_data.buffer.line_count > 1 {
-
-                                }
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                allocate_strings(&event_data.response.id);
-                                response_id = event_data.response.id;
-                            }
                             case OpenAIResponseEvent.OutputItemAdded; {
                                 event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                 if event_data.item.type == OpenAIResponseOutputType.function_call {
@@ -239,6 +234,10 @@ send_agent_message(int thread, JobData data) {
                                 array_insert(&function_calls, function_call, allocate, reallocate);
                             }
                             case OpenAIResponseEvent.Completed; {
+                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
+                                allocate_strings(&event_data.response.id);
+                                response_id = event_data.response.id;
+                                workspace.agent_data.context = event_data.response.usage.total_tokens;
                                 add_to_agent_buffer(workspace, "\n");
                             }
                         }
@@ -261,8 +260,8 @@ send_agent_message(int thread, JobData data) {
     }
 
     workspace.agent_data = {
-        status = AgentStatus.Done;
         previous_response_id = response_id;
+        status = AgentStatus.Done;
     }
 }
 
@@ -671,18 +670,20 @@ u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
                     depth := 0;
                     while i < text.length {
                         char = text[i];
-                        if char == '[' {
-                            depth++;
-                        }
-                        else if char == ']' {
-                            if depth == 0 break;
-                            depth--;
-                        }
-                        else if char == '"' {
+                        if char == '"' {
                             i, _ = get_json_string(text, i);
                         }
+                        else {
+                            if char == '[' {
+                                depth++;
+                            }
+                            else if char == ']' {
+                                if depth == 0 break;
+                                depth--;
+                            }
 
-                        i++;
+                            i++;
+                        }
                     }
                 }
                 else if char == '{' {
@@ -690,19 +691,24 @@ u64 parse_json(string text, u64 i, void* pointer, StructTypeInfo* type) {
                     depth := 0;
                     while i < text.length {
                         char = text[i];
-                        if char == '{' {
-                            depth++;
-                        }
-                        else if char == '}' {
-                            if depth == 0 break;
-                            depth--;
-                        }
-                        else if char == '"' {
+                        if char == '"' {
                             i, _ = get_json_string(text, i);
                         }
+                        else {
+                            if char == '{' {
+                                depth++;
+                            }
+                            else if char == '}' {
+                                if depth == 0 break;
+                                depth--;
+                            }
 
-                        i++;
+                            i++;
+                        }
                     }
+
+                    i++;
+                    continue;
                 }
                 else {
                     i, _ = get_next_json_value(text, i);
@@ -1104,6 +1110,18 @@ struct OpenAIResponse {
     usage: OpenAIResponseUsage;
 }
 
+struct OpenAIResponseWithoutOutput {
+    id: string;
+    error: OpenAIResponseError;
+    model: string;
+    top_p: float;
+    completed_at: u64;
+    max_output_tokens: u32;
+    max_tool_calls: u32;
+    status: OpenAIResponseStatus;
+    usage: OpenAIResponseUsage;
+}
+
 struct OpenAIResponseError {
     code: string;
     message: string;
@@ -1189,7 +1207,7 @@ enum OpenAIResponseEvent {
 
 struct OpenAIResponseEventData {
     type: string;
-    response: OpenAIResponse;
+    response: OpenAIResponseWithoutOutput;
     item: OpenAIResponseOutput;
     item_id: string;
     output_index: u32;
@@ -1265,19 +1283,20 @@ bool, AddressInfo lookup_address(string domain, string port) {
 string get_agent_title() {
     workspace := get_workspace();
 
+    title: string;
     switch workspace.agent_data.status {
-        case AgentStatus.Ready;            return "Ready";
-        case AgentStatus.UnableToConnect;  return "Unable to connect";
-        case AgentStatus.Disconnected;     return "Disconnected";
-        case AgentStatus.Pending;          return "Pending...";
-        case AgentStatus.Thinking;         return "Thinking...";
-        case AgentStatus.ThinkingComplete; return "Pending...";
-        case AgentStatus.Outputting;       return "Outputting...";
-        case AgentStatus.FunctionCall;     return "Calling functions";
-        case AgentStatus.Done;             return "Finished";
+        case AgentStatus.Ready;            title = "Ready";
+        case AgentStatus.UnableToConnect;  title = "Unable to connect";
+        case AgentStatus.Disconnected;     title = "Disconnected";
+        case AgentStatus.Pending;          title = "Pending...";
+        case AgentStatus.Thinking;         title = "Thinking...";
+        case AgentStatus.ThinkingComplete; title = "Pending...";
+        case AgentStatus.Outputting;       title = "Outputting...";
+        case AgentStatus.FunctionCall;     title = "Calling functions";
+        case AgentStatus.Done;             title = "Finished";
     }
 
-    return empty_string;
+    return format_string("Context: % | %", temp_allocate, workspace.agent_data.context, title);
 }
 
 add_to_agent_buffer(Workspace* workspace, string text, BufferLineFlags flags = BufferLineFlags.None) {
