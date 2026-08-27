@@ -48,14 +48,12 @@ send_agent_message(int thread, JobData data) {
     // TODO Use the selected model
     responses_request: OpenAIResponseRequest = {
         model = "google/gemma-4-26b-a4b-qat";
+        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
         input = data.multiple.value1;
         stream = true;
     }
 
-    if string_is_empty(workspace.agent_data.previous_response_id) {
-        responses_request.instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
-    }
-    else {
+    if !string_is_empty(workspace.agent_data.previous_response_id) {
         responses_request.previous_response_id = workspace.agent_data.previous_response_id;
     }
 
