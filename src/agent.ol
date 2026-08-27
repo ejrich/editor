@@ -89,7 +89,7 @@ send_agent_message(int thread, JobData data) {
         body = body;
     }
 
-    r := serialize_http_request(request, allocate_from_request_buffer, workspace);
+    request_text := serialize_http_request(request, allocate_from_request_buffer, workspace);
     workspace.agent_data.status = AgentStatus.Ready;
     trigger_window_update();
 
@@ -114,7 +114,7 @@ send_agent_message(int thread, JobData data) {
         }
     }
 
-    sent, sent_length := write_to(workspace, r.data, r.length);
+    sent, sent_length := write_to(workspace, request_text.data, request_text.length);
     if !sent {
         workspace.agent_data.status = AgentStatus.Disconnected;
         return;
@@ -164,7 +164,7 @@ send_agent_message(int thread, JobData data) {
                     workspace.agent_data.ssl = ssl;
                 }
 
-                sent, sent_length = write_to(workspace, r.data, r.length);
+                sent, sent_length = write_to(workspace, request_text.data, request_text.length);
                 if !sent {
                     workspace.agent_data.status = AgentStatus.Disconnected;
                     return;
@@ -193,7 +193,48 @@ send_agent_message(int thread, JobData data) {
                     response = { length = response.length - index; data = response.data + index; }
                 }
                 else {
-                    // TODO Also handle no streaming
+                    response_object := parse_json<OpenAIResponse>(http_response.body);
+                    allocate_strings(&response_object.id);
+                    response_id = response_object.id;
+
+                    each output in response_object.output {
+                        switch output.type {
+                            case OpenAIResponseOutputType.message;
+                            case OpenAIResponseOutputType.reasoning; {
+                                each content in output.content {
+                                    switch content.type {
+                                        case OpenAIResponseOutputContentType.output_text; {
+                                            add_to_agent_buffer(workspace, content.text);
+                                            add_to_agent_buffer(workspace, "\n");
+                                        }
+                                        case OpenAIResponseOutputContentType.reasoning_text; {
+                                            add_to_agent_buffer(workspace, content.text, BufferLineFlags.Thinking);
+                                            add_to_agent_buffer(workspace, "\n", BufferLineFlags.Thinking);
+                                            add_to_agent_buffer(workspace, "\n");
+                                        }
+                                    }
+                                }
+                            }
+                            case OpenAIResponseOutputType.function_call; {
+                                allocate_strings(&output.name, &output.call_id);
+                                allocate_strings(&output.arguments);
+                                function_call: OpenAIResponseOutput = {
+                                    name = output.name;
+                                    call_id = output.call_id;
+                                    arguments = output.arguments;
+                                }
+                                array_insert(&function_calls, function_call, allocate, reallocate);
+                            }
+                        }
+
+                        if output.content.length
+                            free_allocation(output.content.data);
+                    }
+
+                    if response_object.output.length
+                        free_allocation(response_object.output.data);
+
+                    workspace.agent_data.context = response_object.usage.total_tokens;
                     break;
                 }
             }
@@ -222,9 +263,9 @@ send_agent_message(int thread, JobData data) {
                         event = parse_openai_event_name(chunk);
                     }
                     else if starts_with(chunk, "data: ") {
+                        event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                         switch event {
                             case OpenAIResponseEvent.OutputItemAdded; {
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                 if event_data.item.type == OpenAIResponseOutputType.function_call {
                                     pointer := allocate_strings(&event_data.item.name, &event_data.item.call_id);
                                     name = event_data.item.name;
@@ -233,12 +274,10 @@ send_agent_message(int thread, JobData data) {
                             }
                             case OpenAIResponseEvent.ReasoningTextDelta; {
                                 workspace.agent_data.status = AgentStatus.Thinking;
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                 add_to_agent_buffer(workspace, event_data.delta, BufferLineFlags.Thinking);
                             }
                             case OpenAIResponseEvent.OutputTextDelta; {
                                 workspace.agent_data.status = AgentStatus.Outputting;
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                 add_to_agent_buffer(workspace, event_data.delta);
                             }
                             case OpenAIResponseEvent.ReasoningTextDone; {
@@ -248,8 +287,7 @@ send_agent_message(int thread, JobData data) {
                                 trigger_window_update();
                             }
                             case OpenAIResponseEvent.FunctionCallArgumentsDone; {
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
-                                arguments_pointer := allocate_strings(&event_data.arguments);
+                                allocate_strings(&event_data.arguments);
                                 function_call: OpenAIResponseOutput = {
                                     name = name;
                                     call_id = call_id;
@@ -258,7 +296,6 @@ send_agent_message(int thread, JobData data) {
                                 array_insert(&function_calls, function_call, allocate, reallocate);
                             }
                             case OpenAIResponseEvent.Completed; {
-                                event_data := parse_json<OpenAIResponseEventData>(chunk, 6);
                                 allocate_strings(&event_data.response.id);
                                 response_id = event_data.response.id;
                                 workspace.agent_data.context = event_data.response.usage.total_tokens;
@@ -1193,8 +1230,13 @@ enum OpenAIResponseStatus {
 }
 
 struct OpenAIResponseOutputContent {
-    type: string;
+    type: OpenAIResponseOutputContentType;
     text: string;
+}
+
+enum OpenAIResponseOutputContentType {
+    output_text = 1;
+    reasoning_text;
 }
 
 struct OpenAIResponseUsage {
