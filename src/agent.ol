@@ -1,8 +1,7 @@
 #import openssl
 
 init_agent() {
-    // TODO Figure out why this is causing hang/additional allocations
-    // queue_work(&low_priority_queue, init_ssl_job);
+    // TODO Queue job to load models
 }
 
 deinit_agent() {
@@ -15,6 +14,8 @@ struct AgentData {
     buffer: Buffer = { read_only = true; title = get_agent_title; }
     buffer_window: BufferWindow;
     socket: Socket;
+    ssl: SSL*;
+    request_body_buffer: Array<u8>;
     request_buffer: Array<u8>;
     response_buffer: Array<u8>;
     status: AgentStatus;
@@ -37,6 +38,8 @@ enum AgentStatus {
 
 // TODO Prevent multiple requests at the same time
 send_agent_message(int thread, JobData data) {
+    defer trigger_window_update();
+
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
 
@@ -57,13 +60,23 @@ send_agent_message(int thread, JobData data) {
         responses_request.previous_response_id = workspace.agent_data.previous_response_id;
     }
 
-    // TODO Use workspace request buffer
-    body := serialize_json(responses_request);
-    defer free_allocation(body.data);
+    body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);
 
     // TODO Don't hard code domain/port
     domain := "evan-desktop.local";
     port := "1234";
+    use_ssl := port == "443";
+
+    read_from: SocketFunction;
+    write_to: SocketFunction;
+    if use_ssl {
+        read_from = read_from_socket_ssl;
+        write_to = write_to_socket_ssl;
+    }
+    else {
+        read_from = read_from_socket;
+        write_to = write_to_socket;
+    }
 
     request: HTTPRequest = {
         version = HTTPVersion.HTTP1_1;
@@ -76,12 +89,9 @@ send_agent_message(int thread, JobData data) {
         body = body;
     }
 
-    // TODO Use workspace request buffer
-    r := serialize_http_request(request, allocate);
-    defer free_allocation(r.data);
-
+    r := serialize_http_request(request, allocate_from_request_buffer, workspace);
     workspace.agent_data.status = AgentStatus.Ready;
-
+    trigger_window_update();
 
     if !socket_is_connected(workspace.agent_data.socket) {
         success, socket := connect_to_socket_with_retry(domain, port);
@@ -89,16 +99,29 @@ send_agent_message(int thread, JobData data) {
             workspace.agent_data.status = AgentStatus.UnableToConnect;
             return;
         }
+
         workspace.agent_data.socket = socket;
+
+        if use_ssl {
+            init_ssl();
+            ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
+            if !ssl_success {
+                workspace.agent_data.status = AgentStatus.UnableToConnect;
+                return;
+            }
+
+            workspace.agent_data.ssl = ssl;
+        }
     }
 
-    // TODO Replace with pointer to either socket_send or SSL_write_ex
-    sent, sent_length := socket_send(workspace.agent_data.socket, r.data, r.length);
+    sent, sent_length := write_to(workspace, r.data, r.length);
     if !sent {
         workspace.agent_data.status = AgentStatus.Disconnected;
         return;
     }
+
     workspace.agent_data.status = AgentStatus.Pending;
+    trigger_window_update();
 
     response_parsed := false;
     receiving_chunks := false;
@@ -114,21 +137,10 @@ send_agent_message(int thread, JobData data) {
 
     while true {
         if carry == workspace.agent_data.response_buffer.length {
-            previous_length := workspace.agent_data.response_buffer.length;
-            new_length := previous_length + 1000; // TODO Check that this size is appropriate
-
-            new_buffer := allocate(new_length);
-            if workspace.agent_data.response_buffer.length {
-                memory_copy(new_buffer, workspace.agent_data.response_buffer.data, previous_length);
-                free_allocation(workspace.agent_data.response_buffer.data);
-            }
-
-            workspace.agent_data.response_buffer.data = new_buffer;
-            workspace.agent_data.response_buffer.length = new_length;
+            resize_buffer(&workspace.agent_data.response_buffer, carry + 1000);
         }
 
-        // TODO Replace with pointer to either socket_receive or SSL_read_ex
-        received, length := socket_receive(workspace.agent_data.socket, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+        received, length := read_from(workspace, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
         if !received {
             // Reconnect and resend if the socket was closed
             if !response_parsed {
@@ -139,7 +151,20 @@ send_agent_message(int thread, JobData data) {
                 }
                 close_socket(workspace.agent_data.socket);
                 workspace.agent_data.socket = socket;
-                sent, sent_length = socket_send(workspace.agent_data.socket, r.data, r.length);
+
+                if use_ssl {
+                    SSL_free(workspace.agent_data.ssl);
+
+                    ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
+                    if !ssl_success {
+                        workspace.agent_data.status = AgentStatus.UnableToConnect;
+                        return;
+                    }
+
+                    workspace.agent_data.ssl = ssl;
+                }
+
+                sent, sent_length = write_to(workspace, r.data, r.length);
                 if !sent {
                     workspace.agent_data.status = AgentStatus.Disconnected;
                     return;
@@ -168,6 +193,7 @@ send_agent_message(int thread, JobData data) {
                     response = { length = response.length - index; data = response.data + index; }
                 }
                 else {
+                    // TODO Also handle no streaming
                     break;
                 }
             }
@@ -344,29 +370,30 @@ bool, u64, u64 http_get_chunk_size(string text, u64 i) {
     return false, i, 0;
 }
 
-string serialize_json<T>(T object) {
+string serialize_json<T>(T object, Array<u8>* buffer) {
     #assert type_of(T).type == TypeKind.Struct;
 
     type := cast(StructTypeInfo*, type_of(T));
 
-    buffer: Array<u8>[1000];
-    string_buffer: StringBuffer = { buffer = buffer; }
+    string_buffer: StringBuffer = { buffer = *buffer; }
 
     serialize_json(&object, type, &string_buffer);
 
-    value: string;
-    if string_buffer.length > string_buffer.buffer.length {
-        value = { length = string_buffer.length; data = allocate(string_buffer.length); }
+    if string_buffer.length > buffer.length {
+        increment_size := 1000; #const
+        new_size := buffer.length + increment_size;
+        while new_size < string_buffer.length {
+            new_size += increment_size;
+        }
+
+        resize_buffer(buffer, new_size);
+
         string_buffer.length = 0;
-        string_buffer.buffer.length = value.length;
-        string_buffer.buffer.data = value.data;
+        string_buffer.buffer = *buffer;
         serialize_json(&object, type, &string_buffer);
     }
-    else {
-        value = { length = string_buffer.length; data = allocate(string_buffer.length); }
-        memory_copy(value.data, buffer.data, string_buffer.length);
-    }
 
+    value: string = { length = string_buffer.length; data = buffer.data; }
     return value;
 }
 
@@ -1219,6 +1246,35 @@ struct OpenAIResponseEventData {
 
 #private
 
+void* allocate_from_request_buffer(u64 length, void* data) {
+    workspace := cast(Workspace*, data);
+
+    if workspace.agent_data.request_buffer.length < length {
+        increment_size := 1000; #const
+        new_size := workspace.agent_data.request_buffer.length + increment_size;
+        while new_size < length {
+            new_size += increment_size;
+        }
+
+        resize_buffer(&workspace.agent_data.request_buffer, new_size);
+    }
+
+    return workspace.agent_data.request_buffer.data;
+}
+
+resize_buffer(Array<u8>* buffer, u64 new_length) {
+    previous_length := buffer.length;
+
+    new_buffer := allocate(new_length);
+    if buffer.length {
+        memory_copy(new_buffer, buffer.data, previous_length);
+        free_allocation(buffer.data);
+    }
+
+    buffer.data = new_buffer;
+    buffer.length = new_length;
+}
+
 bool socket_is_connected(Socket socket) {
     connected: bool;
 
@@ -1276,6 +1332,26 @@ bool, AddressInfo lookup_address(string domain, string port) {
     }
 
     return success, address_info;
+}
+
+interface bool, u64 SocketFunction(Workspace* workspace, void* buffer, u64 length)
+
+bool, u64 write_to_socket(Workspace* workspace, void* buffer, u64 length) {
+    success, written := socket_send(workspace.agent_data.socket, buffer, length);
+    return success, cast(u64, written);
+}
+
+bool, u64 write_to_socket_ssl(Workspace* workspace, void* buffer, u64 length) {
+    return socket_send_ssl(workspace.agent_data.ssl, buffer, length);
+}
+
+bool, u64 read_from_socket(Workspace* workspace, void* buffer, u64 length) {
+    success, read := socket_receive(workspace.agent_data.socket, buffer, length);
+    return success, cast(u64, read);
+}
+
+bool, u64 read_from_socket_ssl(Workspace* workspace, void* buffer, u64 length) {
+    return socket_receive_ssl(workspace.agent_data.ssl, buffer, length);
 }
 
 string get_agent_title() {
@@ -1395,20 +1471,28 @@ OpenAIResponseEvent parse_openai_event_name(string chunk) {
     return event;
 }
 
+ssl_initializing := false;
 ssl_initialized := false;
-
-init_ssl_job(int index, JobData data) {
-
-    CRYPTO_set_mem_functions(CRYPTO_malloc_impl, CRYPTO_realloc_impl, CRYPTO_free_impl);
-
-    cacert := temp_string(get_program_directory(), "/cacert.pem");
-    ssl_context = initialize_openssl(OpenSSLMethod.Client, cacert);
-    assert(ssl_context != null, "Unable to initialize OpenSSL context");
-
-    ssl_initialized = true;
-}
-
 ssl_context: SSL_CTX*;
+
+init_ssl() {
+    if !ssl_initialized {
+        if !ssl_initializing && compare_exchange(&ssl_initializing, true, false) == false {
+            CRYPTO_set_mem_functions(CRYPTO_malloc_impl, CRYPTO_realloc_impl, CRYPTO_free_impl);
+
+            cacert := temp_string(get_program_directory(), "/cacert.pem");
+            ssl_context = initialize_openssl(OpenSSLMethod.Client, cacert);
+            assert(ssl_context != null, "Unable to initialize OpenSSL context");
+
+            ssl_initialized = true;
+        }
+        else {
+            while !ssl_initialized {
+                sleep(1);
+            }
+        }
+    }
+}
 
 void* CRYPTO_malloc_impl(u64 num, u8* file, int line) {
     str := convert_c_string(file);
