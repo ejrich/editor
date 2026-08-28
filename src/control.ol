@@ -834,7 +834,7 @@ search_for_value(ModCode mod) {
     search_for_value_in_buffer();
 }
 
-// Debugger commands
+// Debugger keybinds
 [keybind, no_repeat]
 debugger_start_or_continue(ModCode mod) {
     start_or_continue_debugger();
@@ -868,4 +868,20 @@ debugger_run_to(ModCode mod) {
 [keybind, no_repeat]
 debugger_skip_to(ModCode mod) {
     skip_to();
+}
+
+// Agent keybinds
+[keybind, no_repeat]
+open_agent(ModCode mod) {
+    open_agent_window_command();
+}
+
+[keybind, no_repeat]
+cancel_agent(ModCode mod) {
+    cancel_agent_command();
+}
+
+[keybind, no_repeat]
+toggle_thinking(ModCode mod) {
+    toggle_thinking_command();
 }

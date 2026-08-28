@@ -22,6 +22,7 @@ struct AgentData {
     display_thinking: bool;
     previous_response_id: string;
     context: u32;
+    cancel: bool;
 }
 
 enum AgentStatus {
@@ -33,6 +34,7 @@ enum AgentStatus {
     ThinkingComplete;
     Outputting;
     FunctionCall;
+    Cancelled;
     Done;
 }
 
@@ -44,9 +46,9 @@ send_agent_message(int thread, JobData data) {
     workspace := cast(Workspace*, data.multiple.value2);
 
     if workspace.agent_data.buffer.line_count > 1
-        add_to_agent_buffer(workspace, "\n");
+        add_agent_buffer_new_lines(workspace, 1);
     add_to_agent_buffer(workspace, message, BufferLineFlags.Message);
-    add_to_agent_buffer(workspace, "\n\n", BufferLineFlags.Message);
+    add_agent_buffer_new_lines(workspace, 2);
 
     // TODO Use the selected model
     responses_request: OpenAIResponseRequest = {
@@ -135,7 +137,7 @@ send_agent_message(int thread, JobData data) {
     name: string;
     call_id: string;
 
-    while true {
+    while workspace.agent_data.status != AgentStatus.Cancelled {
         if carry == workspace.agent_data.response_buffer.length {
             resize_buffer(&workspace.agent_data.response_buffer, carry + 1000);
         }
@@ -181,6 +183,8 @@ send_agent_message(int thread, JobData data) {
             return;
         }
 
+        if workspace.agent_data.status == AgentStatus.Cancelled break;
+
         response: string = { length = length + carry; data = workspace.agent_data.response_buffer.data; }
 
         if !response_parsed {
@@ -205,12 +209,11 @@ send_agent_message(int thread, JobData data) {
                                     switch content.type {
                                         case OpenAIResponseOutputContentType.output_text; {
                                             add_to_agent_buffer(workspace, content.text);
-                                            add_to_agent_buffer(workspace, "\n");
+                                            add_agent_buffer_new_lines(workspace, 1);
                                         }
                                         case OpenAIResponseOutputContentType.reasoning_text; {
                                             add_to_agent_buffer(workspace, content.text, BufferLineFlags.Thinking);
-                                            add_to_agent_buffer(workspace, "\n", BufferLineFlags.Thinking);
-                                            add_to_agent_buffer(workspace, "\n");
+                                            add_agent_buffer_new_lines(workspace, 2);
                                         }
                                     }
                                 }
@@ -243,10 +246,13 @@ send_agent_message(int thread, JobData data) {
             }
         }
 
+
         if receiving_chunks {
             i := 0;
             has_end_chunk := false;
             while i < response.length {
+                if workspace.agent_data.status == AgentStatus.Cancelled break;
+
                 valid, index, chunk_size := http_get_chunk_size(response, i);
                 if !valid || index + chunk_size >= response.length {
                     carry = response.length - i;
@@ -282,8 +288,7 @@ send_agent_message(int thread, JobData data) {
                             }
                             case OpenAIResponseEvent.ReasoningTextDone; {
                                 workspace.agent_data.status = AgentStatus.ThinkingComplete;
-                                add_to_agent_buffer(workspace, "\n", BufferLineFlags.Thinking);
-                                add_to_agent_buffer(workspace, "\n");
+                                add_agent_buffer_new_lines(workspace, 2);
                                 trigger_window_update();
                             }
                             case OpenAIResponseEvent.FunctionCallArgumentsDone; {
@@ -299,7 +304,7 @@ send_agent_message(int thread, JobData data) {
                                 allocate_strings(&event_data.response.id);
                                 response_id = event_data.response.id;
                                 workspace.agent_data.context = event_data.response.usage.total_tokens;
-                                add_to_agent_buffer(workspace, "\n");
+                                add_agent_buffer_new_lines(workspace, 1);
                             }
                         }
                     }
@@ -314,6 +319,23 @@ send_agent_message(int thread, JobData data) {
             if has_end_chunk
                 break;
         }
+    }
+
+    if workspace.agent_data.status == AgentStatus.Cancelled {
+        close_socket(workspace.agent_data.socket);
+
+        if use_ssl {
+            SSL_free(workspace.agent_data.ssl);
+            workspace.agent_data.ssl = null;
+        }
+
+        #if os == OS.Linux {
+            workspace.agent_data.socket.socket = 0;
+        }
+        #if os == OS.Windows {
+            workspace.agent_data.socket.socket = null;
+        }
+        return;
     }
 
     if !string_is_empty(workspace.agent_data.previous_response_id) {
@@ -1409,10 +1431,24 @@ string get_agent_title() {
         case AgentStatus.ThinkingComplete; title = "Pending...";
         case AgentStatus.Outputting;       title = "Outputting...";
         case AgentStatus.FunctionCall;     title = "Calling functions";
+        case AgentStatus.Cancelled;        title = "Cancelled";
         case AgentStatus.Done;             title = "Finished";
     }
 
     return format_string("Context: % | %", temp_allocate, workspace.agent_data.context, title);
+}
+
+add_agent_buffer_new_lines(Workspace* workspace, u32 count) {
+    original_line := workspace.agent_data.buffer_window.line;
+    original_line_count := workspace.agent_data.buffer.line_count;
+
+    buffer := &workspace.agent_data.buffer;
+    end_line := get_buffer_line(buffer, buffer.line_count - 1);
+    each i in count {
+        end_line = add_new_line(null, buffer, end_line, false, false);
+    }
+
+    adjust_agent_window(workspace, end_line, original_line, original_line_count);
 }
 
 add_to_agent_buffer(Workspace* workspace, string text, BufferLineFlags flags = BufferLineFlags.None) {
@@ -1421,6 +1457,10 @@ add_to_agent_buffer(Workspace* workspace, string text, BufferLineFlags flags = B
 
     line := add_text_to_end_of_buffer(&workspace.agent_data.buffer, text, false, flags);
 
+    adjust_agent_window(workspace, line, original_line, original_line_count);
+}
+
+adjust_agent_window(Workspace* workspace, BufferLine* line, u32 original_line, u32 original_line_count) {
     both_windows_open := workspace.left_window.displayed && workspace.right_window.displayed;
     max_chars: u32;
     if both_windows_open {

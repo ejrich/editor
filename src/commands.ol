@@ -205,7 +205,7 @@ string, bool print_working_directory() {
 }
 
 [command, agent]
-string, bool open_agent_window() {
+string, bool open_agent_window_command() {
     workspace := get_workspace();
 
     editor_window: EditorWindow*;
@@ -218,12 +218,14 @@ string, bool open_agent_window() {
         }
     }
 
-    if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
-        editor_window.buffer_window = editor_window.buffer_window.next;
-    }
+    if editor_window.buffer_window != &workspace.agent_data.buffer_window {
+        if editor_window.buffer_window != null && editor_window.buffer_window.static_buffer != null {
+            editor_window.buffer_window = editor_window.buffer_window.next;
+        }
 
-    workspace.agent_data.buffer_window.next = workspace.left_window.buffer_window;
-    editor_window.buffer_window = &workspace.agent_data.buffer_window;
+        workspace.agent_data.buffer_window.next = workspace.left_window.buffer_window;
+        editor_window.buffer_window = &workspace.agent_data.buffer_window;
+    }
 
     return empty_string, false;
 }
@@ -243,8 +245,26 @@ string, bool send_agent_message_command(string message) {
     return empty_string, false;
 }
 
+[command, cancel_agent]
+string, bool cancel_agent_command() {
+    workspace := get_workspace();
+
+    switch workspace.agent_data.status {
+        case AgentStatus.Pending;
+        case AgentStatus.Thinking;
+        case AgentStatus.ThinkingComplete;
+        case AgentStatus.Outputting;
+        case AgentStatus.FunctionCall; {
+            print("Cancelling\n");
+            workspace.agent_data.status = AgentStatus.Cancelled;
+        }
+    }
+
+    return empty_string, false;
+}
+
 [command, thinking]
-string, bool toggle_thinking() {
+string, bool toggle_thinking_command() {
     workspace := get_workspace();
 
     if workspace.agent_data.display_thinking {
