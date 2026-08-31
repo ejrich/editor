@@ -1,7 +1,7 @@
 #import openssl
 
 init_agent() {
-    // TODO Queue job to load models
+    queue_work(&low_priority_queue, load_models_job);
 }
 
 deinit_agent() {
@@ -10,11 +10,41 @@ deinit_agent() {
     }
 }
 
+agent_settings: Array<AgentSettings>;
+
+struct AgentSettings {
+    url: string;
+    token: string;
+    type: AgentType;
+}
+
+enum AgentType {
+    OpenAI = 1;
+    // @Future Implement these APIs
+    Anthropic;
+    Google;
+}
+
+models: Array<AgentModel>;
+models_loaded := false;
+
+struct AgentModel {
+    api: u32;
+    name: string;
+}
+
+open_models_list() {
+    change_model_filter(empty_string);
+    start_list_mode("Models", get_models, get_model_count, null, change_model_filter, null, select_model);
+}
+
 struct AgentData {
     buffer: Buffer = { read_only = true; title = get_agent_title; }
     buffer_window: BufferWindow;
+    model: int = -1;
     socket: Socket;
     ssl: SSL*;
+    // TODO Use single buffer for this
     request_body_buffer: Array<u8>;
     request_buffer: Array<u8>;
     response_buffer: Array<u8>;
@@ -45,14 +75,13 @@ send_agent_message(int thread, JobData data) {
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
 
-    if workspace.agent_data.buffer.line_count > 1
-        add_agent_buffer_new_lines(workspace, 1);
-    add_to_agent_buffer(workspace, message, BufferLineFlags.Message);
-    add_agent_buffer_new_lines(workspace, 2);
+    model_index := workspace.agent_data.model;
+    if model_index < 0 || model_index >= models.length || !models_loaded return;
 
-    // TODO Use the selected model
+    model := models[model_index];
+
     responses_request: OpenAIResponseRequest = {
-        model = "google/gemma-4-26b-a4b-qat";
+        model = model.name;
         instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
         input = data.multiple.value1;
         stream = true;
@@ -64,10 +93,8 @@ send_agent_message(int thread, JobData data) {
 
     body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);
 
-    // TODO Don't hard code domain/port
-    domain := "evan-desktop.local";
-    port := "1234";
-    use_ssl := port == "443";
+    model_settings := agent_settings[model.api];
+    use_ssl, domain, port := parse_url(model_settings.url);
 
     read_from: SocketFunction;
     write_to: SocketFunction;
@@ -86,18 +113,28 @@ send_agent_message(int thread, JobData data) {
         connection = HTTPConnection.KeepAlive;
         resource = "/v1/responses";
         host = domain;
-        authorization = "Bearer sk-lm-Mukalw9D:ubAtA8TNXFzf7D5I6clm";
         content_type = "application/json";
         body = body;
     }
 
+    if !string_is_empty(model_settings.token) {
+        request.authorization = temp_string("Bearer ", model_settings.token);
+    }
+
     request_text := serialize_http_request(request, allocate_from_request_buffer, workspace);
     workspace.agent_data.status = AgentStatus.Ready;
+
+    if workspace.agent_data.buffer.line_count > 1
+        add_agent_buffer_new_lines(workspace, 1);
+    add_to_agent_buffer(workspace, message, BufferLineFlags.Message);
+    add_agent_buffer_new_lines(workspace, 2);
+
     trigger_window_update();
 
     if !socket_is_connected(workspace.agent_data.socket) {
         success, socket := connect_to_socket_with_retry(domain, port);
         if !success {
+            close_and_clear_socket(workspace, use_ssl);
             workspace.agent_data.status = AgentStatus.UnableToConnect;
             return;
         }
@@ -108,6 +145,7 @@ send_agent_message(int thread, JobData data) {
             init_ssl();
             ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
             if !ssl_success {
+                close_and_clear_socket(workspace, use_ssl);
                 workspace.agent_data.status = AgentStatus.UnableToConnect;
                 return;
             }
@@ -118,6 +156,7 @@ send_agent_message(int thread, JobData data) {
 
     sent, sent_length := write_to(workspace, request_text.data, request_text.length);
     if !sent {
+        close_and_clear_socket(workspace, use_ssl);
         workspace.agent_data.status = AgentStatus.Disconnected;
         return;
     }
@@ -148,6 +187,7 @@ send_agent_message(int thread, JobData data) {
             if !response_parsed {
                 success, socket := connect_to_socket_with_retry(domain, port);
                 if !success {
+                    close_and_clear_socket(workspace, use_ssl);
                     workspace.agent_data.status = AgentStatus.UnableToConnect;
                     return;
                 }
@@ -156,9 +196,11 @@ send_agent_message(int thread, JobData data) {
 
                 if use_ssl {
                     SSL_free(workspace.agent_data.ssl);
+                    workspace.agent_data.ssl = null;
 
                     ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
                     if !ssl_success {
+                        close_and_clear_socket(workspace, use_ssl);
                         workspace.agent_data.status = AgentStatus.UnableToConnect;
                         return;
                     }
@@ -168,6 +210,7 @@ send_agent_message(int thread, JobData data) {
 
                 sent, sent_length = write_to(workspace, request_text.data, request_text.length);
                 if !sent {
+                    close_and_clear_socket(workspace, use_ssl);
                     workspace.agent_data.status = AgentStatus.Disconnected;
                     return;
                 }
@@ -178,7 +221,7 @@ send_agent_message(int thread, JobData data) {
             if !string_is_empty(response_id) {
                 free_allocation(response_id.data);
             }
-            close_socket(workspace.agent_data.socket);
+            close_and_clear_socket(workspace, use_ssl);
             workspace.agent_data.status = AgentStatus.Disconnected;
             return;
         }
@@ -322,19 +365,7 @@ send_agent_message(int thread, JobData data) {
     }
 
     if workspace.agent_data.status == AgentStatus.Cancelled {
-        close_socket(workspace.agent_data.socket);
-
-        if use_ssl {
-            SSL_free(workspace.agent_data.ssl);
-            workspace.agent_data.ssl = null;
-        }
-
-        #if os == OS.Linux {
-            workspace.agent_data.socket.socket = 0;
-        }
-        #if os == OS.Windows {
-            workspace.agent_data.socket.socket = null;
-        }
+        close_and_clear_socket(workspace, use_ssl);
         return;
     }
 
@@ -348,53 +379,21 @@ send_agent_message(int thread, JobData data) {
     }
 }
 
-/*
-load_models() {
-    request: HTTPRequest = {
-        version = HTTPVersion.HTTP1_1;
-        method = HTTPMethod.GET;
-        connection = HTTPConnection.Close;
-        resource = "/v1/models";
-        host = "evan-desktop.local";
-        authorization = "Bearer sk-lm-Mukalw9D:ubAtA8TNXFzf7D5I6clm";
+close_and_clear_socket(Workspace* workspace, bool use_ssl) {
+    close_socket(workspace.agent_data.socket);
+
+    if use_ssl && workspace.agent_data.ssl != null {
+        SSL_free(workspace.agent_data.ssl);
+        workspace.agent_data.ssl = null;
     }
 
-    r := serialize_http_request(request);
-
-    success, address_info := lookup_ip_address_tcp("evan-desktop.local", "1234");
-    if success {
-        defer close_ip_address(address_info);
-
-        connected, socket := connect_socket(address_info);
-        if connected {
-            print("Connected to socket\n", socket);
-            sent := socket_send(socket, r.data, r.length);
-            print("Data sent %\n", sent);
-
-            carry := 0;
-            while true {
-                length := socket_receive(socket, response_buffer.data + carry, response_buffer.length - carry);
-                str: string = { length = length + carry; data = response_buffer.data; }
-
-                valid, index, response := parse_http_response(str);
-                if valid {
-                    // print("Response: %\n", response);
-                    models := parse_json<OpenAIModelResponse>(response.body);
-                    print("Models: %\n", models);
-                    break;
-                }
-                else {
-                    carry = str.length;
-                }
-            }
-
-            close_socket(socket);
-        }
+    #if os == OS.Linux {
+        workspace.agent_data.socket.socket = 0;
     }
-
-    exit_program(0);
+    #if os == OS.Windows {
+        workspace.agent_data.socket.socket = null;
+    }
 }
-*/
 
 bool, u64, u64 http_get_chunk_size(string text, u64 i) {
     size: u64;
@@ -1310,6 +1309,195 @@ struct OpenAIResponseEventData {
 
 #private
 
+load_models_job(int thread, JobData data) {
+    models_loaded = false;
+
+    if models.length {
+        each model in models {
+            free_allocation(model.name.data);
+        }
+
+        free_allocation(models.data);
+        models.length = 0;
+    }
+
+    each setting, i in agent_settings {
+        use_ssl, domain, port := parse_url(setting.url);
+
+        request: HTTPRequest = {
+            version = HTTPVersion.HTTP1_1;
+            method = HTTPMethod.GET;
+            connection = HTTPConnection.Close;
+            resource = "/v1/models";
+            host = domain;
+        }
+
+        if !string_is_empty(setting.token) {
+            request.authorization = temp_string("Bearer ", setting.token);
+        }
+
+        workspace := get_workspace();
+        request_text := serialize_http_request(request, allocate_from_request_buffer, workspace);
+
+        success, socket := connect_to_socket_with_retry(domain, port);
+        ssl: SSL*;
+
+        if !success continue;
+
+        if use_ssl {
+            init_ssl();
+            success, ssl = connect_socket_openssl(socket, domain, ssl_context);
+            if !success {
+                close_socket(socket);
+                continue;
+            }
+        }
+
+        sent: u64;
+        if use_ssl {
+            success, sent = socket_send_ssl(ssl, request_text.data, request_text.length);
+        }
+        else {
+            sent_s32: s32;
+            success, sent_s32 = socket_send(socket, request_text.data, request_text.length);
+            sent = sent_s32;
+        }
+
+        if !success {
+            close_socket(socket);
+            if use_ssl SSL_free(ssl);
+            continue;
+        }
+
+        carry := 0;
+        while true {
+            if carry == workspace.agent_data.response_buffer.length {
+                resize_buffer(&workspace.agent_data.response_buffer, carry + 1000);
+            }
+
+            received: bool;
+            length: u64;
+            if use_ssl {
+                received, length = socket_receive_ssl(ssl, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+            }
+            else {
+                length_s32: s32;
+                received, length_s32 = socket_receive(socket, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+                length = length_s32;
+            }
+
+            response_text: string = { length = length + carry; data = workspace.agent_data.response_buffer.data; }
+
+            valid, index, response := parse_http_response(response_text);
+            if valid {
+                model_list := parse_json<OpenAIModelResponse>(response.body);
+                agent_model: AgentModel = { api = i; }
+
+                each model in model_list.data {
+                    if string_is_empty(model.shutdown_date) {
+                        allocate_strings(&model.id);
+                        agent_model.name = model.id;
+                        array_insert(&models, agent_model, allocate, reallocate);
+                    }
+                }
+
+                if model_list.data.length {
+                    free_allocation(model_list.data.data);
+                }
+                break;
+            }
+            else {
+                carry = response_text.length;
+            }
+        }
+
+        close_socket(socket);
+        if use_ssl {
+            SSL_free(ssl);
+        }
+    }
+
+    models_loaded = true;
+    trigger_window_update();
+}
+
+
+Array<ListEntry> get_models() {
+    return model_entries;
+}
+
+int get_model_count() {
+    return models.length;
+}
+
+change_model_filter(string filter) {
+    if models.length > model_entries_reserved {
+        while model_entries_reserved < models.length {
+            model_entries_reserved += model_entries_block_size;
+        }
+
+        reallocate_array(&model_entries, model_entries_reserved);
+    }
+
+    if string_is_empty(filter) {
+        model_entries.length = models.length;
+        each model, i in models {
+            model_entries[i] = {
+                key = i;
+                name = model.name;
+            }
+        }
+    }
+    else {
+        model_entries.length = 0;
+        each model, i in models {
+            if string_contains(model.name, filter, false) {
+                model_entries[model_entries.length++] = {
+                    key = i;
+                    name = model.name;
+                }
+            }
+        }
+    }
+}
+
+select_model(int key) {
+    workspace := get_workspace();
+    workspace.agent_data.model = key;
+    // @Future handle changing provider
+}
+
+model_entries: Array<ListEntry>;
+model_entries_reserved := 0;
+model_entries_block_size := 10; #const
+
+bool, string, string parse_url(string url) {
+    ssl: bool;
+    domain, port: string;
+    if starts_with(url, "https://") {
+        url.length -= 8;
+        url.data += 8;
+        ssl = true;
+    }
+    else if starts_with(url, "http://") {
+        url.length -= 7;
+        url.data += 7;
+    }
+
+    parts := split_string(url, ':');
+    if parts.length == 1 {
+        domain = parts[0];
+        if ssl port = "443";
+        else   port = "80";
+    }
+    else if parts.length >= 2 {
+        domain = parts[0];
+        port = parts[1];
+    }
+
+    return ssl, domain, port;
+}
+
 void* allocate_from_request_buffer(u64 length, void* data) {
     workspace := cast(Workspace*, data);
 
@@ -1435,7 +1623,15 @@ string get_agent_title() {
         case AgentStatus.Done;             title = "Finished";
     }
 
-    return format_string("Context: % | %", temp_allocate, workspace.agent_data.context, title);
+    model: string;
+    if workspace.agent_data.model < 0 || workspace.agent_data.model >= models.length {
+        model = "No model selected";
+    }
+    else {
+        model = models[workspace.agent_data.model].name;
+    }
+
+    return format_string("% | Context: % | %", temp_allocate, model, workspace.agent_data.context, title);
 }
 
 add_agent_buffer_new_lines(Workspace* workspace, u32 count) {

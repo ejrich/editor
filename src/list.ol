@@ -255,9 +255,11 @@ draw_list_entries() {
             selected_line = -1;
         }
 
-        load_entry_data: JobData;
-        load_entry_data.pointer = &selected_entry;
-        queue_work(&low_priority_queue, list.load_entry, load_entry_data);
+        if list.load_entry != null {
+            load_entry_data: JobData;
+            load_entry_data.pointer = &selected_entry;
+            queue_work(&low_priority_queue, list.load_entry, load_entry_data);
+        }
     }
 
     entries_to_display: int;

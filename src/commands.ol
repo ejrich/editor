@@ -230,6 +230,16 @@ string, bool open_agent_window_command() {
     return empty_string, false;
 }
 
+[command, models]
+string, bool open_models_list_command() {
+    if !models_loaded {
+        return "Loading models", false;
+    }
+
+    open_models_list();
+    return empty_string, false;
+}
+
 [command, agent_message]
 string, bool send_agent_message_command(string message) {
     allocate_strings(&message);
@@ -255,7 +265,6 @@ string, bool cancel_agent_command() {
         case AgentStatus.ThinkingComplete;
         case AgentStatus.Outputting;
         case AgentStatus.FunctionCall; {
-            print("Cancelling\n");
             workspace.agent_data.status = AgentStatus.Cancelled;
         }
     }

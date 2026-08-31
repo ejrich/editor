@@ -47,6 +47,9 @@ struct Settings {
     [color]
     syntax_orange_color: u32;
     reactive_render: bool;
+    agent_api_urls: string;
+    agent_api_tokens: string;
+    agent_api_types: string;
 }
 
 #run {
@@ -188,6 +191,24 @@ load_settings_file() {
             convert_to_color(settings.syntax_aqua_color),
             convert_to_color(settings.syntax_orange_color)
         ]
+    }
+
+    urls := split_string(settings.agent_api_urls, ',');
+    tokens := split_string(settings.agent_api_tokens, ',');
+    types := split_string(settings.agent_api_types, ',');
+
+    array_resize(&agent_settings, urls.length, allocate, reallocate);
+
+    each i in urls.length {
+        agent_settings[i].url = urls[i];
+
+        if i < tokens.length
+            agent_settings[i].token = tokens[i];
+
+        if i < types.length {
+            success, type := get_enum_value<AgentType>(types[i]);
+            if success  agent_settings[i].type = type;
+        }
     }
 }
 
