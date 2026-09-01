@@ -75,6 +75,7 @@ send_agent_message(int thread, JobData data) {
 
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
+    defer free_allocation(message.data);
 
     model_index := workspace.agent_data.model;
     if model_index < 0 || model_index >= models.length || !models_loaded return;
@@ -282,14 +283,12 @@ send_agent_message(int thread, JobData data) {
                         free_allocation(response_object.output.data);
 
                     workspace.agent_data.context = response_object.usage.total_tokens;
-                    break;
                 }
             }
             else {
                 carry = response.length;
             }
         }
-
 
         if receiving_chunks {
             i := 0;
@@ -360,8 +359,14 @@ send_agent_message(int thread, JobData data) {
                 }
             }
 
-            if has_end_chunk
-                break;
+            if (receiving_chunks && has_end_chunk) || (!receiving_chunks && response_parsed) {
+                if function_calls.length {
+                    // TODO Handle function calls and call the api again
+                }
+                else {
+                    break;
+                }
+            }
         }
     }
 
