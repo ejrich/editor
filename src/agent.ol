@@ -80,50 +80,6 @@ send_agent_message(int thread, JobData data) {
     model_index := workspace.agent_data.model;
     if model_index < 0 || model_index >= models.length || !models_loaded return;
 
-    model := models[model_index];
-
-    responses_request: OpenAIResponseRequest = {
-        model = model.name;
-        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
-        input = data.multiple.value1;
-        stream = true;
-    }
-
-    if !string_is_empty(workspace.agent_data.previous_response_id) {
-        responses_request.previous_response_id = workspace.agent_data.previous_response_id;
-    }
-
-    body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);
-
-    model_settings := agent_settings[model.api];
-    use_ssl, domain, port := parse_url(model_settings.url);
-
-    read_from: SocketFunction;
-    write_to: SocketFunction;
-    if use_ssl {
-        read_from = read_from_socket_ssl;
-        write_to = write_to_socket_ssl;
-    }
-    else {
-        read_from = read_from_socket;
-        write_to = write_to_socket;
-    }
-
-    request: HTTPRequest = {
-        version = HTTPVersion.HTTP1_1;
-        method = HTTPMethod.POST;
-        connection = HTTPConnection.KeepAlive;
-        resource = "/v1/responses";
-        host = domain;
-        content_type = "application/json";
-        body = body;
-    }
-
-    if !string_is_empty(model_settings.token) {
-        request.authorization = temp_string("Bearer ", model_settings.token);
-    }
-
-    request_text := serialize_http_request(request, allocate_from_request_buffer, workspace);
     workspace.agent_data.status = AgentStatus.Ready;
 
     if workspace.agent_data.buffer.line_count > 1
@@ -131,35 +87,13 @@ send_agent_message(int thread, JobData data) {
     add_to_agent_buffer(workspace, message, BufferLineFlags.Message);
     add_agent_buffer_new_lines(workspace, 2);
 
-    trigger_window_update();
+    model := models[model_index];
+    model_settings := agent_settings[model.api];
+    use_ssl, domain, port := parse_url(model_settings.url);
 
-    if !socket_is_connected(workspace.agent_data.socket) {
-        success, socket := connect_to_socket_with_retry(domain, port);
-        if !success {
-            close_and_clear_socket(workspace, use_ssl);
-            workspace.agent_data.status = AgentStatus.UnableToConnect;
-            return;
-        }
+    request_text := build_agent_request(workspace, model, domain, workspace.agent_data.previous_response_id, message);
 
-        workspace.agent_data.socket = socket;
-
-        if use_ssl {
-            init_ssl();
-            ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
-            if !ssl_success {
-                close_and_clear_socket(workspace, use_ssl);
-                workspace.agent_data.status = AgentStatus.UnableToConnect;
-                return;
-            }
-
-            workspace.agent_data.ssl = ssl;
-        }
-    }
-
-    sent, sent_length := write_to(workspace, request_text.data, request_text.length);
-    if !sent {
-        close_and_clear_socket(workspace, use_ssl);
-        workspace.agent_data.status = AgentStatus.Disconnected;
+    if !send_agent_request(workspace, use_ssl, domain, port, request_text) {
         return;
     }
 
@@ -173,8 +107,7 @@ send_agent_message(int thread, JobData data) {
 
     response_id: string;
 
-    // TODO Handle function calls and free after handling all results
-    function_calls: Array<OpenAIResponseOutput>;
+    function_calls: Array<FunctionCall>;
     name: string;
     call_id: string;
 
@@ -183,37 +116,21 @@ send_agent_message(int thread, JobData data) {
             resize_buffer(&workspace.agent_data.response_buffer, carry + 1000);
         }
 
-        received, length := read_from(workspace, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+        received: bool;
+        length: u64;
+        if use_ssl {
+            received, length = socket_receive_ssl(workspace.agent_data.ssl, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+        }
+        else {
+            length_s32: s32;
+            received, length_s32 = socket_receive(workspace.agent_data.socket, workspace.agent_data.response_buffer.data + carry, workspace.agent_data.response_buffer.length - carry);
+            length = length_s32;
+        }
+
         if !received {
             // Reconnect and resend if the socket was closed
             if !response_parsed {
-                success, socket := connect_to_socket_with_retry(domain, port);
-                if !success {
-                    close_and_clear_socket(workspace, use_ssl);
-                    workspace.agent_data.status = AgentStatus.UnableToConnect;
-                    return;
-                }
-                close_socket(workspace.agent_data.socket);
-                workspace.agent_data.socket = socket;
-
-                if use_ssl {
-                    SSL_free(workspace.agent_data.ssl);
-                    workspace.agent_data.ssl = null;
-
-                    ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
-                    if !ssl_success {
-                        close_and_clear_socket(workspace, use_ssl);
-                        workspace.agent_data.status = AgentStatus.UnableToConnect;
-                        return;
-                    }
-
-                    workspace.agent_data.ssl = ssl;
-                }
-
-                sent, sent_length = write_to(workspace, request_text.data, request_text.length);
-                if !sent {
-                    close_and_clear_socket(workspace, use_ssl);
-                    workspace.agent_data.status = AgentStatus.Disconnected;
+                if !send_agent_request(workspace, use_ssl, domain, port, request_text, true) {
                     return;
                 }
                 carry = 0;
@@ -266,7 +183,7 @@ send_agent_message(int thread, JobData data) {
                             case OpenAIResponseOutputType.function_call; {
                                 allocate_strings(&output.name, &output.call_id);
                                 allocate_strings(&output.arguments);
-                                function_call: OpenAIResponseOutput = {
+                                function_call: FunctionCall = {
                                     name = output.name;
                                     call_id = output.call_id;
                                     arguments = output.arguments;
@@ -290,9 +207,9 @@ send_agent_message(int thread, JobData data) {
             }
         }
 
+        has_end_chunk := false;
         if receiving_chunks {
             i := 0;
-            has_end_chunk := false;
             while i < response.length {
                 if workspace.agent_data.status == AgentStatus.Cancelled break;
 
@@ -336,7 +253,7 @@ send_agent_message(int thread, JobData data) {
                             }
                             case OpenAIResponseEvent.FunctionCallArgumentsDone; {
                                 allocate_strings(&event_data.arguments);
-                                function_call: OpenAIResponseOutput = {
+                                function_call: FunctionCall = {
                                     name = name;
                                     call_id = call_id;
                                     arguments = event_data.arguments;
@@ -358,14 +275,28 @@ send_agent_message(int thread, JobData data) {
                     break;
                 }
             }
+        }
 
-            if (receiving_chunks && has_end_chunk) || (!receiving_chunks && response_parsed) {
-                if function_calls.length {
-                    // TODO Handle function calls and call the api again
+        if (receiving_chunks && has_end_chunk) || (!receiving_chunks && response_parsed) {
+            if function_calls.length {
+                request_text = handle_function_calls(workspace, model, domain, response_id, function_calls);
+
+                function_calls.length = 0;
+                free_allocation(function_calls.data);
+                response_id.length = 0;
+                free_allocation(response_id.data);
+
+                if !send_agent_request(workspace, use_ssl, domain, port, request_text) {
+                    return;
                 }
-                else {
-                    break;
-                }
+
+                receiving_chunks = false;
+                response_parsed = false;
+                carry = 0;
+                event = OpenAIResponseEvent.None;
+            }
+            else {
+                break;
             }
         }
     }
@@ -583,9 +514,199 @@ struct OpenAIResponseEventData {
     name: string;
     sequence_number: u32;
 }
-
 #private
 
+// Agent functions
+struct FunctionCall {
+    name: string;
+    call_id: string;
+    arguments: string;
+}
+
+string handle_function_calls(Workspace* workspace, AgentModel model, string domain, string response_id, Array<FunctionCall> function_calls) {
+    function_call_allocations: Array<bool>[function_calls.length];
+    function_call_outputs: Array<OpenAIResponseOutput>[function_calls.length];
+
+    each function_call, i in function_calls {
+        result, allocated := call_function(workspace, function_call);
+        function_call_outputs[i] = {
+            type = OpenAIResponseOutputType.function_call_output;
+            call_id = function_calls[i].call_id;
+            output = result;
+        }
+        function_call_allocations[i] = allocated;
+    }
+
+    request_text := build_agent_request(workspace, model, domain, response_id, function_call_outputs);
+
+    each i in function_calls.length {
+        if function_call_allocations[i] {
+            free_allocation(function_call_outputs[i].output.data);
+        }
+
+        free_allocation(function_calls[i].name.data);
+        free_allocation(function_calls[i].arguments.data);
+    }
+
+    return request_text;
+}
+
+string, bool call_function(Workspace* workspace, FunctionCall function_call) {
+    // TODO Call the requested functions
+    return "Test", false;
+}
+
+string build_agent_request(Workspace* workspace, AgentModel model, string domain, string response_id, string message = empty_string, Params<OpenAIResponseOutput> function_call_output) {
+    responses_request: OpenAIResponseRequest = {
+        model = model.name;
+        instructions = "Do not use latex in the output and make the output text easy to read without formatting.";
+        input = message;
+        input_array = function_call_output;
+        stream = true;
+    }
+
+    if !string_is_empty(response_id) {
+        responses_request.previous_response_id = response_id;
+    }
+
+    body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);
+
+    model_settings := agent_settings[model.api];
+
+    request: HTTPRequest = {
+        version = HTTPVersion.HTTP1_1;
+        method = HTTPMethod.POST;
+        connection = HTTPConnection.KeepAlive;
+        resource = "/v1/responses";
+        host = domain;
+        content_type = "application/json";
+        body = body;
+    }
+
+    if !string_is_empty(model_settings.token) {
+        request.authorization = temp_string("Bearer ", model_settings.token);
+    }
+
+    return serialize_http_request(request, allocate_from_request_buffer, workspace);
+}
+
+bool send_agent_request(Workspace* workspace, bool use_ssl, string domain, string port, string request_text, bool close = false) {
+    workspace.agent_data.status = AgentStatus.Ready;
+
+    if close || !socket_is_connected(workspace.agent_data.socket) {
+        success, socket := connect_to_socket_with_retry(domain, port);
+        if !success {
+            close_and_clear_socket(workspace, use_ssl);
+            workspace.agent_data.status = AgentStatus.UnableToConnect;
+            return false;
+        }
+
+        close_socket(workspace.agent_data.socket);
+        workspace.agent_data.socket = socket;
+
+        if use_ssl {
+            init_ssl();
+            SSL_free(workspace.agent_data.ssl);
+
+            ssl_success, ssl := connect_socket_openssl(socket, domain, ssl_context);
+            if !ssl_success {
+                close_and_clear_socket(workspace, use_ssl);
+                workspace.agent_data.status = AgentStatus.UnableToConnect;
+                return false;
+            }
+
+            workspace.agent_data.ssl = ssl;
+        }
+    }
+
+    sent: bool;
+    sent_length: u64;
+    if use_ssl {
+        sent, sent_length = socket_send_ssl(workspace.agent_data.ssl, request_text.data, request_text.length);
+    }
+    else {
+        sent_length_s32: s32;
+        sent, sent_length_s32 = socket_send(workspace.agent_data.socket, request_text.data, request_text.length);
+        sent_length = sent_length_s32;
+    }
+
+    if !sent {
+        close_and_clear_socket(workspace, use_ssl);
+        workspace.agent_data.status = AgentStatus.Disconnected;
+    }
+
+    return sent;
+}
+
+OpenAIResponseEvent parse_openai_event_name(string chunk) {
+    start := 7;
+    while start < chunk.length && is_whitespace(chunk[start]) {
+        start++;
+    }
+
+    event_name: string = { data = chunk.data + start; }
+    while start < chunk.length && !is_whitespace(chunk[start++]) {
+        event_name.length++;
+    }
+
+    name_parts := split_string(event_name, '.');
+    assert(name_parts.length >= 2);
+
+    event := OpenAIResponseEvent.None;
+    if name_parts[1] == "created" {
+        event = OpenAIResponseEvent.Created;
+    }
+    else if name_parts[1] == "in_progress" {
+        event = OpenAIResponseEvent.InProgress;
+    }
+    else if name_parts[1] == "output_item" {
+        assert(name_parts.length >= 3);
+        if name_parts[2] == "added" {
+            event = OpenAIResponseEvent.OutputItemAdded;
+        }
+        else if name_parts[2] == "done" {
+            event = OpenAIResponseEvent.OutputItemDone;
+        }
+    }
+    else if name_parts[1] == "content_part" {
+        assert(name_parts.length >= 3);
+        if name_parts[2] == "added" {
+            event = OpenAIResponseEvent.ContentPartAdded;
+        }
+        else if name_parts[2] == "done" {
+            event = OpenAIResponseEvent.ContentPartDone;
+        }
+    }
+    else if name_parts[1] == "reasoning_text" {
+        assert(name_parts.length >= 3);
+        if name_parts[2] == "delta" {
+            event = OpenAIResponseEvent.ReasoningTextDelta;
+        }
+        else if name_parts[2] == "done" {
+            event = OpenAIResponseEvent.ReasoningTextDone;
+        }
+    }
+    else if name_parts[1] == "output_text" {
+        assert(name_parts.length >= 3);
+        if name_parts[2] == "delta" {
+            event = OpenAIResponseEvent.OutputTextDelta;
+        }
+        else if name_parts[2] == "done" {
+            event = OpenAIResponseEvent.OutputTextDone;
+        }
+    }
+    else if name_parts[1] == "function_call_arguments" {
+        assert(name_parts.length >= 3);
+        if name_parts[2] == "done" {
+            event = OpenAIResponseEvent.FunctionCallArgumentsDone;
+        }
+    }
+    else if name_parts[1] == "completed" {
+        event = OpenAIResponseEvent.Completed;
+    }
+
+    return event;
+}
 
 // Models
 load_models_job(int thread, JobData data) {
@@ -904,26 +1025,6 @@ bool, AddressInfo lookup_address(string domain, string port) {
     return success, address_info;
 }
 
-interface bool, u64 SocketFunction(Workspace* workspace, void* buffer, u64 length)
-
-bool, u64 write_to_socket(Workspace* workspace, void* buffer, u64 length) {
-    success, written := socket_send(workspace.agent_data.socket, buffer, length);
-    return success, cast(u64, written);
-}
-
-bool, u64 write_to_socket_ssl(Workspace* workspace, void* buffer, u64 length) {
-    return socket_send_ssl(workspace.agent_data.ssl, buffer, length);
-}
-
-bool, u64 read_from_socket(Workspace* workspace, void* buffer, u64 length) {
-    success, read := socket_receive(workspace.agent_data.socket, buffer, length);
-    return success, cast(u64, read);
-}
-
-bool, u64 read_from_socket_ssl(Workspace* workspace, void* buffer, u64 length) {
-    return socket_receive_ssl(workspace.agent_data.ssl, buffer, length);
-}
-
 
 // Agent buffer functions
 string get_agent_title() {
@@ -997,76 +1098,6 @@ adjust_agent_window(Workspace* workspace, BufferLine* line, u32 original_line, u
     }
 
     trigger_window_update();
-}
-
-OpenAIResponseEvent parse_openai_event_name(string chunk) {
-    start := 7;
-    while start < chunk.length && is_whitespace(chunk[start]) {
-        start++;
-    }
-
-    event_name: string = { data = chunk.data + start; }
-    while start < chunk.length && !is_whitespace(chunk[start++]) {
-        event_name.length++;
-    }
-
-    name_parts := split_string(event_name, '.');
-    assert(name_parts.length >= 2);
-
-    event := OpenAIResponseEvent.None;
-    if name_parts[1] == "created" {
-        event = OpenAIResponseEvent.Created;
-    }
-    else if name_parts[1] == "in_progress" {
-        event = OpenAIResponseEvent.InProgress;
-    }
-    else if name_parts[1] == "output_item" {
-        assert(name_parts.length >= 3);
-        if name_parts[2] == "added" {
-            event = OpenAIResponseEvent.OutputItemAdded;
-        }
-        else if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.OutputItemDone;
-        }
-    }
-    else if name_parts[1] == "content_part" {
-        assert(name_parts.length >= 3);
-        if name_parts[2] == "added" {
-            event = OpenAIResponseEvent.ContentPartAdded;
-        }
-        else if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.ContentPartDone;
-        }
-    }
-    else if name_parts[1] == "reasoning_text" {
-        assert(name_parts.length >= 3);
-        if name_parts[2] == "delta" {
-            event = OpenAIResponseEvent.ReasoningTextDelta;
-        }
-        else if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.ReasoningTextDone;
-        }
-    }
-    else if name_parts[1] == "output_text" {
-        assert(name_parts.length >= 3);
-        if name_parts[2] == "delta" {
-            event = OpenAIResponseEvent.OutputTextDelta;
-        }
-        else if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.OutputTextDone;
-        }
-    }
-    else if name_parts[1] == "function_call_arguments" {
-        assert(name_parts.length >= 3);
-        if name_parts[2] == "done" {
-            event = OpenAIResponseEvent.FunctionCallArgumentsDone;
-        }
-    }
-    else if name_parts[1] == "completed" {
-        event = OpenAIResponseEvent.Completed;
-    }
-
-    return event;
 }
 
 
