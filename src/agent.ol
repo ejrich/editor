@@ -1,5 +1,6 @@
 #import openssl
 #import "json.ol"
+#import "tools.ol"
 
 init_agent() {
     queue_work(&low_priority_queue, load_models_job);
@@ -356,7 +357,7 @@ struct OpenAIResponseRequest {
     reasoning: OpenAIResponseRequestReasoning;
     stream: bool;
     tool_choice: OpenAIResponseRequestToolChoice;
-    tools: Array<OpenAIResponseRequestTool>;
+    tools: Array<ToolSchema>;
 }
 
 struct OpenAIResponseRequestReasoning {
@@ -377,14 +378,6 @@ enum OpenAIResponseRequestToolChoice {
     none = 1;
     auto;
     required;
-}
-
-struct OpenAIResponseRequestTool {
-    type: string;
-    name: string;
-    description: string;
-    strict: bool;
-    parameters: JsonSchema;
 }
 
 struct OpenAIResponse {
@@ -552,8 +545,17 @@ string handle_function_calls(Workspace* workspace, AgentModel model, string doma
 }
 
 string, bool call_function(Workspace* workspace, FunctionCall function_call) {
-    // TODO Call the requested functions
-    return "Test", false;
+    result: string;
+    allocated: bool;
+
+    each tool in tools {
+        if tool.name == function_call.name {
+            result, allocated = tool.call(workspace, function_call.arguments);
+            break;
+        }
+    }
+
+    return result, allocated;
 }
 
 string build_agent_request(Workspace* workspace, AgentModel model, string domain, string response_id, string message = empty_string, Params<OpenAIResponseOutput> function_call_output) {
@@ -567,6 +569,9 @@ string build_agent_request(Workspace* workspace, AgentModel model, string domain
 
     if !string_is_empty(response_id) {
         responses_request.previous_response_id = response_id;
+    }
+    else {
+        responses_request.tools = tool_schemas;
     }
 
     body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);

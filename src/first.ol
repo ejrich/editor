@@ -49,10 +49,11 @@ executable_name := "editor";
     create_shader_library();
 
     if intercept_compiler_messages() {
-        profiling_data_variable, function_names_variable, keybind_definitions_variable, commands_variable: GlobalVariableAst*;
+        profiling_data_variable, function_names_variable, keybind_definitions_variable, commands_variable, tools_variable, tool_schemas_variable: GlobalVariableAst*;
         profiled_function_names: Array<string>;
         keybind_functions: Array<KeybindFunction>;
         commands: Array<Command>;
+        tool_definitions: Array<ToolDefinition>;
         function_index, function_names_length, keybind_definitions_length, commands_length: int;
 
         message: CompilerMessage;
@@ -80,6 +81,12 @@ executable_name := "editor";
                         }
                         if global.name == "commands" {
                             commands_variable = global;
+                        }
+                        if global.name == "tools" {
+                            tools_variable = global;
+                        }
+                        if global.name == "tool_schemas" {
+                            tool_schemas_variable = global;
                         }
                     }
                 }
@@ -124,6 +131,26 @@ executable_name := "editor";
                             }
                             else {
                                 error_string := format_string("Function '%' has the incorrect arguments/return type for a command. The return type needs to be 'string, bool' and the arguments can only be bool, integer, float, or string types", function.name);
+                                defer default_free(error_string.data);
+                                report_error(error_string, function);
+                            }
+                        }
+                        else if array_contains(function.attributes, "tool") {
+                            verified, arguments_type := verify_tool_arguments(function);
+                            if verified {
+                                tool_definition: ToolDefinition = {
+                                    name = function.name;
+                                    arguments_type = arguments_type;
+                                }
+                                if function.attributes.length > 1 {
+                                    tool_definition.description = function.attributes[1];
+                                }
+
+                                generate_tool(tool_definition);
+                                array_insert(&tool_definitions, tool_definition);
+                            }
+                            else {
+                                error_string := format_string("Function '%' has the incorrect arguments/return type for a tool. The return type needs to be 'string, bool' and the arguments must be (Workspace*, T) where T is a struct", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);
                             }
@@ -265,6 +292,10 @@ executable_name := "editor";
 
                         commands_initial_value[commands_length - 1] = ']';
                         set_global_variable_value(commands_variable, commands_initial_value);
+                    }
+
+                    if tool_definitions.length > 0 && tools_variable != null && tool_schemas_variable != null {
+                        // TODO Initialize the tools and schemas variables
                     }
                 }
                 case CompilerMessageType.CodeGenerated; {}
@@ -547,6 +578,49 @@ CommandResult, string, bool __%(Array<string> args) {
     add_code(code_string);
 }
 
+// Code for verifying and generating tools
+struct ToolDefinition {
+    name: string;
+    description: string;
+    arguments_type: StructTypeInfo*;
+}
+
+int tool_sort(ToolDefinition a, ToolDefinition b) {
+    if a.name > b.name return 1;
+    if a.name < b.name return -1;
+    return 0;
+}
+
+bool, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
+    if function.return_type.type != TypeKind.Compound return false, null;
+
+    compound_return_type := cast(CompoundTypeInfo*, function.return_type);
+    if compound_return_type.types.length != 2 ||
+        compound_return_type.types[0].type != TypeKind.String ||
+        compound_return_type.types[1].type != TypeKind.Boolean
+        return false, null;
+
+    if function.arguments.length != 2 ||
+        function.arguments[0].type_info.name != "Workspace*" ||
+        function.arguments[1].type_info.type != TypeKind.Struct return false, null;
+
+    return true, cast(StructTypeInfo*, function.arguments[1].type_info);
+}
+
+generate_tool(ToolDefinition tool) {
+    function_parts: Array<string>;
+
+    code_string := format_string("""
+string, bool __%(Workspace* workspace, string args) {
+    arguments := parse_json<%>(args);
+    return %(workspace, arguments);
+}""", tool.name, tool.arguments_type.name, tool.name);
+    defer default_free(code_string.data);
+
+    add_code(code_string);
+
+    // TODO Add the tool schema
+}
 
 // General helper functions
 bool ends_with(string value, string ending) {
