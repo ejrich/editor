@@ -54,7 +54,7 @@ executable_name := "editor";
         keybind_functions: Array<KeybindFunction>;
         commands: Array<Command>;
         tool_definitions: Array<ToolDefinition>;
-        function_index, function_names_length, keybind_definitions_length, commands_length: int;
+        function_index, function_names_length, keybind_definitions_length, commands_length, tool_definitions_length: int;
 
         message: CompilerMessage;
         while get_next_compiler_message(&message) {
@@ -138,19 +138,12 @@ executable_name := "editor";
                         else if array_contains(function.attributes, "tool") {
                             verified, arguments_type := verify_tool_arguments(function);
                             if verified {
-                                tool_definition: ToolDefinition = {
-                                    name = function.name;
-                                    arguments_type = arguments_type;
-                                }
-                                if function.attributes.length > 1 {
-                                    tool_definition.description = function.attributes[1];
-                                }
-
-                                generate_tool(tool_definition);
+                                tool_definition := generate_tool(function, arguments_type);
+                                tool_definitions_length += tool_definition.schema.length + 1;
                                 array_insert(&tool_definitions, tool_definition);
                             }
                             else {
-                                error_string := format_string("Function '%' has the incorrect arguments/return type for a tool. The return type needs to be 'string, bool' and the arguments must be (Workspace*, T) where T is a struct", function.name);
+                                error_string := format_string("Function '%' has the incorrect arguments/return type for a tool. The return type needs to be 'string, bool' and the arguments must be (Workspace*, T) where T is a struct the bool/integer/enum/float/string field(s)", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);
                             }
@@ -294,8 +287,20 @@ executable_name := "editor";
                         set_global_variable_value(commands_variable, commands_initial_value);
                     }
 
-                    if tool_definitions.length > 0 && tools_variable != null && tool_schemas_variable != null {
+                    if tool_definitions_length > 0 && tools_variable != null && tool_schemas_variable != null {
                         // TODO Initialize the tools and schemas variables
+                        tool_definitions_length++;
+                        tool_schemas_initial_value: string = { length = tool_definitions_length; data = default_allocator(tool_definitions_length); }
+                        defer default_free(tool_schemas_initial_value.data);
+                        i: u64;
+                        insert_string(tool_schemas_initial_value, &i, "[");
+                        each tool in tool_definitions {
+                            insert_string(tool_schemas_initial_value, &i, tool.schema);
+                            insert_string(tool_schemas_initial_value, &i, ",");
+                        }
+                        tool_schemas_initial_value[i - 1] = ']';
+
+                        set_global_variable_value(tool_schemas_variable, tool_schemas_initial_value);
                     }
                 }
                 case CompilerMessageType.CodeGenerated; {}
@@ -582,7 +587,7 @@ CommandResult, string, bool __%(Array<string> args) {
 struct ToolDefinition {
     name: string;
     description: string;
-    arguments_type: StructTypeInfo*;
+    schema: string;
 }
 
 int tool_sort(ToolDefinition a, ToolDefinition b) {
@@ -604,22 +609,163 @@ bool, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
         function.arguments[0].type_info.name != "Workspace*" ||
         function.arguments[1].type_info.type != TypeKind.Struct return false, null;
 
+    arguments_type := cast(StructTypeInfo*, function.arguments[1].type_info);
+
+    each field in arguments_type.fields {
+        switch field.type_info.type {
+            case TypeKind.Boolean;
+            case TypeKind.Integer;
+            case TypeKind.Float;
+            case TypeKind.Enum;
+            case TypeKind.String; {}
+            default; return false, null;
+        }
+    }
+
     return true, cast(StructTypeInfo*, function.arguments[1].type_info);
 }
 
-generate_tool(ToolDefinition tool) {
-    function_parts: Array<string>;
+ToolDefinition generate_tool(FunctionAst* function, StructTypeInfo* arguments_type) {
+    tool: ToolDefinition = {
+        name = function.name;
+    }
+    if function.attributes.length > 1 {
+        tool.description = function.attributes[1];
+    }
 
     code_string := format_string("""
 string, bool __%(Workspace* workspace, string args) {
     arguments := parse_json<%>(args);
     return %(workspace, arguments);
-}""", tool.name, tool.arguments_type.name, tool.name);
+}""", tool.name, arguments_type.name, tool.name);
     defer default_free(code_string.data);
 
     add_code(code_string);
 
     // TODO Add the tool schema
+    start := "{type=ToolSchemaType.function;name=\""; #const
+    length := start.length + tool.name.length;
+    description := "\";description=\""; #const
+    length += description.length + tool.description.length;
+    parameters := "\";strict=true;parameters={type=JsonSchemaType.object;properties=["; #const
+    length += parameters.length;
+
+    property_name := "{name=\""; #const
+    property_description := "\";description=\""; #const
+    property_type := "\";type=JsonSchemaPropertyType."; #const
+    property_enum_names := "enum_names=["; #const
+    property_end := "},"; #const
+
+    each field, i in arguments_type.fields {
+        length += property_name.length + field.name.length * 2 + 3;
+
+        if field.attributes.length {
+            length += property_description.length + field.attributes[0].length;
+        }
+
+        length += property_type.length;
+
+        switch field.type_info.type {
+            case TypeKind.Boolean;
+            case TypeKind.Integer; {
+                length += 8;
+            }
+            case TypeKind.Float;
+            case TypeKind.Enum;
+            case TypeKind.String; {
+                length += 7;
+            }
+        }
+
+        if field.type_info.type == TypeKind.Enum {
+            length += property_enum_names.length;
+            enum_type := cast(EnumTypeInfo*, field.type_info);
+            each enum_value in enum_type.values {
+                length += enum_value.name.length + 3;
+            }
+
+            if enum_type.values.length == 1 length--;
+        }
+
+        length += property_end.length;
+        if i == arguments_type.fields.length - 1 length -= 2;
+    }
+
+    required := "] required=["; #const
+    end := "] additionalProperties=false;}}"; #const
+    length += required.length + end.length;
+
+    tool_schema: string = { length = length; data = default_allocator(length); }
+    i: u64;
+    insert_string(tool_schema, &i, start);
+    insert_string(tool_schema, &i, tool.name);
+
+    insert_string(tool_schema, &i, description);
+    insert_string(tool_schema, &i, tool.description);
+
+    insert_string(tool_schema, &i, parameters);
+
+    each field, j in arguments_type.fields {
+        insert_string(tool_schema, &i, property_name);
+        insert_string(tool_schema, &i, field.name);
+
+        if field.attributes.length {
+            insert_string(tool_schema, &i, property_description);
+            insert_string(tool_schema, &i, field.attributes[0]);
+        }
+
+        insert_string(tool_schema, &i, property_type);
+
+        switch field.type_info.type {
+            case TypeKind.Boolean; {
+                insert_string(tool_schema, &i, "boolean;");
+            }
+            case TypeKind.Integer; {
+                insert_string(tool_schema, &i, "integer;");
+            }
+            case TypeKind.Float; {
+                insert_string(tool_schema, &i, "number;");
+            }
+            case TypeKind.Enum;
+            case TypeKind.String; {
+                insert_string(tool_schema, &i, "string;");
+            }
+        }
+
+        if field.type_info.type == TypeKind.Enum {
+            insert_string(tool_schema, &i, property_enum_names);
+            enum_type := cast(EnumTypeInfo*, field.type_info);
+            each enum_value, k in enum_type.values {
+                insert_string(tool_schema, &i, "\"");
+                insert_string(tool_schema, &i, enum_value.name);
+                insert_string(tool_schema, &i, "\",");
+                if k == enum_type.values.length - 1 i--;
+            }
+            insert_string(tool_schema, &i, "]");
+        }
+
+        insert_string(tool_schema, &i, property_end);
+        if j == arguments_type.fields.length - 1 i--;
+    }
+
+    insert_string(tool_schema, &i, required);
+    each field, j in arguments_type.fields {
+        insert_string(tool_schema, &i, "\"");
+        insert_string(tool_schema, &i, field.name);
+        insert_string(tool_schema, &i, "\",");
+        if j == arguments_type.fields.length - 1 i--;
+    }
+
+    insert_string(tool_schema, &i, end);
+
+    tool.schema = tool_schema;
+
+    return tool;
+}
+
+insert_string(string target, u64* start, string value) {
+    memory_copy(target.data + *start, value.data, value.length);
+    *start = *start + value.length;
 }
 
 // General helper functions

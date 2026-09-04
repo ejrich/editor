@@ -1,12 +1,14 @@
 struct ToolSchema {
-    type: string;
+    type: ToolSchemaType;
     name: string;
     description: string;
     strict: bool;
     parameters: JsonSchema;
 }
 
-function_type := "function"; #const
+enum ToolSchemaType {
+    function;
+}
 
 interface string, bool ToolCall(Workspace* workspace, string arguments)
 

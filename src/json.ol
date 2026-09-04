@@ -38,16 +38,20 @@ T parse_json<T>(string text, u64 i = 0) {
 }
 
 struct JsonSchema {
-    type: string;
+    type: JsonSchemaType;
     properties: Array<JsonSchemaProperty>;
     required: Array<string>;
     additionalProperties: bool;
 }
 
+enum JsonSchemaType {
+    object;
+}
+
 struct JsonSchemaProperty {
     name: string;
-    type: JsonSchemaPropertyType;
     description: string;
+    type: JsonSchemaPropertyType;
     enum_names: Array<string>;
 }
 
@@ -68,7 +72,7 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
         add_char_to_string_buffer(buffer, '{');
 
         add_to_string_buffer(buffer, "\"type\":\"");
-        add_to_string_buffer(buffer, json_schema.type);
+        add_to_string_buffer(buffer, get_enum_name(json_schema.type));
 
         add_to_string_buffer(buffer, "\",\"required\":");
         serialize_json_array(&json_schema.required, type_of(string), buffer);
