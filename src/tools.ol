@@ -43,3 +43,13 @@ string, bool read_file_lines(Workspace* workspace, ReadFileLineArguments args) {
 }
 
 // TODO Implement the rest of the tools
+struct GetWeatherArguments {
+    city: string;
+    state: string;
+}
+
+[tool, "Gets the current weather for the requested location"]
+string, bool get_weather(Workspace* workspace, GetWeatherArguments args) {
+    print("Getting the weather for %\n", args);
+    return "77F", false;
+}

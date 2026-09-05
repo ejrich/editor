@@ -54,7 +54,7 @@ executable_name := "editor";
         keybind_functions: Array<KeybindFunction>;
         commands: Array<Command>;
         tool_definitions: Array<ToolDefinition>;
-        function_index, function_names_length, keybind_definitions_length, commands_length, tool_definitions_length: int;
+        function_index, function_names_length, keybind_definitions_length, commands_length, tool_entries_length, tool_schemas_length: int;
 
         message: CompilerMessage;
         while get_next_compiler_message(&message) {
@@ -139,7 +139,8 @@ executable_name := "editor";
                             verified, arguments_type := verify_tool_arguments(function);
                             if verified {
                                 tool_definition := generate_tool(function, arguments_type);
-                                tool_definitions_length += tool_definition.schema.length + 1;
+                                tool_entries_length += tool_definition.entry.length;
+                                tool_schemas_length += tool_definition.schema.length;
                                 array_insert(&tool_definitions, tool_definition);
                             }
                             else {
@@ -287,19 +288,29 @@ executable_name := "editor";
                         set_global_variable_value(commands_variable, commands_initial_value);
                     }
 
-                    if tool_definitions_length > 0 && tools_variable != null && tool_schemas_variable != null {
-                        // TODO Initialize the tools and schemas variables
-                        tool_definitions_length++;
-                        tool_schemas_initial_value: string = { length = tool_definitions_length; data = default_allocator(tool_definitions_length); }
-                        defer default_free(tool_schemas_initial_value.data);
-                        i: u64;
-                        insert_string(tool_schemas_initial_value, &i, "[");
-                        each tool in tool_definitions {
-                            insert_string(tool_schemas_initial_value, &i, tool.schema);
-                            insert_string(tool_schemas_initial_value, &i, ",");
-                        }
-                        tool_schemas_initial_value[i - 1] = ']';
+                    bubble_sort(tool_definitions, tool_sort);
+                    if tool_entries_length > 0 && tools_variable != null && tool_schemas_variable != null {
+                        tool_entries_length++;
+                        tool_entries_initial_value: string = { length = tool_entries_length; data = default_allocator(tool_entries_length); }
+                        defer default_free(tool_entries_initial_value.data);
 
+                        tool_schemas_length++;
+                        tool_schemas_initial_value: string = { length = tool_schemas_length; data = default_allocator(tool_schemas_length); }
+                        defer default_free(tool_schemas_initial_value.data);
+
+                        i, j: u64;
+                        insert_string(tool_entries_initial_value, &i, "[");
+                        insert_string(tool_schemas_initial_value, &j, "[");
+
+                        each tool in tool_definitions {
+                            insert_string(tool_entries_initial_value, &i, tool.entry);
+                            insert_string(tool_schemas_initial_value, &j, tool.schema);
+                        }
+
+                        tool_entries_initial_value[i - 1] = ']';
+                        tool_schemas_initial_value[j - 1] = ']';
+
+                        set_global_variable_value(tools_variable, tool_entries_initial_value);
                         set_global_variable_value(tool_schemas_variable, tool_schemas_initial_value);
                     }
                 }
@@ -586,7 +597,7 @@ CommandResult, string, bool __%(Array<string> args) {
 // Code for verifying and generating tools
 struct ToolDefinition {
     name: string;
-    description: string;
+    entry: string;
     schema: string;
 }
 
@@ -626,13 +637,13 @@ bool, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
 }
 
 ToolDefinition generate_tool(FunctionAst* function, StructTypeInfo* arguments_type) {
-    tool: ToolDefinition = {
-        name = function.name;
-    }
+    tool: ToolDefinition = { name = function.name; }
+    tool_description: string;
     if function.attributes.length > 1 {
-        tool.description = function.attributes[1];
+        tool_description = function.attributes[1];
     }
 
+    // Emit the function to be called
     code_string := format_string("""
 string, bool __%(Workspace* workspace, string args) {
     arguments := parse_json<%>(args);
@@ -642,11 +653,14 @@ string, bool __%(Workspace* workspace, string args) {
 
     add_code(code_string);
 
-    // TODO Add the tool schema
+    // Format the tool entry
+    tool_entry := format_string("{name=\"%\";call=__%;},", tool.name, tool.name);
+
+    // Format the tool schema
     start := "{type=ToolSchemaType.function;name=\""; #const
     length := start.length + tool.name.length;
     description := "\";description=\""; #const
-    length += description.length + tool.description.length;
+    length += description.length + tool_description.length;
     parameters := "\";strict=true;parameters={type=JsonSchemaType.object;properties=["; #const
     length += parameters.length;
 
@@ -692,7 +706,7 @@ string, bool __%(Workspace* workspace, string args) {
     }
 
     required := "] required=["; #const
-    end := "] additionalProperties=false;}}"; #const
+    end := "] additionalProperties=false;}},"; #const
     length += required.length + end.length;
 
     tool_schema: string = { length = length; data = default_allocator(length); }
@@ -701,7 +715,7 @@ string, bool __%(Workspace* workspace, string args) {
     insert_string(tool_schema, &i, tool.name);
 
     insert_string(tool_schema, &i, description);
-    insert_string(tool_schema, &i, tool.description);
+    insert_string(tool_schema, &i, tool_description);
 
     insert_string(tool_schema, &i, parameters);
 
@@ -758,8 +772,10 @@ string, bool __%(Workspace* workspace, string args) {
 
     insert_string(tool_schema, &i, end);
 
-    tool.schema = tool_schema;
-
+    tool = {
+        entry = tool_entry;
+        schema = tool_schema;
+    }
     return tool;
 }
 
