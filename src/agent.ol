@@ -566,13 +566,11 @@ string build_agent_request(Workspace* workspace, AgentModel model, string domain
         input = message;
         input_array = function_call_output;
         stream = true;
+        tools = tool_schemas;
     }
 
     if !string_is_empty(response_id) {
         responses_request.previous_response_id = response_id;
-    }
-    else {
-        responses_request.tools = tool_schemas;
     }
 
     body := serialize_json(responses_request, &workspace.agent_data.request_body_buffer);
