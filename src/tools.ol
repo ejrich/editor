@@ -7,7 +7,7 @@ struct ToolSchema {
 }
 
 enum ToolSchemaType {
-    function;
+    function = 1;
 }
 
 interface string, bool ToolCall(Workspace* workspace, string arguments)

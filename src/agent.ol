@@ -522,11 +522,12 @@ string handle_function_calls(Workspace* workspace, AgentModel model, string doma
 
     each function_call, i in function_calls {
         result, allocated := call_function(workspace, function_call);
-        function_call_outputs[i] = {
+        output: OpenAIResponseOutput = {
             type = OpenAIResponseOutputType.function_call_output;
             call_id = function_calls[i].call_id;
             output = result;
         }
+        function_call_outputs[i] = output;
         function_call_allocations[i] = allocated;
     }
 

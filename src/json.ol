@@ -45,7 +45,7 @@ struct JsonSchema {
 }
 
 enum JsonSchemaType {
-    object;
+    object = 1;
 }
 
 struct JsonSchemaProperty {
@@ -279,7 +279,7 @@ serialize_json_enum(void* data, EnumTypeInfo* type_info, StringBuffer* buffer) {
 }
 
 serialize_json_array(void* data, TypeInfo* element_type, StringBuffer* buffer) {
-    array := cast(Array<void*>*, data);
+    array := cast(Array<u8>*, data);
     if array.length == 0 {
         add_to_string_buffer(buffer, "null");
     }
