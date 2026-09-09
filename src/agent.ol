@@ -317,19 +317,6 @@ send_agent_message(int thread, JobData data) {
     }
 }
 
-resize_buffer(Array<u8>* buffer, u64 new_length) {
-    previous_length := buffer.length;
-
-    new_buffer := allocate(new_length);
-    if buffer.length {
-        memory_copy(new_buffer, buffer.data, previous_length);
-        free_allocation(buffer.data);
-    }
-
-    buffer.data = new_buffer;
-    buffer.length = new_length;
-}
-
 
 // OpenAI Contracts
 struct OpenAIModelResponse {

@@ -1,4 +1,4 @@
-string serialize_json<T>(T object, Array<u8>* buffer) {
+string serialize_json<T>(T object, Array<u8>* buffer, bool buffer_allocated = true) {
     #assert type_of(T).type == TypeKind.Struct;
 
     type := cast(StructTypeInfo*, type_of(T));
@@ -14,7 +14,7 @@ string serialize_json<T>(T object, Array<u8>* buffer) {
             new_size += increment_size;
         }
 
-        resize_buffer(buffer, new_size);
+        resize_buffer(buffer, new_size, buffer_allocated);
 
         string_buffer.length = 0;
         string_buffer.buffer = *buffer;
@@ -37,25 +37,31 @@ T parse_json<T>(string text, u64 i = 0) {
     return result;
 }
 
+resize_buffer(Array<u8>* buffer, u64 new_length, bool buffer_allocated = true) {
+    previous_length := buffer.length;
+
+    new_buffer := allocate(new_length);
+    if buffer.length > 0 && buffer_allocated {
+        memory_copy(new_buffer, buffer.data, previous_length);
+        free_allocation(buffer.data);
+    }
+
+    buffer.data = new_buffer;
+    buffer.length = new_length;
+}
+
 struct JsonSchema {
     type: JsonSchemaType;
-    properties: Array<JsonSchemaProperty>;
-    required: Array<string>;
     additionalProperties: bool;
-}
-
-enum JsonSchemaType {
-    object = 1;
-}
-
-struct JsonSchemaProperty {
     name: string;
     description: string;
-    type: JsonSchemaPropertyType;
+    properties: Array<JsonSchema>;
+    items: Array<JsonSchema>; // Set as an array to avoid recursive dependencies, the array should always be size 0 or 1
+    required: Array<string>;
     enum_names: Array<string>;
 }
 
-enum JsonSchemaPropertyType {
+enum JsonSchemaType {
     array = 1;
     boolean;
     integer;
@@ -69,46 +75,7 @@ enum JsonSchemaPropertyType {
 serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
     if type == type_of(JsonSchema) {
         json_schema := *cast(JsonSchema*, data);
-        add_char_to_string_buffer(buffer, '{');
-
-        add_to_string_buffer(buffer, "\"type\":\"");
-        add_to_string_buffer(buffer, get_enum_name(json_schema.type));
-
-        add_to_string_buffer(buffer, "\",\"required\":");
-        serialize_json_array(&json_schema.required, type_of(string), buffer);
-
-        add_to_string_buffer(buffer, ",\"additionalProperties\":");
-        if json_schema.additionalProperties
-             add_to_string_buffer(buffer, "true");
-        else
-             add_to_string_buffer(buffer, "false");
-
-        add_to_string_buffer(buffer, ",\"properties\":{");
-        length := json_schema.properties.length;
-        each property, i in json_schema.properties {
-            add_char_to_string_buffer(buffer, '"');
-            add_to_string_buffer(buffer, property.name);
-            add_to_string_buffer(buffer, "\":{\"type\":");
-
-            serialize_json_enum(&property.type, cast(EnumTypeInfo*, type_of(JsonSchemaPropertyType)), buffer);
-
-            if !string_is_empty(property.description) {
-                add_to_string_buffer(buffer, ",\"description\":");
-                serialize_json_string(property.description, buffer);
-            }
-
-            if property.enum_names.length {
-                add_to_string_buffer(buffer, ",\"enum\":");
-                serialize_json_array(&property.enum_names, type_of(JsonSchemaPropertyType), buffer);
-            }
-
-            add_char_to_string_buffer(buffer, '}');
-            if i < length - 1
-                add_char_to_string_buffer(buffer, ',');
-        }
-
-        add_char_to_string_buffer(buffer, '}');
-        add_char_to_string_buffer(buffer, '}');
+        serialize_json_schema(json_schema, buffer);
         return;
     }
 
@@ -195,6 +162,63 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
             assert(false, format_string("Unable to serialize type '%'\n", temp_allocate, type.name));
         }
     }
+}
+
+serialize_json_schema(JsonSchema json_schema, StringBuffer* buffer) {
+    add_char_to_string_buffer(buffer, '{');
+
+    add_to_string_buffer(buffer, "\"type\":\"");
+    add_to_string_buffer(buffer, get_enum_name(json_schema.type));
+    add_char_to_string_buffer(buffer, '"');
+
+    if json_schema.description.length {
+        add_to_string_buffer(buffer, ",\"description\":\"");
+        add_to_string_buffer(buffer, json_schema.description);
+        add_char_to_string_buffer(buffer, '"');
+    }
+
+    switch json_schema.type {
+        case JsonSchemaType.boolean;
+        case JsonSchemaType.integer;
+        case JsonSchemaType.number; {}
+        case JsonSchemaType.array; {
+            if json_schema.items.length {
+                add_to_string_buffer(buffer, ",\"items\":");
+                serialize_json_schema(json_schema.items[0], buffer);
+            }
+        }
+        case JsonSchemaType.object; {
+            add_to_string_buffer(buffer, ",\"required\":");
+            serialize_json_array(&json_schema.required, type_of(string), buffer);
+
+            add_to_string_buffer(buffer, ",\"additionalProperties\":");
+            if json_schema.additionalProperties
+                 add_to_string_buffer(buffer, "true");
+            else
+                 add_to_string_buffer(buffer, "false");
+
+            add_to_string_buffer(buffer, ",\"properties\":{");
+            each property, i in json_schema.properties {
+                add_char_to_string_buffer(buffer, '"');
+                add_to_string_buffer(buffer, property.name);
+                add_to_string_buffer(buffer, "\":");
+
+                serialize_json_schema(property, buffer);
+                if i < json_schema.properties.length - 1
+                    add_char_to_string_buffer(buffer, ',');
+            }
+
+            add_char_to_string_buffer(buffer, '}');
+        }
+        case JsonSchemaType.string; {
+           if json_schema.enum_names.length {
+               add_to_string_buffer(buffer, ",\"enum\":");
+               serialize_json_array(&json_schema.enum_names, type_of(JsonSchemaType), buffer);
+           }
+        }
+    }
+
+    add_char_to_string_buffer(buffer, '}');
 }
 
 bool should_serialize_json_struct_field(void* data, TypeInfo* type) {

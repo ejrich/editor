@@ -4,6 +4,7 @@ struct ToolSchema {
     description: string;
     strict: bool;
     parameters: JsonSchema;
+    output_schema: JsonSchema;
 }
 
 enum ToolSchemaType {
@@ -40,16 +41,4 @@ struct ReadFileLineArguments {
 string, bool read_file_lines(Workspace* workspace, ReadFileLineArguments args) {
     print("Read file lines\n");
     return "Test", false;
-}
-
-// TODO Implement the rest of the tools
-struct GetWeatherArguments {
-    city: string;
-    state: string;
-}
-
-[tool, "Gets the current weather for the requested location"]
-string, bool get_weather(Workspace* workspace, GetWeatherArguments args) {
-    print("Getting the weather for %\n", args);
-    return "77F", false;
 }
