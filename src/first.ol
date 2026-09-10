@@ -136,15 +136,15 @@ executable_name := "editor";
                             }
                         }
                         else if array_contains(function.attributes, "tool") {
-                            verified, arguments_type := verify_tool_arguments(function);
+                            verified, arguments_type, output_type := verify_tool_arguments(function);
                             if verified {
-                                tool_definition := generate_tool(function, arguments_type);
+                                tool_definition := generate_tool(function, arguments_type, output_type);
                                 tool_entries_length += tool_definition.entry.length;
                                 tool_schemas_length += tool_definition.schema.length;
                                 array_insert(&tool_definitions, tool_definition);
                             }
                             else {
-                                error_string := format_string("Function '%' has the incorrect arguments/return type for a tool. The return type needs to be 'string, bool' and the arguments must be (Workspace*, T) where T is a struct the bool/integer/enum/float/string field(s)", function.name);
+                                error_string := format_string("Function '%' has the incorrect arguments/return type for a tool. The return type needs to be 'string, bool' and the arguments must be (Workspace*, T, V) where T and V are structs with bool/integer/enum/float/string/struct/array field(s)", function.name);
                                 defer default_free(error_string.data);
                                 report_error(error_string, function);
                             }
@@ -607,18 +607,19 @@ int tool_sort(ToolDefinition a, ToolDefinition b) {
     return 0;
 }
 
-bool, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
-    if function.return_type.type != TypeKind.Compound return false, null;
+bool, StructTypeInfo*, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
+    if function.return_type.type != TypeKind.Compound return false, null, null;
 
     compound_return_type := cast(CompoundTypeInfo*, function.return_type);
     if compound_return_type.types.length != 2 ||
         compound_return_type.types[0].type != TypeKind.String ||
         compound_return_type.types[1].type != TypeKind.Boolean
-        return false, null;
+        return false, null, null;
 
-    if function.arguments.length != 2 ||
+    if function.arguments.length != 3 ||
         function.arguments[0].type_info.name != "Workspace*" ||
-        function.arguments[1].type_info.type != TypeKind.Struct return false, null;
+        function.arguments[1].type_info.type != TypeKind.Struct ||
+        function.arguments[2].type_info.type != TypeKind.Struct return false, null, null;
 
     arguments_type := cast(StructTypeInfo*, function.arguments[1].type_info);
 
@@ -631,14 +632,29 @@ bool, StructTypeInfo* verify_tool_arguments(FunctionAst* function) {
             case TypeKind.String;
             case TypeKind.Struct;
             case TypeKind.Array; {}
-            default; return false, null;
+            default; return false, null, null;
         }
     }
 
-    return true, cast(StructTypeInfo*, function.arguments[1].type_info);
+    output_type := cast(StructTypeInfo*, function.arguments[2].type_info);
+
+    each field in output_type.fields {
+        switch field.type_info.type {
+            case TypeKind.Boolean;
+            case TypeKind.Integer;
+            case TypeKind.Float;
+            case TypeKind.Enum;
+            case TypeKind.String;
+            case TypeKind.Struct;
+            case TypeKind.Array; {}
+            default; return false, null, null;
+        }
+    }
+
+    return true, arguments_type, output_type;
 }
 
-ToolDefinition generate_tool(FunctionAst* function, StructTypeInfo* arguments_type) {
+ToolDefinition generate_tool(FunctionAst* function, StructTypeInfo* arguments_type, StructTypeInfo* output_type) {
     tool: ToolDefinition = { name = function.name; }
     tool_description: string;
     if function.attributes.length > 1 {
@@ -648,9 +664,10 @@ ToolDefinition generate_tool(FunctionAst* function, StructTypeInfo* arguments_ty
     // Emit the function to be called
     code_string := format_string("""
 string, bool __%(Workspace* workspace, string args) {
+    _: %;
     arguments := parse_json<%>(args);
-    return %(workspace, arguments);
-}""", tool.name, arguments_type.name, tool.name);
+    return %(workspace, arguments, _);
+}""", tool.name, output_type.name, arguments_type.name, tool.name);
     defer default_free(code_string.data);
 
     add_code(code_string);
@@ -663,53 +680,20 @@ string, bool __%(Workspace* workspace, string args) {
     length := start.length + tool.name.length;
     description := "\";description=\""; #const
     length += description.length + tool_description.length;
-    parameters := "\";strict=true;parameters={type=JsonSchemaType.object;properties=["; #const
+    parameters := "\";strict=true;parameters="; #const
     length += parameters.length;
 
-    property_name := "{name=\""; #const
-    property_description := "\";description=\""; #const
-    property_type := "\";type=JsonSchemaType."; #const
-    property_enum_names := "enum_names=["; #const
-    property_end := "},"; #const
+    parameters_schema := build_json_schema(arguments_type);
+    length += parameters_schema.length;
 
-    each field, i in arguments_type.fields {
-        length += property_name.length + field.name.length * 2 + 3;
+    output_schema_field := "output_schema="; #const
+    length += output_schema_field.length;
 
-        if field.attributes.length {
-            length += property_description.length + field.attributes[0].length;
-        }
+    output_schema := build_json_schema(output_type);
+    length += output_schema.length;
 
-        length += property_type.length;
-
-        switch field.type_info.type {
-            case TypeKind.Boolean;
-            case TypeKind.Integer; {
-                length += 8;
-            }
-            case TypeKind.Float;
-            case TypeKind.Enum;
-            case TypeKind.String; {
-                length += 7;
-            }
-        }
-
-        if field.type_info.type == TypeKind.Enum {
-            length += property_enum_names.length;
-            enum_type := cast(EnumTypeInfo*, field.type_info);
-            each enum_value in enum_type.values {
-                length += enum_value.name.length + 3;
-            }
-
-            if enum_type.values.length == 1 length--;
-        }
-
-        length += property_end.length;
-        if i == arguments_type.fields.length - 1 length -= 2;
-    }
-
-    required := "] required=["; #const
-    end := "] additionalProperties=false;}},"; #const
-    length += required.length + end.length;
+    end := "},"; #const
+    length += end.length;
 
     tool_schema: string = { length = length; data = default_allocator(length); }
     i: u64;
@@ -720,57 +704,10 @@ string, bool __%(Workspace* workspace, string args) {
     insert_string(tool_schema, &i, tool_description);
 
     insert_string(tool_schema, &i, parameters);
+    insert_string(tool_schema, &i, parameters_schema);
 
-    each field, j in arguments_type.fields {
-        insert_string(tool_schema, &i, property_name);
-        insert_string(tool_schema, &i, field.name);
-
-        if field.attributes.length {
-            insert_string(tool_schema, &i, property_description);
-            insert_string(tool_schema, &i, field.attributes[0]);
-        }
-
-        insert_string(tool_schema, &i, property_type);
-
-        switch field.type_info.type {
-            case TypeKind.Boolean; {
-                insert_string(tool_schema, &i, "boolean;");
-            }
-            case TypeKind.Integer; {
-                insert_string(tool_schema, &i, "integer;");
-            }
-            case TypeKind.Float; {
-                insert_string(tool_schema, &i, "number;");
-            }
-            case TypeKind.Enum;
-            case TypeKind.String; {
-                insert_string(tool_schema, &i, "string;");
-            }
-        }
-
-        if field.type_info.type == TypeKind.Enum {
-            insert_string(tool_schema, &i, property_enum_names);
-            enum_type := cast(EnumTypeInfo*, field.type_info);
-            each enum_value, k in enum_type.values {
-                insert_string(tool_schema, &i, "\"");
-                insert_string(tool_schema, &i, enum_value.name);
-                insert_string(tool_schema, &i, "\",");
-                if k == enum_type.values.length - 1 i--;
-            }
-            insert_string(tool_schema, &i, "]");
-        }
-
-        insert_string(tool_schema, &i, property_end);
-        if j == arguments_type.fields.length - 1 i--;
-    }
-
-    insert_string(tool_schema, &i, required);
-    each field, j in arguments_type.fields {
-        insert_string(tool_schema, &i, "\"");
-        insert_string(tool_schema, &i, field.name);
-        insert_string(tool_schema, &i, "\",");
-        if j == arguments_type.fields.length - 1 i--;
-    }
+    insert_string(tool_schema, &i, output_schema_field);
+    insert_string(tool_schema, &i, output_schema);
 
     insert_string(tool_schema, &i, end);
 
@@ -785,10 +722,13 @@ string build_json_schema(TypeInfo* type_info, string name = empty_string, string
     property_start := "{"; #const
     property_name := "name=\""; #const
     property_description := "description=\""; #const
-    property_type := "\";type=JsonSchemaType."; #const
+    property_type := "type=JsonSchemaType."; #const
+    property_properties := "properties=["; #const
     property_enum_names := "enum_names=["; #const
     property_items := "items=["; #const
-    property_end := "},"; #const
+    property_end := "}"; #const
+    property_required := " required=["; #const
+    additional_properties := " additionalProperties=false;"; #const
 
     length: u64 = property_start.length;
 
@@ -836,12 +776,10 @@ string build_json_schema(TypeInfo* type_info, string name = empty_string, string
                 field_description: string;
                 if field.attributes.length field_description = field.attributes[0];
                 properties[i] = build_json_schema(field.type_info, field.name, field_description);
-                if i == struct_type_info.fields.length - 1 length -= 1;
+                length += properties[i].length + 1;
             }
 
-            required := "] required=["; #const
-            end := "] additionalProperties=false;}},"; #const
-            length += required.length + end.length;
+            length += property_properties.length + property_required.length + additional_properties.length;
         }
         case TypeKind.Array; {
             length += 6 + property_items.length;
@@ -851,76 +789,83 @@ string build_json_schema(TypeInfo* type_info, string name = empty_string, string
             pointer_type_info := cast(PointerTypeInfo*, pointer_field.type_info);
             element_type := pointer_type_info.pointer_type;
 
-            // TODO Add items
             items = build_json_schema(element_type);
+            length += items.length + 1;
         }
     }
 
+    length += property_end.length;
 
     json_schema: string = { length = length; data = default_allocator(length); }
     i: u64;
-    /*
-    insert_string(tool_schema, &i, start);
-    insert_string(tool_schema, &i, tool.name);
+    insert_string(json_schema, &i, property_start);
 
-    insert_string(tool_schema, &i, description);
-    insert_string(tool_schema, &i, tool_description);
-
-    insert_string(tool_schema, &i, parameters);
-
-    each field, j in arguments_type.fields {
-        insert_string(tool_schema, &i, property_name);
-        insert_string(tool_schema, &i, field.name);
-
-        if field.attributes.length {
-            insert_string(tool_schema, &i, property_description);
-            insert_string(tool_schema, &i, field.attributes[0]);
-        }
-
-        insert_string(tool_schema, &i, property_type);
-
-        switch field.type_info.type {
-            case TypeKind.Boolean; {
-                insert_string(tool_schema, &i, "boolean;");
-            }
-            case TypeKind.Integer; {
-                insert_string(tool_schema, &i, "integer;");
-            }
-            case TypeKind.Float; {
-                insert_string(tool_schema, &i, "number;");
-            }
-            case TypeKind.Enum;
-            case TypeKind.String; {
-                insert_string(tool_schema, &i, "string;");
-            }
-        }
-
-        if field.type_info.type == TypeKind.Enum {
-            insert_string(tool_schema, &i, property_enum_names);
-            enum_type := cast(EnumTypeInfo*, field.type_info);
-            each enum_value, k in enum_type.values {
-                insert_string(tool_schema, &i, "\"");
-                insert_string(tool_schema, &i, enum_value.name);
-                insert_string(tool_schema, &i, "\",");
-                if k == enum_type.values.length - 1 i--;
-            }
-            insert_string(tool_schema, &i, "]");
-        }
-
-        insert_string(tool_schema, &i, property_end);
-        if j == arguments_type.fields.length - 1 i--;
+    if name.length {
+        insert_string(json_schema, &i, property_name);
+        insert_string(json_schema, &i, name);
+        insert_string(json_schema, &i, "\";");
     }
 
-    insert_string(tool_schema, &i, required);
-    each field, j in arguments_type.fields {
-        insert_string(tool_schema, &i, "\"");
-        insert_string(tool_schema, &i, field.name);
-        insert_string(tool_schema, &i, "\",");
-        if j == arguments_type.fields.length - 1 i--;
+    if description.length {
+        insert_string(json_schema, &i, property_description);
+        insert_string(json_schema, &i, description);
+        insert_string(json_schema, &i, "\";");
     }
 
-    insert_string(tool_schema, &i, end);
-    */
+    insert_string(json_schema, &i, property_type);
+
+    switch type_info.type {
+        case TypeKind.Boolean;
+            insert_string(json_schema, &i, "integer;");
+        case TypeKind.Integer;
+            insert_string(json_schema, &i, "integer;");
+        case TypeKind.Float;
+            insert_string(json_schema, &i, "number;");
+        case TypeKind.String;
+            insert_string(json_schema, &i, "string;");
+        case TypeKind.Enum; {
+            insert_string(json_schema, &i, "string;");
+
+            insert_string(json_schema, &i, property_enum_names);
+            enum_type := cast(EnumTypeInfo*, type_info);
+            each enum_value, j in enum_type.values {
+                insert_string(json_schema, &i, "\"");
+                insert_string(json_schema, &i, enum_value.name);
+                insert_string(json_schema, &i, "\",");
+            }
+
+            json_schema[i - 1] = ']';
+        }
+        case TypeKind.Struct; {
+            insert_string(json_schema, &i, "object;");
+            insert_string(json_schema, &i, property_properties);
+
+            each property in properties {
+                insert_string(json_schema, &i, property);
+                insert_string(json_schema, &i, ",");
+            }
+            json_schema[i - 1] = ']';
+
+            insert_string(json_schema, &i, property_required);
+            struct_type_info := cast(StructTypeInfo*, type_info);
+            each field, j in struct_type_info.fields {
+                insert_string(json_schema, &i, "\"");
+                insert_string(json_schema, &i, field.name);
+                insert_string(json_schema, &i, "\",");
+            }
+            json_schema[i - 1] = ']';
+
+            insert_string(json_schema, &i, additional_properties);
+        }
+        case TypeKind.Array; {
+            insert_string(json_schema, &i, "array;");
+            insert_string(json_schema, &i, property_items);
+            insert_string(json_schema, &i, items);
+            insert_string(json_schema, &i, "]");
+        }
+    }
+
+    insert_string(json_schema, &i, property_end);
 
     return json_schema;
 }
