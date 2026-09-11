@@ -737,7 +737,7 @@ string build_json_schema(TypeInfo* type_info, string name = empty_string, string
     }
 
     if description.length {
-        length += property_description.length + description.length;
+        length += property_description.length + description.length + 2;
     }
 
     length += property_type.length;
@@ -816,7 +816,7 @@ string build_json_schema(TypeInfo* type_info, string name = empty_string, string
 
     switch type_info.type {
         case TypeKind.Boolean;
-            insert_string(json_schema, &i, "integer;");
+            insert_string(json_schema, &i, "boolean;");
         case TypeKind.Integer;
             insert_string(json_schema, &i, "integer;");
         case TypeKind.Float;

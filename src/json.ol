@@ -212,8 +212,8 @@ serialize_json_schema(JsonSchema json_schema, StringBuffer* buffer) {
         }
         case JsonSchemaType.string; {
            if json_schema.enum_names.length {
-               add_to_string_buffer(buffer, ",\"enum\":");
-               serialize_json_array(&json_schema.enum_names, type_of(JsonSchemaType), buffer);
+               add_to_string_buffer(buffer, ",\"enum_names\":");
+               serialize_json_array(&json_schema.enum_names, type_of(string), buffer);
            }
         }
     }
