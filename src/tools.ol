@@ -37,6 +37,7 @@ struct ReadFileOutput {
 
 [tool, "Reads the entire text of a requested file"]
 string, bool read_file_text(Workspace* workspace, ReadFileArguments args, ReadFileOutput output) {
+    // TODO Implement
     print("Read file - %\n", args);
     return "{success:true}", false;
 }
@@ -65,6 +66,7 @@ struct ReadFileLinesOutput {
 
 [tool, "Reads a block of lines from a requested file"]
 string, bool read_file_lines(Workspace* workspace, ReadFileLineArguments args, ReadFileLinesOutput output) {
+    // TODO Implement
     print("Read file lines - %\n", args);
     return "{success:true}", false;
 }
@@ -86,6 +88,7 @@ struct CreateFileOutput {
 
 [tool, "Creates a file with the specified text"]
 string, bool create_file(Workspace* workspace, CreateFileArguments args, CreateFileOutput output) {
+    // TODO Implement
     print("Create file - %\n", args);
     return "{success:true}", false;
 }
@@ -125,6 +128,7 @@ struct WriteFileOutput {
 
 [tool, "Writes to a file with commands"]
 string, bool write_file(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
+    // TODO Implement
     print("Write file - %\n", args);
     return "{success:true,lines_written:0,lines_deleted:0}", false;
 }
@@ -147,6 +151,7 @@ struct RenameFileOutput {
 
 [tool, "Renames a file"]
 string, bool rename_file(Workspace* workspace, RenameFileArguments args, RenameFileOutput output) {
+    // TODO Implement
     print("Rename file - %\n", args);
     return "{success:true}", false;
 }
@@ -165,6 +170,7 @@ struct DeleteFileOutput {
 
 [tool, "Deletes a file"]
 string, bool delete_file(Workspace* workspace, DeleteFileArguments args, DeleteFileOutput output) {
+    // TODO Implement
     print("Delete file - %\n", args);
     return "{success:true}", false;
 }
@@ -181,6 +187,7 @@ struct FindFilesOutput {
 
 [tool, "Searches for files"]
 string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFilesOutput output) {
+    // TODO Implement
     print("Search for files - %\n", args);
     return "{results:[]}", false;
 }
@@ -206,6 +213,7 @@ struct SearchResult {
 
 [tool, "Searches for text"]
 string, bool search_for_text(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
+    // TODO Implement
     print("Search for text - %\n", args);
     return "{results:[]}", false;
 }
@@ -219,8 +227,9 @@ struct StatusCheckOutput {
     completed: bool;
 }
 
-[tool, "Gives a status update"]
+[tool, "Give the user a status update"]
 string, bool status_check(Workspace* workspace, StatusCheckArguments args, StatusCheckOutput output) {
-    print("Status check - %\n", args);
+    add_to_agent_buffer(workspace, args.message);
+    add_agent_buffer_new_lines(workspace, 2);
     return "{completed:true}", false;
 }

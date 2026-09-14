@@ -265,7 +265,8 @@ send_agent_message(int thread, JobData data) {
                                 allocate_strings(&event_data.response.id);
                                 response_id = event_data.response.id;
                                 workspace.agent_data.context = event_data.response.usage.total_tokens;
-                                add_agent_buffer_new_lines(workspace, 1);
+                                if function_calls.length == 0
+                                    add_agent_buffer_new_lines(workspace, 1);
                             }
                         }
                     }
@@ -315,6 +316,28 @@ send_agent_message(int thread, JobData data) {
         previous_response_id = response_id;
         status = AgentStatus.Done;
     }
+}
+
+add_agent_buffer_new_lines(Workspace* workspace, u32 count) {
+    original_line := workspace.agent_data.buffer_window.line;
+    original_line_count := workspace.agent_data.buffer.line_count;
+
+    buffer := &workspace.agent_data.buffer;
+    end_line := get_buffer_line(buffer, buffer.line_count - 1);
+    each i in count {
+        end_line = add_new_line(null, buffer, end_line, false, false);
+    }
+
+    adjust_agent_window(workspace, end_line, original_line, original_line_count);
+}
+
+add_to_agent_buffer(Workspace* workspace, string text, BufferLineFlags flags = BufferLineFlags.None) {
+    original_line := workspace.agent_data.buffer_window.line;
+    original_line_count := workspace.agent_data.buffer.line_count;
+
+    line := add_text_to_end_of_buffer(&workspace.agent_data.buffer, text, false, flags);
+
+    adjust_agent_window(workspace, line, original_line, original_line_count);
 }
 
 
@@ -494,6 +517,7 @@ struct OpenAIResponseEventData {
     name: string;
     sequence_number: u32;
 }
+
 #private
 
 // Agent functions
@@ -1044,28 +1068,6 @@ string get_agent_title() {
     }
 
     return format_string("% | Context: % | %", temp_allocate, model, workspace.agent_data.context, title);
-}
-
-add_agent_buffer_new_lines(Workspace* workspace, u32 count) {
-    original_line := workspace.agent_data.buffer_window.line;
-    original_line_count := workspace.agent_data.buffer.line_count;
-
-    buffer := &workspace.agent_data.buffer;
-    end_line := get_buffer_line(buffer, buffer.line_count - 1);
-    each i in count {
-        end_line = add_new_line(null, buffer, end_line, false, false);
-    }
-
-    adjust_agent_window(workspace, end_line, original_line, original_line_count);
-}
-
-add_to_agent_buffer(Workspace* workspace, string text, BufferLineFlags flags = BufferLineFlags.None) {
-    original_line := workspace.agent_data.buffer_window.line;
-    original_line_count := workspace.agent_data.buffer.line_count;
-
-    line := add_text_to_end_of_buffer(&workspace.agent_data.buffer, text, false, flags);
-
-    adjust_agent_window(workspace, line, original_line, original_line_count);
 }
 
 adjust_agent_window(Workspace* workspace, BufferLine* line, u32 original_line, u32 original_line_count) {
