@@ -408,13 +408,6 @@ init_graphics() {
         pEnabledFeatures = &features.features;
     }
 
-    #if DEVELOPER {
-        device_create_info = {
-            enabledLayerCount = validation_layers.length;
-            ppEnabledLayerNames = &validation_layers[0].data;
-        }
-    }
-
     result = vkCreateDevice(physical_device, &device_create_info, &allocator, &device);
     if result != VkResult.VK_SUCCESS {
         log("Unable to create vulkan device %\n", result);

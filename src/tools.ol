@@ -170,8 +170,9 @@ struct DeleteFileOutput {
 
 [tool, "Deletes a file"]
 string, bool delete_file(Workspace* workspace, DeleteFileArguments args, DeleteFileOutput output) {
-    // TODO Implement
-    print("Delete file - %\n", args);
+    path := temp_string(workspace.directory, "/", args.file);
+    if !file_exists(path) return "{success:false,error:\"File doesn't exist\"}", false;
+    if !delete_file(path) return "{success:false,error:\"Unable to delete file\"}", false;
     return "{success:true}", false;
 }
 

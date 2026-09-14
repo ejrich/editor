@@ -408,6 +408,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
             lines = line;
         }
 
+        // TODO Use temp_allocate only if on the main thread and the file size is less than the temp allocate buffer size
         found, file := read_file(path, temp_allocate);
         if found {
             if is_file_binary(file) {
