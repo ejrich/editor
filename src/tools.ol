@@ -91,9 +91,12 @@ string, bool create_file(Workspace* workspace, CreateFileArguments args, CreateF
     path := temp_string(workspace.directory, "/", args.file_path);
     if file_exists(path) return "{\"success\":false,\"error\":\"File already exists\"}", false;
 
-    // TODO Implement
-    print("Create file - %\n", args);
-    return "{success:true}", false;
+    buffer := open_workspace_file_buffer(workspace, path, args.file_path);
+    if buffer == null return "{\"success\":false,\"error\":\"Unable to create file\"}", false;
+
+    add_text_to_end_of_buffer(buffer, args.text, false);
+    save_buffer(workspace, buffer);
+    return "{\"success\":true}", false;
 }
 
 struct WriteFileArguments {

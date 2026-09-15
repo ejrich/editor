@@ -380,20 +380,20 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 // Opening buffers with files
 BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = false) {
     workspace := get_workspace();
-    buffer_index := get_or_open_file_buffer(workspace, path, allocate_path, reload);
+    buffer_index := get_or_open_file_buffer(workspace, path, path, allocate_path, reload);
     if buffer_index < 0 return null;
 
     return open_buffer_index(workspace, buffer_index);
 }
 
-Buffer* open_workspace_file_buffer(Workspace* workspace, string path, bool allocate_path) {
-    buffer_index := get_or_open_file_buffer(workspace, path, allocate_path);
+Buffer* open_workspace_file_buffer(Workspace* workspace, string path, string relative_path) {
+    buffer_index := get_or_open_file_buffer(workspace, path, relative_path, true, true);
     if buffer_index < 0 return null;
 
     return &workspace.buffers[buffer_index];
 }
 
-int get_or_open_file_buffer(Workspace* workspace, string path, bool allocate_path, bool reload = false) {
+int get_or_open_file_buffer(Workspace* workspace, string path, string relative_path, bool allocate_path, bool reload = false, bool force_allocation = false) {
     buffer_index := -1;
 
     each buffer, i in workspace.buffers {
@@ -409,13 +409,13 @@ int get_or_open_file_buffer(Workspace* workspace, string path, bool allocate_pat
         }
 
         if allocate_path {
-            allocate_strings(&path);
+            allocate_strings(&relative_path);
         }
 
         line := allocate_line();
         buffer: Buffer = {
             path_allocated = allocate_path || reload;
-            relative_path = path;
+            relative_path = relative_path;
             syntax = get_syntax_for_file(path);
             line_count = 1;
             line_count_digits = 1;
@@ -426,7 +426,7 @@ int get_or_open_file_buffer(Workspace* workspace, string path, bool allocate_pat
 
         free_file: bool;
         allocator: Allocate;
-        if can_temp_allocate(size) {
+        if can_temp_allocate(size) && !force_allocation {
             allocator = temp_allocate;
         }
         else {
@@ -686,11 +686,17 @@ bool, u32, u32, string save_buffer(int buffer_index) {
 }
 
 bool, u32, u32, string save_buffer(Buffer* buffer) {
+    workspace := get_workspace();
+    return save_buffer(workspace, buffer);
+}
+
+bool, u32, u32, string save_buffer(Workspace* workspace, Buffer* buffer) {
     lines_written, bytes_written: u32;
     buffer.has_changes = false;
 
-    create_directories_recursively(buffer.relative_path);
-    opened, file := open_file(buffer.relative_path, FileFlags.Create | FileFlags.Truncate);
+    path := temp_string(workspace.directory, "/", buffer.relative_path);
+    create_directories_recursively(path);
+    opened, file := open_file(path, FileFlags.Create | FileFlags.Truncate);
     if !opened return false, 0, 0, buffer.relative_path;
 
     defer close_file(file);
