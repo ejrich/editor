@@ -88,6 +88,9 @@ struct CreateFileOutput {
 
 [tool, "Creates a file with the specified text"]
 string, bool create_file(Workspace* workspace, CreateFileArguments args, CreateFileOutput output) {
+    path := temp_string(workspace.directory, "/", args.file_path);
+    if file_exists(path) return "{\"success\":false,\"error\":\"File already exists\"}", false;
+
     // TODO Implement
     print("Create file - %\n", args);
     return "{success:true}", false;
@@ -171,9 +174,9 @@ struct DeleteFileOutput {
 [tool, "Deletes a file"]
 string, bool delete_file(Workspace* workspace, DeleteFileArguments args, DeleteFileOutput output) {
     path := temp_string(workspace.directory, "/", args.file);
-    if !file_exists(path) return "{success:false,error:\"File doesn't exist\"}", false;
-    if !delete_file(path) return "{success:false,error:\"Unable to delete file\"}", false;
-    return "{success:true}", false;
+    if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+    if !delete_file(path) return "{\"success\":false,\"error\":\"Unable to delete file\"}", false;
+    return "{\"success\":true}", false;
 }
 
 struct FindFilesArguments {
@@ -232,5 +235,5 @@ struct StatusCheckOutput {
 string, bool status_check(Workspace* workspace, StatusCheckArguments args, StatusCheckOutput output) {
     add_to_agent_buffer(workspace, args.message);
     add_agent_buffer_new_lines(workspace, 2);
-    return "{completed:true}", false;
+    return "{\"completed\":true}", false;
 }

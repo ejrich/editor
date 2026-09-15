@@ -379,8 +379,22 @@ draw_buffer_window(Workspace* workspace, BufferWindow* window, float x, bool sel
 
 // Opening buffers with files
 BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = false) {
-    buffer_index := -1;
     workspace := get_workspace();
+    buffer_index := get_or_open_file_buffer(workspace, path, allocate_path, reload);
+    if buffer_index < 0 return null;
+
+    return open_buffer_index(workspace, buffer_index);
+}
+
+Buffer* open_workspace_file_buffer(Workspace* workspace, string path, bool allocate_path) {
+    buffer_index := get_or_open_file_buffer(workspace, path, allocate_path);
+    if buffer_index < 0 return null;
+
+    return &workspace.buffers[buffer_index];
+}
+
+int get_or_open_file_buffer(Workspace* workspace, string path, bool allocate_path, bool reload = false) {
+    buffer_index := -1;
 
     each buffer, i in workspace.buffers {
         if buffer.relative_path == path {
@@ -391,7 +405,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
 
     if buffer_index < 0 || reload {
         if is_directory(path) {
-            return null;
+            return -1;
         }
 
         if allocate_path {
@@ -408,8 +422,19 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
             lines = line;
         }
 
-        // TODO Use temp_allocate only if on the main thread and the file size is less than the temp allocate buffer size
-        found, file := read_file(path, temp_allocate);
+        size := file_size(path);
+
+        free_file: bool;
+        allocator: Allocate;
+        if can_temp_allocate(size) {
+            allocator = temp_allocate;
+        }
+        else {
+            allocator = allocate;
+            free_file = true;
+        }
+
+        found, file := read_file(path, allocator);
         if found {
             if is_file_binary(file) {
                 buffer.hex_view = true;
@@ -417,6 +442,10 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
             }
             else {
                 add_text_to_end_of_buffer(&buffer, file, false);
+            }
+
+            if free_file {
+                free_allocation(file.data);
             }
         }
 
@@ -436,7 +465,7 @@ BufferWindow* open_file_buffer(string path, bool allocate_path, bool reload = fa
         }
     }
 
-    return open_buffer_index(workspace, buffer_index);
+    return buffer_index;
 }
 
 bool is_file_binary(string file) {

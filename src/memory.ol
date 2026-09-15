@@ -256,6 +256,11 @@ void* temp_allocate(u64 size) {
     return &temporary_buffer[cursor];
 }
 
+bool can_temp_allocate(u64 size) {
+    cursor := temporary_buffer_cursor;
+    return cursor + size < temp_buffer_size;
+}
+
 Array<T> temp_allocate_array<T>(u32 length) {
     array: Array<T>;
     array.length = length;
