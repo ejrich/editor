@@ -25,6 +25,23 @@ string serialize_json<T>(T object, Array<u8>* buffer, bool buffer_allocated = tr
     return value;
 }
 
+string serialize_json<T>(T object) {
+    #assert type_of(T).type == TypeKind.Struct;
+
+    type := cast(StructTypeInfo*, type_of(T));
+
+    string_buffer: StringBuffer;
+    serialize_json(&object, type, &string_buffer);
+
+    string_buffer.buffer.length = string_buffer.length;
+    string_buffer.buffer.data = allocate(string_buffer.length);
+
+    serialize_json(&object, type, &string_buffer);
+
+    value: string = { length = string_buffer.length; data = string_buffer.buffer.data; }
+    return value;
+}
+
 T parse_json<T>(string text, u64 i = 0) {
     #assert type_of(T).type == TypeKind.Struct;
 

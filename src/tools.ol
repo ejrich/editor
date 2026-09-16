@@ -33,13 +33,27 @@ struct ReadFileOutput {
     file: string;
     ["The contents of the file"]
     text: string;
+    ["Error message if unable to read the file"]
+    error: string;
 }
 
 [tool, "Reads the entire text of a requested file"]
 string, bool read_file_text(Workspace* workspace, ReadFileArguments args, ReadFileOutput output) {
-    // TODO Implement
-    print("Read file - %\n", args);
-    return "{success:true}", false;
+    path := temp_string(workspace.directory, "/", args.file);
+    if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+
+    buffer := open_workspace_file_buffer(workspace, path, args.file);
+    if buffer == null return "{\"success\":false,\"error\":\"Unable to load file\"}", false;
+
+    output = {
+        success = true;
+        file = args.file;
+        text = read_buffer_lines(buffer, 1, buffer.line_count);
+    }
+
+    output_json := serialize_json(output);
+    free_allocation(output.text.data);
+    return output_json, true;
 }
 
 struct ReadFileLineArguments {
@@ -62,13 +76,29 @@ struct ReadFileLinesOutput {
     end_line: u32;
     ["The text of the queried lines in the file"]
     text: string;
+    ["Error message if unable to read the file"]
+    error: string;
 }
 
 [tool, "Reads a block of lines from a requested file"]
 string, bool read_file_lines(Workspace* workspace, ReadFileLineArguments args, ReadFileLinesOutput output) {
-    // TODO Implement
-    print("Read file lines - %\n", args);
-    return "{success:true}", false;
+    path := temp_string(workspace.directory, "/", args.file);
+    if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+
+    buffer := open_workspace_file_buffer(workspace, path, args.file);
+    if buffer == null return "{\"success\":false,\"error\":\"Unable to load file\"}", false;
+
+    output = {
+        success = true;
+        file = args.file;
+        start_line = clamp(args.start, 1, buffer.line_count);
+        end_line = clamp(args.end, 1, buffer.line_count);
+        text = read_buffer_lines(buffer, args.start, args.end);
+    }
+
+    output_json := serialize_json(output);
+    free_allocation(output.text.data);
+    return output_json, true;
 }
 
 struct CreateFileArguments {
@@ -136,7 +166,7 @@ struct WriteFileOutput {
 string, bool write_file(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
     // TODO Implement
     print("Write file - %\n", args);
-    return "{success:true,lines_written:0,lines_deleted:0}", false;
+    return "{\"success\":true,\"lines_written\":0,\"lines_deleted\":0}", false;
 }
 
 struct RenameFileArguments {
@@ -157,9 +187,44 @@ struct RenameFileOutput {
 
 [tool, "Renames a file"]
 string, bool rename_file(Workspace* workspace, RenameFileArguments args, RenameFileOutput output) {
-    // TODO Implement
-    print("Rename file - %\n", args);
-    return "{success:true}", false;
+    path := temp_string(workspace.directory, "/", args.file);
+    if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+
+    buffer_exists := false;
+    each buffer in workspace.buffers {
+        if buffer.relative_path == args.file {
+            allocate_strings(&args.file);
+            old_path := buffer.relative_path;
+            buffer.relative_path = args.file;
+            free_allocation(old_path.data);
+
+            success, lines, bytes, file := save_buffer(workspace, &buffer);
+            if !success {
+                return "{\"success\":false,\"error\":\"Unable to save new file\"}", false;
+            }
+            if !delete_file(path) {
+                return "{\"success\":false,\"error\":\"Unable to delete old file\"}", false;
+            }
+
+            buffer_exists = true;
+            break;
+        }
+    }
+
+    if !buffer_exists {
+        new_path := temp_string(workspace.directory, "/", args.new_path);
+        if !rename_file(path, new_path) {
+            return "{\"success\":false,\"error\":\"Unable to rename file\"}", false;
+        }
+    }
+
+    output = {
+        success = true;
+        new_path = args.file;
+    }
+
+    output_json := serialize_json(output);
+    return output_json, true;
 }
 
 struct DeleteFileArguments {
@@ -196,7 +261,7 @@ struct FindFilesOutput {
 string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFilesOutput output) {
     // TODO Implement
     print("Search for files - %\n", args);
-    return "{results:[]}", false;
+    return "{\"results\":[]}", false;
 }
 
 struct SearchArguments {
@@ -222,7 +287,7 @@ struct SearchResult {
 string, bool search_for_text(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
     // TODO Implement
     print("Search for text - %\n", args);
-    return "{results:[]}", false;
+    return "{\"results\":[]}", false;
 }
 
 struct StatusCheckArguments {
@@ -239,4 +304,49 @@ string, bool status_check(Workspace* workspace, StatusCheckArguments args, Statu
     add_to_agent_buffer(workspace, args.message);
     add_agent_buffer_new_lines(workspace, 2);
     return "{\"completed\":true}", false;
+}
+
+#private
+
+string read_buffer_lines(Buffer* buffer, int start, int end) {
+    start = clamp(start, 1, buffer.line_count);
+    end = clamp(end, 1, buffer.line_count);
+
+    start_line := buffer.lines;
+    line_number := 1;
+
+    while line_number < start {
+        start_line = start_line.next;
+        line_number++;
+    }
+
+    text: string;
+    line := start_line;
+    while line_number <= end {
+        text.length += line.length + 1;
+        line = line.next;
+        line_number++;
+    }
+
+    line_number = start;
+    line = start_line;
+    text.data = allocate(text.length);
+    while line_number <= end {
+        copy_length := clamp(line.length, 0, line_buffer_length);
+        memory_copy(text.data + text.length, line.data.data, copy_length);
+        text.length += copy_length;
+
+        child := line.child;
+        while (child) {
+            memory_copy(text.data + text.length, child.data.data, child.length);
+            text.length += child.length;
+        }
+
+        text[text.length++] = '\n';
+
+        line = line.next;
+        line_number++;
+    }
+
+    return text;
 }
