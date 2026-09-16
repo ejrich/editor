@@ -189,6 +189,8 @@ struct RenameFileOutput {
 string, bool rename_file(Workspace* workspace, RenameFileArguments args, RenameFileOutput output) {
     path := temp_string(workspace.directory, "/", args.file);
     if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+    new_path := temp_string(workspace.directory, "/", args.new_path);
+    if file_exists(new_path) return "{\"success\":false,\"error\":\"New file already exists\"}", false;
 
     buffer_exists := false;
     each buffer in workspace.buffers {
@@ -211,11 +213,8 @@ string, bool rename_file(Workspace* workspace, RenameFileArguments args, RenameF
         }
     }
 
-    if !buffer_exists {
-        new_path := temp_string(workspace.directory, "/", args.new_path);
-        if !rename_file(path, new_path) {
-            return "{\"success\":false,\"error\":\"Unable to rename file\"}", false;
-        }
+    if !buffer_exists && !rename_file(path, new_path) {
+        return "{\"success\":false,\"error\":\"Unable to rename file\"}", false;
     }
 
     output = {
