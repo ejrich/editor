@@ -1546,6 +1546,45 @@ BufferLine* add_text_to_end_of_buffer(Buffer* buffer, string value, bool parse_e
     return line;
 }
 
+u32 add_text_lines_to_buffer(Buffer* buffer, BufferLine* line, string value) {
+    lines: u32;
+    text: string;
+    tab := create_empty_string(settings.tab_size);
+
+    each i in value.length {
+        char := value[i];
+        if char == '\n' {
+            if text.length {
+                add_text_to_line(null, line, text, line.length);
+            }
+
+            line = add_new_line(null, buffer, line, false, false);
+            text = { length = 0; data = value.data + i + 1; }
+            lines++;
+        }
+        else if char == '\t' {
+            if text.length {
+                add_text_to_line(null, line, text, line.length);
+            }
+
+            add_text_to_line(null, line, tab, line.length);
+            text = { length = 0; data = value.data + i + 1; }
+        }
+        else if char != '\r' {
+            if text.length == 0 {
+                text.data = value.data + i;
+            }
+            text.length++;
+        }
+    }
+
+    if text.length {
+        add_text_to_line(null, line, text, line.length);
+    }
+
+    return lines;
+}
+
 interpret_escape_code(EscapeCodeParseState* state) {
     code := state.current_code;
 

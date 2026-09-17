@@ -160,13 +160,60 @@ struct WriteFileOutput {
     lines_written: u32;
     ["The number of lines that were deleted by the commands"]
     lines_deleted: u32;
+    ["Error message if the file was not written to"]
+    error: string;
 }
 
 [tool, "Writes to a file with commands"]
 string, bool write_file(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
-    // TODO Implement
-    print("Write file - %\n", args);
-    return "{\"success\":true,\"lines_written\":0,\"lines_deleted\":0}", false;
+    path := temp_string(workspace.directory, "/", args.file);
+    if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
+
+    buffer := open_workspace_file_buffer(workspace, path, args.file);
+
+    each command in args.write_commands {
+        // print("%\n", command);
+        switch command.type {
+            case WriteFileCommandType.Insert; {
+                begin_change(buffer, -1, 0, 0, command.start_line - 1);
+
+                line := get_buffer_line(buffer, command.start_line - 1);
+                line = add_new_line(null, buffer, line, true, false);
+                lines_written := add_text_lines_to_buffer(buffer, line, command.text);
+
+                record_change(buffer, command.start_line - 1, command.start_line + lines_written, 0, command.start_line + lines_written);
+                output.lines_written += lines_written + 1;
+            }
+            case WriteFileCommandType.Delete; {
+                begin_change(buffer, command.start_line - 1, command.end_line - 1, 0, command.start_line - 1);
+
+                line := get_buffer_line(buffer, command.start_line - 1);
+                delete_lines_in_range(buffer, line, command.end_line - command.start_line, true);
+
+                record_change(buffer, -1, 0, 0, command.start_line - 1);
+                output.lines_deleted += command.end_line - command.start_line + 1;
+            }
+            case WriteFileCommandType.Overwrite; {
+                begin_change(buffer, command.start_line - 1, command.end_line - 1, 0, command.start_line - 1);
+
+                line := get_buffer_line(buffer, command.start_line - 1);
+                delete_lines_in_range(buffer, line, command.end_line - command.start_line, false);
+                lines_written := add_text_lines_to_buffer(buffer, line, command.text);
+
+                record_change(buffer, command.start_line - 1, command.start_line + lines_written, 0, command.start_line + lines_written);
+                output.lines_deleted += command.end_line - command.start_line + 1;
+                output.lines_written += lines_written + 1;
+            }
+        }
+    }
+
+    calculate_line_digits(buffer);
+
+    free_allocation(args.write_commands.data);
+
+    output.success = true;
+    output_json := serialize_json(output);
+    return output_json, true;
 }
 
 struct RenameFileArguments {
