@@ -35,6 +35,7 @@ string serialize_json<T>(T object) {
 
     string_buffer.buffer.length = string_buffer.length;
     string_buffer.buffer.data = allocate(string_buffer.length);
+    string_buffer.length = 0;
 
     serialize_json(&object, type, &string_buffer);
 
@@ -162,8 +163,8 @@ serialize_json(void* data, TypeInfo* type, StringBuffer* buffer) {
                     add_char_to_string_buffer(buffer, ',');
 
                 add_char_to_string_buffer(buffer, '"');
-                if field.attributes.length {
-                    add_to_string_buffer(buffer, field.attributes[0]);
+                if field.attributes.length == 2 && field.attributes[0] == "json_field" {
+                    add_to_string_buffer(buffer, field.attributes[1]);
                 }
                 else {
                     add_to_string_buffer(buffer, field.name);

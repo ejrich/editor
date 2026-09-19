@@ -39,7 +39,116 @@ free_directory(Directory* directory) {
     free_allocation(directory);
 }
 
+Array<string> find_files(Workspace* workspace, string filter, u32 max) {
+    files: Array<string>;
+
+    find_files(workspace, &files, filter, workspace.directory, empty_string, max);
+
+    return files;
+}
+
 #private
+
+
+find_files(Workspace* workspace, Array<string>* files, string filter, string path, string display_path, u32 max) {
+    #if os == OS.Linux {
+        // TODO Refactor this, it's used in like 4 different places
+        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
+        directory := open(path.data, open_flags, FileMode.S_RWALL);
+
+        if directory < 0 {
+            return;
+        }
+
+        buffer: CArray<u8>[5600];
+        while !cancel_loading_files {
+            bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
+
+            if bytes <= 0 break;
+
+            position := 0;
+            while position < bytes && files.length < max {
+                dirent := cast(Dirent*, &buffer + position);
+                name := convert_c_string(&dirent.d_name);
+
+                if !ignore_directory(name, workspace) {
+                    if dirent.d_type == DirentType.DT_REG {
+                        if !ignore_file(name, workspace) {
+                            file_path := name;
+                            if !string_is_empty(display_path) {
+                                file_path = temp_string(display_path, "/", name);
+                            }
+
+                            if string_contains(file_path, filter, false) {
+                                allocate_strings(&file_path);
+                                array_insert(files, file_path, allocate, reallocate);
+                            }
+                        }
+                    }
+                    else if dirent.d_type == DirentType.DT_DIR {
+                        sub_path := temp_string(path, "/", name);
+                        sub_display_path := name;
+                        if !string_is_empty(display_path) {
+                            sub_display_path = temp_string(display_path, "/", name);
+                        }
+
+                        find_files(workspace, files, filter, sub_path, sub_display_path, max);
+                    }
+                }
+
+                position += dirent.d_reclen;
+            }
+        }
+
+        close(directory);
+    }
+    #if os == OS.Windows {
+        // TODO Refactor this, it's used in like 4 different places
+        wildcard := "/*"; #const
+        path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
+        memory_copy(path_with_wildcard.data, path.data, path.length);
+        memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
+        path_with_wildcard[path.length + wildcard.length] = 0;
+
+        find_data: WIN32_FIND_DATAA;
+        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
+
+        if cast(s64, find_handle) == -1 {
+            return;
+        }
+
+        while files.length < max {
+            name := convert_c_string(&find_data.cFileName);
+
+            if !ignore_directory(name, workspace) {
+                if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
+                    sub_path := temp_string(path, "/", name);
+                    sub_display_path := name;
+                    if !string_is_empty(display_path) {
+                        sub_display_path = temp_string(display_path, "/", name);
+                    }
+
+                    find_files(workspace, files, filter, sub_path, sub_display_path, max);
+                }
+                else if !ignore_file(name, workspace) {
+                    file_path := name;
+                    if !string_is_empty(display_path) {
+                        file_path = temp_string(display_path, "/", name);
+                    }
+
+                    if string_contains(file_path, filter, false) {
+                        allocate_strings(&file_path);
+                        array_insert(files, file_path, allocate, reallocate);
+                    }
+                }
+            }
+
+            if !FindNextFileA(find_handle, &find_data) break;
+        }
+
+        FindClose(find_handle);
+    }
+}
 
 Directory* get_or_create_directory(string name, Directory* parent_directory, Array<Directory*>* sub_directories) {
     each sub_directory in *sub_directories {

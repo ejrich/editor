@@ -46,7 +46,6 @@ struct AgentData {
     model: int = -1;
     socket: Socket;
     ssl: SSL*;
-    // TODO Use single buffer for this
     request_body_buffer: Array<u8>;
     request_buffer: Array<u8>;
     response_buffer: Array<u8>;
@@ -358,7 +357,7 @@ struct OpenAIModel {
 struct OpenAIResponseRequest {
     model: string;
     input: string;
-    [input]
+    [json_field, input]
     input_array: Array<OpenAIResponseOutput>;
     instructions: string;
     // max_output_tokens: u32;

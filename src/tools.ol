@@ -305,9 +305,18 @@ struct FindFilesOutput {
 
 [tool, "Searches for files"]
 string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFilesOutput output) {
-    // TODO Implement
-    print("Search for files - %\n", args);
-    return "{\"results\":[]}", false;
+    output.results = find_files(workspace, args.query, 10);
+
+    output_json := serialize_json(output);
+
+    if output.results.length {
+        each result in output.results {
+            free_allocation(result.data);
+        }
+        free_allocation(output.results.data);
+    }
+
+    return output_json, true;
 }
 
 struct SearchArguments {
