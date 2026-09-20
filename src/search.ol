@@ -47,107 +47,141 @@ Array<string> find_files(Workspace* workspace, string filter, u32 max) {
     return files;
 }
 
+#if os == OS.Linux {
+    struct DirectoryIterator {
+        fd: int;
+        buffer: CArray<u8>[5600];
+        bytes: int;
+        position: int;
+    }
+}
+#if os == OS.Windows {
+    struct DirectoryIterator {
+        find_data: WIN32_FIND_DATAA;
+        find_handle: Handle*;
+        first := true;
+    }
+}
+
+bool start_directory_search(DirectoryIterator* iterator, string path, bool use_path_wildcard = true) {
+    success: bool;
+
+    #if os == OS.Linux {
+        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
+        iterator.fd = open(path.data, open_flags, FileMode.S_RWALL);
+
+        success = iterator.fd >= 0;
+    }
+    #if os == OS.Windows {
+        if use_path_wildcard {
+            wildcard := "/*"; #const
+            path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
+            memory_copy(path_with_wildcard.data, path.data, path.length);
+            memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
+            path_with_wildcard[path.length + wildcard.length] = 0;
+
+            iterator.find_handle = FindFirstFileA(path_with_wildcard.data, &iterator.find_data);
+        }
+        else {
+            iterator.find_handle = FindFirstFileA(path.data, &iterator.find_data);
+        }
+
+        success = cast(s64, iterator.find_handle) != -1;
+    }
+
+    return success;
+}
+
+bool get_next_directory_entry(DirectoryIterator* iterator, string* name, bool* is_directory) {
+    success: bool;
+
+    #if os == OS.Linux {
+        while !success {
+            if iterator.position >= iterator.bytes {
+                iterator.bytes = getdents64(iterator.fd, cast(Dirent*, &iterator.buffer), iterator.buffer.length);
+                iterator.position = 0;
+            }
+
+            if iterator.bytes <= 0 break;
+
+            while !success && iterator.position < iterator.bytes {
+                dirent := cast(Dirent*, &iterator.buffer + iterator.position);
+                *name = convert_c_string(&dirent.d_name);
+
+                if dirent.d_type == DirentType.DT_REG {
+                    *is_directory = false;
+                    success = true;
+                }
+                if dirent.d_type == DirentType.DT_DIR {
+                    *is_directory = true;
+                    success = true;
+                }
+
+                iterator.position += dirent.d_reclen;
+            }
+        }
+    }
+    #if os == OS.Windows {
+        if iterator.first || FindNextFileA(iterator.find_handle, &iterator.find_data) {
+            success = true;
+            iterator.first = false;
+            *name = convert_c_string(&iterator.find_data.cFileName);
+            *is_directory = (iterator.find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY) == FileAttribute.FILE_ATTRIBUTE_DIRECTORY;
+        }
+    }
+
+    return success;
+}
+
+finish_directory_search(DirectoryIterator* iterator) {
+    #if os == OS.Linux {
+        close(iterator.fd);
+    }
+    #if os == OS.Windows {
+        FindClose(iterator.find_handle);
+    }
+}
+
+
 #private
 
 
 find_files(Workspace* workspace, Array<string>* files, string filter, string path, string display_path, u32 max) {
-    #if os == OS.Linux {
-        // TODO Refactor this, it's used in like 4 different places
-        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-        directory := open(path.data, open_flags, FileMode.S_RWALL);
+    iterator: DirectoryIterator;
 
-        if directory < 0 {
-            return;
-        }
-
-        buffer: CArray<u8>[5600];
-        while !cancel_loading_files {
-            bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
-
-            if bytes <= 0 break;
-
-            position := 0;
-            while position < bytes && files.length < max {
-                dirent := cast(Dirent*, &buffer + position);
-                name := convert_c_string(&dirent.d_name);
-
-                if !ignore_directory(name, workspace) {
-                    if dirent.d_type == DirentType.DT_REG {
-                        if !ignore_file(name, workspace) {
-                            file_path := name;
-                            if !string_is_empty(display_path) {
-                                file_path = temp_string(display_path, "/", name);
-                            }
-
-                            if string_contains(file_path, filter, false) {
-                                allocate_strings(&file_path);
-                                array_insert(files, file_path, allocate, reallocate);
-                            }
-                        }
-                    }
-                    else if dirent.d_type == DirentType.DT_DIR {
-                        sub_path := temp_string(path, "/", name);
-                        sub_display_path := name;
-                        if !string_is_empty(display_path) {
-                            sub_display_path = temp_string(display_path, "/", name);
-                        }
-
-                        find_files(workspace, files, filter, sub_path, sub_display_path, max);
-                    }
-                }
-
-                position += dirent.d_reclen;
-            }
-        }
-
-        close(directory);
+    if !start_directory_search(&iterator, path) {
+        return;
     }
-    #if os == OS.Windows {
-        // TODO Refactor this, it's used in like 4 different places
-        wildcard := "/*"; #const
-        path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
-        memory_copy(path_with_wildcard.data, path.data, path.length);
-        memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
-        path_with_wildcard[path.length + wildcard.length] = 0;
 
-        find_data: WIN32_FIND_DATAA;
-        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
+    name: string;
+    is_directory: bool;
 
-        if cast(s64, find_handle) == -1 {
-            return;
-        }
+    while files.length < max && get_next_directory_entry(&iterator, &name, &is_directory) {
+        if is_directory {
+            if ignore_directory(name, workspace) continue;
 
-        while files.length < max {
-            name := convert_c_string(&find_data.cFileName);
-
-            if !ignore_directory(name, workspace) {
-                if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                    sub_path := temp_string(path, "/", name);
-                    sub_display_path := name;
-                    if !string_is_empty(display_path) {
-                        sub_display_path = temp_string(display_path, "/", name);
-                    }
-
-                    find_files(workspace, files, filter, sub_path, sub_display_path, max);
-                }
-                else if !ignore_file(name, workspace) {
-                    file_path := name;
-                    if !string_is_empty(display_path) {
-                        file_path = temp_string(display_path, "/", name);
-                    }
-
-                    if string_contains(file_path, filter, false) {
-                        allocate_strings(&file_path);
-                        array_insert(files, file_path, allocate, reallocate);
-                    }
-                }
+            sub_path := temp_string(path, "/", name);
+            sub_display_path := name;
+            if !string_is_empty(display_path) {
+                sub_display_path = temp_string(display_path, "/", name);
             }
 
-            if !FindNextFileA(find_handle, &find_data) break;
+            find_files(workspace, files, filter, sub_path, sub_display_path, max);
         }
+        else if !ignore_file(name, workspace) {
+            file_path := name;
+            if !string_is_empty(display_path) {
+                file_path = temp_string(display_path, "/", name);
+            }
 
-        FindClose(find_handle);
+            if string_contains(file_path, filter, false) {
+                allocate_strings(&file_path);
+                array_insert(files, file_path, allocate, reallocate);
+            }
+        }
     }
+
+    finish_directory_search(&iterator);
 }
 
 Directory* get_or_create_directory(string name, Directory* parent_directory, Array<Directory*>* sub_directories) {
@@ -238,107 +272,43 @@ load_directory(Workspace* workspace, string path, string display_path, Directory
 
 bool load_directory_files(Workspace* workspace, string path, string display_path, bool load_sub_directories, Directory* parent_directory, Array<Directory*>* sub_directories) {
     found_sub_directory := false;
+    iterator: DirectoryIterator;
 
-    #if os == OS.Linux {
-        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-        directory := open(path.data, open_flags, FileMode.S_RWALL);
-
-        if directory < 0 {
-            return false;
-        }
-
-        buffer: CArray<u8>[5600];
-        while !cancel_loading_files {
-            bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
-
-            if bytes <= 0 break;
-
-            position := 0;
-            while position < bytes && !cancel_loading_files {
-                dirent := cast(Dirent*, &buffer + position);
-                name := convert_c_string(&dirent.d_name);
-
-                if !ignore_directory(name, workspace) {
-                    if dirent.d_type == DirentType.DT_REG {
-                        if !ignore_file(name, workspace) && !load_sub_directories {
-                            file_path := name;
-                            if !string_is_empty(display_path) {
-                                file_path = temp_string(display_path, "/", name);
-                            }
-
-                            add_file_entry(name, parent_directory);
-                        }
-                    }
-                    else if dirent.d_type == DirentType.DT_DIR {
-                        if load_sub_directories {
-                            sub_path := temp_string(path, "/", name);
-                            sub_display_path := name;
-                            if !string_is_empty(display_path) {
-                                sub_display_path = temp_string(display_path, "/", name);
-                            }
-                            sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            load_directory(workspace, sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
-                        }
-                        else {
-                            found_sub_directory = true;
-                        }
-                    }
-                }
-
-                position += dirent.d_reclen;
-            }
-        }
-
-        close(directory);
-    }
-    #if os == OS.Windows {
-        wildcard := "/*"; #const
-        path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
-        memory_copy(path_with_wildcard.data, path.data, path.length);
-        memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
-        path_with_wildcard[path.length + wildcard.length] = 0;
-
-        find_data: WIN32_FIND_DATAA;
-        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
-
-        if cast(s64, find_handle) == -1 {
-            return false;
-        }
-
-        while !cancel_loading_files {
-            name := convert_c_string(&find_data.cFileName);
-
-            if !ignore_directory(name, workspace) {
-                if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                    if load_sub_directories {
-                        sub_path := temp_string(path, "/", name);
-                        sub_display_path := name;
-                        if !string_is_empty(display_path) {
-                            sub_display_path = temp_string(display_path, "/", name);
-                        }
-                        sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        load_directory(workspace, sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
-                    }
-                    else {
-                        found_sub_directory = true;
-                    }
-                }
-                else if !ignore_file(name, workspace) && !load_sub_directories {
-                    file_path := name;
-                    if !string_is_empty(display_path) {
-                        file_path = temp_string(display_path, "/", name);
-                    }
-
-                    add_file_entry(name, parent_directory);
-                }
-            }
-
-            if !FindNextFileA(find_handle, &find_data) break;
-        }
-
-        FindClose(find_handle);
+    if !start_directory_search(&iterator, path) {
+        return false;
     }
 
+    name: string;
+    is_directory: bool;
+
+    while !cancel_loading_files && get_next_directory_entry(&iterator, &name, &is_directory) {
+        if is_directory {
+            if ignore_directory(name, workspace) continue;
+
+            if load_sub_directories {
+                sub_path := temp_string(path, "/", name);
+                sub_display_path := name;
+                if !string_is_empty(display_path) {
+                    sub_display_path = temp_string(display_path, "/", name);
+                }
+                sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
+                load_directory(workspace, sub_path, sub_display_path, sub_directory, &sub_directory.sub_directories);
+            }
+            else {
+                found_sub_directory = true;
+            }
+        }
+        else if !ignore_file(name, workspace) && !load_sub_directories {
+            file_path := name;
+            if !string_is_empty(display_path) {
+                file_path = temp_string(display_path, "/", name);
+            }
+
+            add_file_entry(name, parent_directory);
+        }
+    }
+
+    finish_directory_search(&iterator);
     return found_sub_directory;
 }
 
@@ -759,89 +729,35 @@ bool search_directory_files(Workspace* workspace, string path, bool search_sub_d
     defer trigger_window_update();
 
     found_sub_directory := false;
+    iterator: DirectoryIterator;
 
-    #if os == OS.Linux {
-        open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-        directory := open(path.data, open_flags, FileMode.S_RWALL);
-
-        if directory < 0 {
-            return false;
-        }
-
-        buffer: CArray<u8>[5600];
-        while !cancel_search && search_results.length < max_search_results {
-            bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
-
-            if bytes <= 0 break;
-
-            position := 0;
-            while position < bytes {
-                dirent := cast(Dirent*, &buffer + position);
-                name := convert_c_string(&dirent.d_name);
-
-                if !ignore_directory(name, workspace) {
-                    if dirent.d_type == DirentType.DT_REG && !ignore_file(name, workspace) && !search_sub_directories {
-                        atomic_increment(&searches_in_progress);
-                        search_file(name, parent_directory);
-                    }
-                    else if dirent.d_type == DirentType.DT_DIR {
-                        if search_sub_directories {
-                            sub_path := temp_string(path, "/", name);
-                            sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                            search_directory(workspace, sub_path, sub_directory, &sub_directory.sub_directories);
-                        }
-                        else {
-                            found_sub_directory = true;
-                        }
-                    }
-                }
-
-                position += dirent.d_reclen;
-            }
-        }
-
-        close(directory);
-    }
-    #if os == OS.Windows {
-        wildcard := "/*"; #const
-        path_with_wildcard: Array<u8>[path.length + wildcard.length + 1];
-        memory_copy(path_with_wildcard.data, path.data, path.length);
-        memory_copy(path_with_wildcard.data + path.length, wildcard.data, wildcard.length);
-        path_with_wildcard[path.length + wildcard.length] = 0;
-
-        find_data: WIN32_FIND_DATAA;
-        find_handle := FindFirstFileA(path_with_wildcard.data, &find_data);
-
-        if cast(s64, find_handle) == -1 {
-            return false;
-        }
-
-        while !cancel_search && search_results.length < max_search_results {
-            name := convert_c_string(&find_data.cFileName);
-
-            if !ignore_directory(name, workspace) {
-                if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                    if search_sub_directories {
-                        sub_path := temp_string(path, "/", name);
-                        sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
-                        search_directory(workspace, sub_path, sub_directory, &sub_directory.sub_directories);
-                    }
-                    else {
-                        found_sub_directory = true;
-                    }
-                }
-                else if !ignore_file(name, workspace) && !search_sub_directories {
-                    atomic_increment(&searches_in_progress);
-                    search_file(name, parent_directory);
-                }
-            }
-
-            if !FindNextFileA(find_handle, &find_data) break;
-        }
-
-        FindClose(find_handle);
+    if !start_directory_search(&iterator, path) {
+        return false;
     }
 
+    name: string;
+    is_directory: bool;
+
+    while get_next_directory_entry(&iterator, &name, &is_directory) {
+        if is_directory {
+            if ignore_directory(name, workspace) continue;
+
+            if search_sub_directories {
+                sub_path := temp_string(path, "/", name);
+                sub_directory := get_or_create_directory(name, parent_directory, sub_directories);
+                search_directory(workspace, sub_path, sub_directory, &sub_directory.sub_directories);
+            }
+            else {
+                found_sub_directory = true;
+            }
+        }
+        else if !ignore_file(name, workspace) && !search_sub_directories {
+            atomic_increment(&searches_in_progress);
+            search_file(name, parent_directory);
+        }
+    }
+
+    finish_directory_search(&iterator);
     return found_sub_directory;
 }
 

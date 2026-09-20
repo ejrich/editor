@@ -326,88 +326,51 @@ autocomplete_terminal(Workspace* workspace) {
                 if path.length == argument.length return;
 
                 candidate := empty_string;
+                iterator: DirectoryIterator;
 
                 #if os == OS.Windows {
-                    candidate_file := empty_string;
                     search_string := temp_string(argument, "*");
-
-                    find_data: WIN32_FIND_DATAA;
-                    find_handle := FindFirstFileA(search_string.data, &find_data);
-
-                    if cast(s64, find_handle) == -1 return;
-
-                    while true {
-                        file_name := convert_c_string(&find_data.cFileName);
-                        if file_name != "." && file_name != ".." {
-                            if candidate.length {
-                                if candidate.length > file_name.length {
-                                    candidate.length = file_name.length;
-                                }
-
-                                each j in argument.length - path.length..candidate.length - 1 {
-                                    if candidate[j] != file_name[j] {
-                                        candidate.length = j;
-                                        break;
-                                    }
-                                }
-                            }
-                            else if find_data.dwFileAttributes & FileAttribute.FILE_ATTRIBUTE_DIRECTORY {
-                                candidate = temp_string(file_name, "/");
-                            }
-                            else {
-                                candidate = temp_string(file_name);
-                            }
-                        }
-
-                        if !FindNextFileA(find_handle, &find_data) break;
+                    if !start_directory_search(&iterator, search_string, false) {
+                        return;
                     }
                 }
                 #if os == OS.Linux {
-                    open_flags := OpenFlags.O_RDONLY | OpenFlags.O_NONBLOCK | OpenFlags.O_DIRECTORY | OpenFlags.O_LARGEFILE | OpenFlags.O_CLOEXEC;
-                    null_terminated_path := temp_string(path);
-                    directory := open(null_terminated_path.data, open_flags, FileMode.S_RWALL);
-
-                    if directory < 0 return;
-
                     query: string = { length = argument.length - path.length; data = argument.data + path.length; }
 
-                    buffer: CArray<u8>[5600];
-                    while true {
-                        bytes := getdents64(directory, cast(Dirent*, &buffer), buffer.length);
+                    null_terminated_path := temp_string(path);
+                    if !start_directory_search(&iterator, null_terminated_path) {
+                        return;
+                    }
+                }
 
-                        if bytes <= 0 break;
+                file_name: string;
+                is_directory: bool;
 
-                        position := 0;
-                        while position < bytes {
-                            dirent := cast(Dirent*, &buffer + position);
-                            file_name := convert_c_string(&dirent.d_name);
-
-                            if starts_with(file_name, query) && file_name != "." && file_name != ".." {
-                                if candidate.length {
-                                    if candidate.length > file_name.length {
-                                        candidate.length = file_name.length;
-                                    }
-
-                                    each j in argument.length - path.length..candidate.length - 1 {
-                                        if candidate[j] != file_name[j] {
-                                            candidate.length = j;
-                                            break;
-                                        }
-                                    }
-                                }
-                                else if dirent.d_type == DirentType.DT_REG {
-                                    candidate = temp_string(file_name);
-                                }
-                                else if dirent.d_type == DirentType.DT_DIR {
-                                    candidate = temp_string(file_name, "/");
-                                }
-                            }
-
-                            position += dirent.d_reclen;
-                        }
+                while get_next_directory_entry(&iterator, &file_name, &is_directory) {
+                    #if os == OS.Linux {
+                        if !starts_with(file_name, query) continue;
                     }
 
-                    close(directory);
+                    if file_name == "." || file_name == ".." continue;
+
+                    if candidate.length {
+                        if candidate.length > file_name.length {
+                            candidate.length = file_name.length;
+                        }
+
+                        each j in argument.length - path.length..candidate.length - 1 {
+                            if candidate[j] != file_name[j] {
+                                candidate.length = j;
+                                break;
+                            }
+                        }
+                    }
+                    else if is_directory {
+                        candidate = temp_string(file_name, "/");
+                    }
+                    else {
+                        candidate = temp_string(file_name);
+                    }
                 }
 
                 if candidate.length {
