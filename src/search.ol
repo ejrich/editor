@@ -47,6 +47,14 @@ Array<string> find_files(Workspace* workspace, string filter, u32 max) {
     return files;
 }
 
+Array<SearchResult> search_for_text(Workspace* workspace, string filter, string query, u32 max) {
+    results: Array<SearchResult>;
+
+    search_for_text(workspace, &results, filter, query, workspace.directory, empty_string, max);
+
+    return results;
+}
+
 #if os == OS.Linux {
     struct DirectoryIterator {
         fd: int;
@@ -182,6 +190,138 @@ find_files(Workspace* workspace, Array<string>* files, string filter, string pat
     }
 
     finish_directory_search(&iterator);
+}
+
+search_for_text(Workspace* workspace, Array<SearchResult>* results, string filter, string query, string path, string display_path, u32 max) {
+    iterator: DirectoryIterator;
+
+    if !start_directory_search(&iterator, path) {
+        return;
+    }
+
+    name: string;
+    is_directory: bool;
+
+    while results.length < max && get_next_directory_entry(&iterator, &name, &is_directory) {
+        if is_directory {
+            if ignore_directory(name, workspace) continue;
+
+            sub_path := temp_string(path, "/", name);
+            sub_display_path := name;
+            if !string_is_empty(display_path) {
+                sub_display_path = temp_string(display_path, "/", name);
+            }
+
+            search_for_text(workspace, results, filter, query, sub_path, sub_display_path, max);
+        }
+        else if !ignore_file(name, workspace) {
+            file_path := name;
+            if !string_is_empty(display_path) {
+                file_path = temp_string(display_path, "/", name);
+            }
+
+            if string_is_empty(filter) || string_contains(file_path, filter, false) {
+                absolute_file_path := temp_string(path, "/", name);
+                search_file_for_text(workspace, results, absolute_file_path, file_path, query, max);
+            }
+        }
+    }
+
+    finish_directory_search(&iterator);
+}
+
+search_file_for_text(Workspace* workspace, Array<SearchResult>* results, string path, string relative_path, string query, u32 max) {
+    if results.length >= max return;
+
+    // Try to search in an open buffer
+    existing_buffer: Buffer*;
+    each buffer in workspace.buffers {
+        if buffer.relative_path == relative_path {
+            existing_buffer = &buffer;
+            break;
+        }
+    }
+
+    if existing_buffer {
+        // TODO Search the existing buffer
+    }
+
+
+    // Otherwise read the file and search
+    success, file_handle := open_file(path);
+    if !success || is_file_binary(file_handle) {
+        close_file(file_handle);
+        return;
+    }
+
+    found, file := read_file(file_handle, allocate);
+    if !found return;
+
+    defer free_allocation(file.data);
+
+    line_number, column := 1;
+    skip_until_next_line := false;
+    found_match := false;
+    each i in file.length {
+        if results.length >= max break;
+
+        char := file[i];
+        if skip_until_next_line {
+            if char == '\n' {
+                line_number++;
+                column = 1;
+                skip_until_next_line = false;
+            }
+        }
+        else {
+            if char == query[0] {
+                if file.length - i >= query.length {
+                    match := true;
+                    query_index := 1;
+                    file_index := i + 1;
+                    while query_index < query.length && file_index < file.length {
+                        test_char := file[file_index];
+                        filter_char := query[query_index];
+                        if test_char == '\r' {
+                            file_index++;
+                        }
+                        else if test_char != filter_char {
+                            match = false;
+                            break;
+                        }
+                        else {
+                            query_index++;
+                            file_index++;
+                        }
+                    }
+
+                    if match && query_index == query.length {
+                        if !found_match {
+                            found_match = true;
+                            allocate_strings(&relative_path);
+                        }
+
+                        result: SearchResult = {
+                            file = relative_path;
+                            line = line_number;
+                            column = column;
+                        }
+
+                        array_insert(results, result, allocate, reallocate);
+                        skip_until_next_line = true;
+                    }
+                }
+            }
+
+            if char == '\n' {
+                line_number++;
+                column = 1;
+            }
+            else {
+                column++;
+            }
+        }
+    }
 }
 
 Directory* get_or_create_directory(string name, Directory* parent_directory, Array<Directory*>* sub_directories) {

@@ -305,7 +305,7 @@ struct FindFilesOutput {
 
 [tool, "Searches for files"]
 string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFilesOutput output) {
-    output.results = find_files(workspace, args.query, 10);
+    output.results = find_files(workspace, args.query, 20);
 
     output_json := serialize_json(output);
 
@@ -322,6 +322,8 @@ string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFiles
 struct SearchArguments {
     ["Text to search for, not a regex but can include '\\n'"]
     query: string;
+    ["Optional file filter for searches, use empty string for no filter"]
+    filter: string;
 }
 
 struct SearchOutput {
@@ -339,10 +341,19 @@ struct SearchResult {
 }
 
 [tool, "Searches for text"]
-string, bool search_for_text(Workspace* workspace, WriteFileArguments args, WriteFileOutput output) {
-    // TODO Implement
-    print("Search for text - %\n", args);
-    return "{\"results\":[]}", false;
+string, bool search_for_text(Workspace* workspace, SearchArguments args, SearchOutput output) {
+    output.results = search_for_text(workspace, args.filter, args.query, 20);
+
+    output_json := serialize_json(output);
+
+    if output.results.length {
+        each result in output.results {
+            free_allocation(result.file.data);
+        }
+        free_allocation(output.results.data);
+    }
+
+    return output_json, true;
 }
 
 struct StatusCheckArguments {

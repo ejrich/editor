@@ -437,7 +437,10 @@ int get_or_open_file_buffer(Workspace* workspace, string path, string relative_p
         found, file := read_file(path, allocator);
         if found {
             if is_file_binary(file) {
-                buffer.hex_view = true;
+                buffer = {
+                    hex_view = true;
+                    is_binary = true;
+                }
                 add_text_to_line(null, line, file);
             }
             else {
@@ -4139,6 +4142,7 @@ struct Buffer {
     has_changes: bool;
     path_allocated: bool;
     hex_view: bool;
+    is_binary: bool;
     relative_path: string;
     title: GetBufferTitle;
     line_count: u32;
