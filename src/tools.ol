@@ -45,6 +45,9 @@ string, bool read_file_text(Workspace* workspace, ReadFileArguments args, ReadFi
     buffer := open_workspace_file_buffer(workspace, path, args.file);
     if buffer == null return "{\"success\":false,\"error\":\"Unable to load file\"}", false;
 
+    update_message := temp_string("Read '", args.file, "'\n");
+    add_to_agent_buffer(workspace, update_message);
+
     output = {
         success = true;
         file = args.file;
@@ -88,6 +91,10 @@ string, bool read_file_lines(Workspace* workspace, ReadFileLineArguments args, R
     buffer := open_workspace_file_buffer(workspace, path, args.file);
     if buffer == null return "{\"success\":false,\"error\":\"Unable to load file\"}", false;
 
+    update_message := format_string("Read '%' lines %-%\n", allocate, args.file, args.start, args.end);
+    add_to_agent_buffer(workspace, update_message);
+    free_allocation(update_message.data);
+
     output = {
         success = true;
         file = args.file;
@@ -123,6 +130,10 @@ string, bool create_file(Workspace* workspace, CreateFileArguments args, CreateF
 
     buffer := open_workspace_file_buffer(workspace, path, args.file_path);
     if buffer == null return "{\"success\":false,\"error\":\"Unable to create file\"}", false;
+
+    update_message := format_string("Created '%' with % bytes\n", allocate, args.file_path, args.text.length);
+    add_to_agent_buffer(workspace, update_message);
+    free_allocation(update_message.data);
 
     add_text_to_end_of_buffer(buffer, args.text, false);
     save_buffer(workspace, buffer);
@@ -172,7 +183,6 @@ string, bool write_file(Workspace* workspace, WriteFileArguments args, WriteFile
     buffer := open_workspace_file_buffer(workspace, path, args.file);
 
     each command in args.write_commands {
-        // print("%\n", command);
         switch command.type {
             case WriteFileCommandType.Insert; {
                 begin_change(buffer, -1, 0, 0, command.start_line - 1);
@@ -207,7 +217,12 @@ string, bool write_file(Workspace* workspace, WriteFileArguments args, WriteFile
         }
     }
 
+    update_message := format_string("Wrote to '%' +% -%\n", allocate, args.file, output.lines_written, output.lines_deleted);
+    add_to_agent_buffer(workspace, update_message);
+    free_allocation(update_message.data);
+
     calculate_line_digits(buffer);
+    save_buffer(workspace, buffer);
 
     free_allocation(args.write_commands.data);
 
@@ -264,6 +279,9 @@ string, bool rename_file(Workspace* workspace, RenameFileArguments args, RenameF
         return "{\"success\":false,\"error\":\"Unable to rename file\"}", false;
     }
 
+    update_message := temp_string("Renamed '", args.file, "' to '", args.new_path, "'\n");
+    add_to_agent_buffer(workspace, update_message);
+
     output = {
         success = true;
         new_path = args.file;
@@ -290,6 +308,10 @@ string, bool delete_file(Workspace* workspace, DeleteFileArguments args, DeleteF
     path := temp_string(workspace.directory, "/", args.file);
     if !file_exists(path) return "{\"success\":false,\"error\":\"File doesn't exist\"}", false;
     if !delete_file(path) return "{\"success\":false,\"error\":\"Unable to delete file\"}", false;
+
+    update_message := temp_string("Deleted '", args.file, "'\n");
+    add_to_agent_buffer(workspace, update_message);
+
     return "{\"success\":true}", false;
 }
 
@@ -305,7 +327,14 @@ struct FindFilesOutput {
 
 [tool, "Searches for files"]
 string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFilesOutput output) {
+    update_message := temp_string("Searching for files '", args.query, "'");
+    add_to_agent_buffer(workspace, update_message);
+
     output.results = find_files(workspace, args.query, 20);
+
+    update_message = format_string(" - Found % files\n", output.results.length);
+    add_to_agent_buffer(workspace, update_message);
+    free_allocation(update_message.data);
 
     output_json := serialize_json(output);
 
@@ -342,7 +371,14 @@ struct SearchResult {
 
 [tool, "Searches for text"]
 string, bool search_for_text(Workspace* workspace, SearchArguments args, SearchOutput output) {
+    update_message := temp_string("Searching for text '", args.query, "'");
+    add_to_agent_buffer(workspace, update_message);
+
     output.results = search_for_text(workspace, args.filter, args.query, 20);
+
+    update_message = format_string(" - Found % results\n", output.results.length);
+    add_to_agent_buffer(workspace, update_message);
+    free_allocation(update_message.data);
 
     output_json := serialize_json(output);
 
