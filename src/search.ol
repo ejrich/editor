@@ -242,10 +242,74 @@ search_file_for_text(Workspace* workspace, Array<SearchResult>* results, string 
         }
     }
 
-    if existing_buffer {
-        // TODO Search the existing buffer
-    }
+    line_number, column := 1;
+    skip_until_next_line := false;
+    found_match := false;
 
+    if existing_buffer {
+        line := existing_buffer.lines;
+        while results.length < max && line != null {
+            each i in line.length {
+                if results.length >= max break;
+
+                char := get_char(line, i);
+                if char == query[0] {
+                    current_line := line;
+                    match := true;
+                    query_index := 1;
+                    line_index := i + 1;
+                    while query_index < query.length {
+                        query_char := query[query_index];
+
+                        if line_index >= current_line.length {
+                            if query_char == '\n' && current_line.next != null {
+                                current_line = current_line.next;
+                                line_index = 0;
+                                query_index++;
+                            }
+                            else {
+                                match = false;
+                                break;
+                            }
+                        }
+                        else {
+                            test_char := get_char(current_line, line_index);
+                            if test_char != query_char {
+                                match = false;
+                                break;
+                            }
+                            else {
+                                query_index++;
+                                line_index++;
+                            }
+                        }
+                    }
+
+                    if match && query_index == query.length {
+                        if !found_match {
+                            found_match = true;
+                            allocate_strings(&relative_path);
+                        }
+
+                        result: SearchResult = {
+                            file = relative_path;
+                            line = line_number;
+                            column = column;
+                        }
+
+                        array_insert(results, result, allocate, reallocate);
+                        break;
+                    }
+                }
+            }
+
+            line = line.next;
+            line_number++;
+            column = 1;
+        }
+
+        return;
+    }
 
     // Otherwise read the file and search
     success, file_handle := open_file(path);
@@ -259,9 +323,6 @@ search_file_for_text(Workspace* workspace, Array<SearchResult>* results, string 
 
     defer free_allocation(file.data);
 
-    line_number, column := 1;
-    skip_until_next_line := false;
-    found_match := false;
     each i in file.length {
         if results.length >= max break;
 
@@ -281,11 +342,11 @@ search_file_for_text(Workspace* workspace, Array<SearchResult>* results, string 
                     file_index := i + 1;
                     while query_index < query.length && file_index < file.length {
                         test_char := file[file_index];
-                        filter_char := query[query_index];
+                        query_char := query[query_index];
                         if test_char == '\r' {
                             file_index++;
                         }
-                        else if test_char != filter_char {
+                        else if test_char != query_char {
                             match = false;
                             break;
                         }
