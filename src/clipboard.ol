@@ -69,7 +69,14 @@ set_clipboard(string value, ClipboardMode mode = ClipboardMode.Normal) {
     get_current_clipboard() {
         clipboard_string: string;
 
-        success := OpenClipboard(window.handle);
+        success := false;
+        retries := 5; #const
+        i := 0;
+        while !success && i++ < retries {
+            success = OpenClipboard(window.handle);
+            if !success Sleep(10);
+        }
+
         if success {
             clipboard_handle := GetClipboardData(ClipboardFormat.CF_TEXT);
             if clipboard_handle {

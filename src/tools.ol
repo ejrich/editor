@@ -349,7 +349,7 @@ string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFiles
 }
 
 struct SearchArguments {
-    ["Text to search for, not a regex but can include '\\n'"]
+    ["Text to search for, not a regex but can include '\\\\n'"]
     query: string;
     ["Optional file filter for searches, use empty string for no filter"]
     filter: string;
