@@ -2,6 +2,7 @@
 init_memory() {
     arena_head = create_arena(0);
     allocate_line_arenas();
+    init_small_arena();
 }
 
 // General allocation
@@ -13,6 +14,30 @@ T* new<T>() #inline {
 
     return pointer;
 }
+
+/*
+
+Memory allocator design
+
+- For sizes <= 256 bytes, try to allocate in an arena reserved for these allocations
+- Otherwise allocate in the general purpose arena
+
+Small allocator arena:
+
+// 260 bytes - 4 for block for 256 bytes of storage
+struct SmallMemoryBlock {
+    used: bool; // 1
+    index: u16; // 3-4
+}
+
+Allocate 10000 on startup for 2.6mb memory, aka nothing
+
+
+General allocator arena:
+
+TODO
+
+*/
 
 enum MemoryBlockFlags {
     Unused = 0x0;
@@ -27,10 +52,16 @@ struct MemoryBlock {
     flags: MemoryBlockFlags;
 }
 
+
 void* allocate(u64 size) {
     // Pad out the size to make sure it is a multiple of 8
     padding := size % 8;
     if padding size += 8 - padding;
+
+    if size <= small_block_size {
+        success, pointer := try_small_allocation();
+        if success return pointer;
+    }
 
     if size > default_arena_size
         return allocate_arena(size, size);
@@ -78,6 +109,7 @@ void* reallocate(void* pointer, u64 old_size, u64 size) {
     if padding size += 8 - padding;
 
     // Convert pointer to memory block
+    // TODO Change to helper function to get the block size
     block := cast(MemoryBlock*, pointer) - 1;
 
     // Create a new allocation and free the existing memory block
@@ -90,6 +122,10 @@ void* reallocate(void* pointer, u64 old_size, u64 size) {
 
 free_allocation(void* pointer) {
     if pointer == null return;
+
+    if try_free_small_allocation(pointer) {
+        return;
+    }
 
     block := cast(MemoryBlock*, pointer) - 1;
     free_memory_block(block);
@@ -278,6 +314,57 @@ reset_temp_buffer() #inline {
 temp_buffer_size := 50 * 1024 * 1024; #const
 temporary_buffer: CArray<u8>[temp_buffer_size];
 temporary_buffer_cursor := 0;
+
+
+// Small allocation
+
+struct SmallMemoryBlock {
+    used: bool;
+    index: u16;
+}
+
+small_block_size := 256; #const
+small_block_count := 10000; #const
+
+struct SmallMemoryArena {
+    size: int;
+    used: int;
+    first_unused: int;
+    last_unused: int;
+    data: void*;
+    data_end: u64;
+}
+
+small_arena: SmallMemoryArena = { size = small_block_count; last_unused = small_block_count - 1; }
+
+init_small_arena() {
+    total_block_size := size_of(SmallMemoryBlock) + small_block_size;
+    allocation_size := total_block_size * small_block_count;
+
+    small_arena.data = allocate_memory(allocation_size);
+    small_arena.data_end = cast(u64, small_arena.data) + allocation_size;
+
+    each i in small_block_count {
+        block := cast(SmallMemoryBlock*, small_arena.data + i * total_block_size);
+        block.used = false;
+        block.index = i;
+    }
+}
+
+bool, void* try_small_allocation() {
+    // TODO Implement
+    return false, null;
+}
+
+bool try_free_small_allocation(void* pointer) {
+    if cast(u64, pointer) < cast(u64, small_arena.data) || cast(u64, pointer) > small_arena.data_end {
+        return false;
+    }
+
+    // TODO Implement
+    return false;
+}
+
 
 // General allocation
 struct Arena {
