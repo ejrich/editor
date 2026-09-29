@@ -324,6 +324,7 @@ struct SmallMemoryBlock {
 }
 
 small_block_size := 256; #const
+total_block_size := size_of(SmallMemoryBlock) + small_block_size; #const
 small_block_count := 10000; #const
 
 struct SmallMemoryArena {
@@ -331,6 +332,7 @@ struct SmallMemoryArena {
     used: int;
     first_unused: int;
     last_unused: int;
+    first_unused_mutex: Semaphore;
     data: void*;
     data_end: u64;
 }
@@ -338,9 +340,9 @@ struct SmallMemoryArena {
 small_arena: SmallMemoryArena = { size = small_block_count; last_unused = small_block_count - 1; }
 
 init_small_arena() {
-    total_block_size := size_of(SmallMemoryBlock) + small_block_size;
     allocation_size := total_block_size * small_block_count;
 
+    create_semaphore(&small_arena.first_unused_mutex, initial_value = 1);
     small_arena.data = allocate_memory(allocation_size);
     small_arena.data_end = cast(u64, small_arena.data) + allocation_size;
 
@@ -352,7 +354,35 @@ init_small_arena() {
 }
 
 bool, void* try_small_allocation() {
-    // TODO Implement
+    // TODO Remove when this is ready
+    return false, null;
+
+    while small_arena.used < small_arena.size {
+        first_unused := small_arena.first_unused;
+        block: SmallMemoryBlock* = small_arena.data + (total_block_size * first_unused);
+        if compare_exchange(&block.used, true, false) == false {
+            atomic_increment(&small_arena.used);
+
+            semaphore_wait(&small_arena.first_unused_mutex);
+            if block.index == small_arena.first_unused {
+                each i in small_arena.first_unused + 1..small_arena.last_unused {
+                    candidate_block: SmallMemoryBlock* = small_arena.data + (total_block_size * i);
+                    if !candidate_block.used {
+                        small_arena.first_unused = i;
+                        break;
+                    }
+                }
+            }
+
+            semaphore_release(&small_arena.first_unused_mutex);
+            return true, block + 1;
+        }
+
+        while true {
+            if small_arena.first_unused != first_unused break;
+        }
+    }
+
     return false, null;
 }
 
@@ -361,8 +391,31 @@ bool try_free_small_allocation(void* pointer) {
         return false;
     }
 
-    // TODO Implement
-    return false;
+    block := cast(SmallMemoryBlock*, pointer) - 1;
+
+    if block.index < small_arena.first_unused {
+        semaphore_wait(&small_arena.first_unused_mutex);
+        if block.index < small_arena.first_unused {
+            small_arena.first_unused = block.index;
+        }
+
+        semaphore_release(&small_arena.first_unused_mutex);
+    }
+    else {
+        last_unused := small_arena.last_unused;
+        while block.index > last_unused {
+            if compare_exchange(&small_arena.last_unused, block.index, last_unused) == last_unused {
+                break;
+            }
+
+            last_unused = small_arena.last_unused;
+        }
+
+    }
+
+    block.used = false;
+    atomic_decrement(&small_arena.used);
+    return true;
 }
 
 
