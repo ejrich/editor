@@ -345,6 +345,7 @@ init_small_arena() {
     create_semaphore(&small_arena.first_unused_mutex, initial_value = 1);
     small_arena.data = allocate_memory(allocation_size);
     small_arena.data_end = cast(u64, small_arena.data) + allocation_size;
+    clear_memory(small_arena.data, allocation_size);
 
     each i in small_block_count {
         block := cast(SmallMemoryBlock*, small_arena.data + i * total_block_size);
@@ -358,10 +359,26 @@ bool, void* try_small_allocation() {
     return false, null;
 
     while small_arena.used < small_arena.size {
+        each i in small_block_count {
+            block: SmallMemoryBlock* = small_arena.data + (total_block_size * i);
+            if !block.used && compare_exchange(&block.used, true, false) == false {
+                atomic_increment(&small_arena.used);
+
+                result: void* = block + 1;
+                clear_memory(result, small_block_size);
+
+                return true, result;
+            }
+        }
+
+
+        /*
         first_unused := small_arena.first_unused;
         block: SmallMemoryBlock* = small_arena.data + (total_block_size * first_unused);
         if compare_exchange(&block.used, true, false) == false {
             atomic_increment(&small_arena.used);
+            result: void* = block + 1;
+            clear_memory(result, small_block_size);
 
             semaphore_wait(&small_arena.first_unused_mutex);
             if block.index == small_arena.first_unused {
@@ -375,12 +392,13 @@ bool, void* try_small_allocation() {
             }
 
             semaphore_release(&small_arena.first_unused_mutex);
-            return true, block + 1;
+            return true, result;
         }
 
         while true {
             if small_arena.first_unused != first_unused break;
         }
+        */
     }
 
     return false, null;
@@ -393,6 +411,7 @@ bool try_free_small_allocation(void* pointer) {
 
     block := cast(SmallMemoryBlock*, pointer) - 1;
 
+    /*
     if block.index < small_arena.first_unused {
         semaphore_wait(&small_arena.first_unused_mutex);
         if block.index < small_arena.first_unused {
@@ -410,8 +429,8 @@ bool try_free_small_allocation(void* pointer) {
 
             last_unused = small_arena.last_unused;
         }
-
     }
+    */
 
     block.used = false;
     atomic_decrement(&small_arena.used);
