@@ -1126,8 +1126,7 @@ void* CRYPTO_realloc_impl(void* addr, u64 num, u8* file, int line) {
     str := convert_c_string(file);
     if addr == null return allocate(num);
 
-    block := cast(MemoryBlock*, addr) - 1;
-    return reallocate(addr, block.size, num);
+    return reallocate(addr, 0, num);
 }
 
 CRYPTO_free_impl(void* addr, u8* file, int line) {

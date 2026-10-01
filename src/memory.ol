@@ -52,7 +52,6 @@ struct MemoryBlock {
     flags: MemoryBlockFlags;
 }
 
-
 void* allocate(u64 size) {
     // Pad out the size to make sure it is a multiple of 8
     padding := size % 8;
@@ -108,13 +107,26 @@ void* reallocate(void* pointer, u64 old_size, u64 size) {
     padding := size % 8;
     if padding size += 8 - padding;
 
+    // Handle small allocations
+    if is_small_allocation(pointer) {
+        if size <= small_block_size {
+            return pointer;
+        }
+
+        new_pointer := allocate(size);
+        memory_copy(new_pointer, pointer, small_block_size);
+        free_small_allocation(pointer);
+
+        return new_pointer;
+    }
+
     // Convert pointer to memory block
-    // TODO Change to helper function to get the block size
     block := cast(MemoryBlock*, pointer) - 1;
+    if size <= block.size return pointer;
 
     // Create a new allocation and free the existing memory block
     new_pointer := allocate(size);
-    memory_copy(new_pointer, pointer, old_size);
+    memory_copy(new_pointer, pointer, block.size);
     free_memory_block(block);
 
     return new_pointer;
@@ -123,7 +135,8 @@ void* reallocate(void* pointer, u64 old_size, u64 size) {
 free_allocation(void* pointer) {
     if pointer == null return;
 
-    if try_free_small_allocation(pointer) {
+    if is_small_allocation(pointer) {
+        free_small_allocation(pointer);
         return;
     }
 
@@ -308,6 +321,14 @@ reset_temp_buffer() #inline {
     temporary_buffer_cursor = 0;
 }
 
+bool is_small_allocation(void* pointer) {
+    if cast(u64, pointer) < cast(u64, small_arena.data) || cast(u64, pointer) > small_arena.data_end {
+        return false;
+    }
+
+    return true;
+}
+
 #private
 
 
@@ -317,7 +338,6 @@ temporary_buffer_cursor := 0;
 
 
 // Small allocation
-
 struct SmallMemoryBlock {
     used: bool;
     index: u16;
@@ -355,9 +375,6 @@ init_small_arena() {
 }
 
 bool, void* try_small_allocation() {
-    // TODO Remove when this is ready
-    return false, null;
-
     while small_arena.used < small_arena.size {
         each i in small_block_count {
             block: SmallMemoryBlock* = small_arena.data + (total_block_size * i);
@@ -370,7 +387,6 @@ bool, void* try_small_allocation() {
                 return true, result;
             }
         }
-
 
         /*
         first_unused := small_arena.first_unused;
@@ -404,11 +420,7 @@ bool, void* try_small_allocation() {
     return false, null;
 }
 
-bool try_free_small_allocation(void* pointer) {
-    if cast(u64, pointer) < cast(u64, small_arena.data) || cast(u64, pointer) > small_arena.data_end {
-        return false;
-    }
-
+free_small_allocation(void* pointer) {
     block := cast(SmallMemoryBlock*, pointer) - 1;
 
     /*
@@ -434,7 +446,6 @@ bool try_free_small_allocation(void* pointer) {
 
     block.used = false;
     atomic_decrement(&small_arena.used);
-    return true;
 }
 
 

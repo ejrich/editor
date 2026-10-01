@@ -1805,8 +1805,7 @@ void* vulkan_allocate(void* pUserData, u64 size, u64 alignment, VkSystemAllocati
 
 void* vulkan_reallocate(void* pUserData, void* pOriginal, u64 size, u64 alignment, VkSystemAllocationScope allocationScope) {
     if pOriginal {
-        block := cast(MemoryBlock*, pOriginal) - 1;
-        return reallocate(pOriginal, block.size, size);
+        return reallocate(pOriginal, 0, size);
     }
 
     return allocate(size);
