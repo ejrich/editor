@@ -35,7 +35,24 @@ Allocate 10000 on startup for 2.6mb memory, aka nothing
 
 General allocator arena:
 
-TODO
+MemoryBlock:
+- used
+- locked
+- size
+- next
+- previous
+- checksum
+
+When allocating, try to find a block that fits the size
+If the block is locked, wait until it is unlocked before checking again
+Once it is unlocked, verify the checksum. If it fails, restart the search
+When a valid block is found, lock it and try to insert another block
+
+Allocate new arenas if a block was not found
+
+
+When freeing blocks, attempt to merge the surrounding blocks
+Lock both blocks being merged and clear the data of the rightmost block, this will cause the checksum verification to fail in allocate
 
 */
 
@@ -49,6 +66,7 @@ struct MemoryBlock {
     previous: MemoryBlock*;
     next: MemoryBlock*;
     size: u64;
+    checksum: u64; // 0xFFFFFFFF ^ prev ^ next ^ size
     flags: MemoryBlockFlags;
 }
 
@@ -357,7 +375,10 @@ struct SmallMemoryArena {
     data_end: u64;
 }
 
-small_arena: SmallMemoryArena = { size = small_block_count; last_unused = small_block_count - 1; }
+small_arena: SmallMemoryArena = {
+    size = small_block_count;
+    last_unused = small_block_count - 1;
+ }
 
 init_small_arena() {
     allocation_size := total_block_size * small_block_count;
@@ -376,6 +397,7 @@ init_small_arena() {
 
 bool, void* try_small_allocation() {
     while small_arena.used < small_arena.size {
+        /*
         each i in small_block_count {
             block: SmallMemoryBlock* = small_arena.data + (total_block_size * i);
             if !block.used && compare_exchange(&block.used, true, false) == false {
@@ -387,8 +409,8 @@ bool, void* try_small_allocation() {
                 return true, result;
             }
         }
+        */
 
-        /*
         first_unused := small_arena.first_unused;
         block: SmallMemoryBlock* = small_arena.data + (total_block_size * first_unused);
         if compare_exchange(&block.used, true, false) == false {
@@ -414,7 +436,6 @@ bool, void* try_small_allocation() {
         while true {
             if small_arena.first_unused != first_unused break;
         }
-        */
     }
 
     return false, null;
@@ -422,8 +443,8 @@ bool, void* try_small_allocation() {
 
 free_small_allocation(void* pointer) {
     block := cast(SmallMemoryBlock*, pointer) - 1;
+    block.used = false;
 
-    /*
     if block.index < small_arena.first_unused {
         semaphore_wait(&small_arena.first_unused_mutex);
         if block.index < small_arena.first_unused {
@@ -442,9 +463,7 @@ free_small_allocation(void* pointer) {
             last_unused = small_arena.last_unused;
         }
     }
-    */
 
-    block.used = false;
     atomic_decrement(&small_arena.used);
 }
 

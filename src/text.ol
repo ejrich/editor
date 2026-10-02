@@ -556,7 +556,6 @@ u32, float, float render_line_with_cursor_and_state(FontTexture* font_texture, R
     allocation_length := clamp(line.length - line_start, 0, lines_available * max_chars_per_line);
     // Use a temp allocation for lines longer that 3.5k, otherwise push onto the stack
     if allocation_length > line_stack_allocation_max {
-        // TODO Stack allocate 500 quads and and flush when at the end
         quad_data.data = temp_allocate(size_of(QuadInstanceData) * allocation_length);
         quad_data.length = allocation_length;
     }
