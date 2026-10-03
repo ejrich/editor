@@ -1100,7 +1100,7 @@ ssl_context: SSL_CTX*;
 
 init_ssl() {
     if !ssl_initialized {
-        if !ssl_initializing && compare_exchange(&ssl_initializing, true, false) == false {
+        if !ssl_initializing && !compare_exchange(&ssl_initializing, true, false) {
             CRYPTO_set_mem_functions(CRYPTO_malloc_impl, CRYPTO_realloc_impl, CRYPTO_free_impl);
 
             cacert := temp_string(get_program_directory(), "/cacert.pem");

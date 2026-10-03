@@ -56,20 +56,6 @@ Lock both blocks being merged and clear the data of the rightmost block, this wi
 
 */
 
-enum MemoryBlockFlags {
-    Unused = 0x0;
-    Locked = 0x1;
-    Used   = 0x2;
-}
-
-struct MemoryBlock {
-    previous: MemoryBlock*;
-    next: MemoryBlock*;
-    size: u64;
-    checksum: u64; // 0xFFFFFFFF ^ prev ^ next ^ size
-    flags: MemoryBlockFlags;
-}
-
 void* allocate(u64 size) {
     // Pad out the size to make sure it is a multiple of 8
     padding := size % 8;
@@ -86,32 +72,36 @@ void* allocate(u64 size) {
     arena := arena_head;
     while arena {
         block := arena.first_block;
+        retry := false;
         while block {
-            if cast(u64, block) < arena.start || cast(u64, block) > arena.end {
-                log("Memory corrupted, block with invalid pointer % in arena %\n", block, arena);
-                assert(false);
+            while true
+                if !block.locked break;
+
+            next := block.next;
+            if !verify_checksum(block) {
+                retry = true;
+                break;
             }
-            if block.flags == MemoryBlockFlags.Unused && block.size >= size {
+
+            if !block.used && block.size >= size {
                 // Try to obtain a lock on the block
-                if compare_exchange(&block.flags, MemoryBlockFlags.Locked, MemoryBlockFlags.Unused) == MemoryBlockFlags.Unused {
+                if !compare_exchange(&block.locked, true, false) {
                     result: void* = block + 1;
 
                     insert_memory_block_if_possible(block, size, result);
                     clear_memory(result, size);
-                    block.flags = MemoryBlockFlags.Used;
+                    set_checksum(block);
+                    block.used = true;
+                    block.locked = false;
                     return result;
                 }
             }
 
-            // Ensure that the block is not locked until moving to the next block
-            while true {
-                if block.flags != MemoryBlockFlags.Locked break;
-            }
-
-            block = block.next;
+            block = next;
         }
 
-        arena = arena.next;
+        if !retry
+            arena = arena.next;
     }
 
     return allocate_arena(size);
@@ -195,13 +185,13 @@ print_arenas() {
         while block {
             size_with_header := block.size + size_of(MemoryBlock);
             size += size_with_header;
-            if block.flags == MemoryBlockFlags.Unused {
-                unused += size_with_header;
-            }
-            else {
+            if block.used {
                 used += size_with_header;
             }
-            log("Block %, Size = %, %\n", block_index++, block.size, block.flags);
+            else {
+                unused += size_with_header;
+            }
+            log("Block %, Size = %, %\n", block_index++, block.size, block.used);
             block = block.next;
         }
 
@@ -413,7 +403,7 @@ bool, void* try_small_allocation() {
 
         first_unused := small_arena.first_unused;
         block: SmallMemoryBlock* = small_arena.data + (total_block_size * first_unused);
-        if compare_exchange(&block.used, true, false) == false {
+        if !compare_exchange(&block.used, true, false) {
             atomic_increment(&small_arena.used);
             result: void* = block + 1;
             clear_memory(result, small_block_size);
@@ -469,6 +459,39 @@ free_small_allocation(void* pointer) {
 
 
 // General allocation
+enum MemoryBlockFlags {
+    Unused = 0x0;
+    Locked = 0x1;
+    Used   = 0x2;
+}
+
+struct MemoryBlock {
+    previous: MemoryBlock*;
+    next: MemoryBlock*;
+    size: u64;
+    checksum: u64; // 0xFFFFFFFFFFFFFFFF ^ prev ^ next ^ size
+    used: bool;
+    locked: bool;
+    // flags: MemoryBlockFlags;
+}
+
+bool verify_checksum(MemoryBlock* block) {
+    checksum: u64 = 0xFFFFFFFFFFFFFFFF ^ cast(u64, block.previous) ^ cast(u64, block.previous) ^ block.size;
+
+    return checksum == block.checksum;
+}
+
+set_checksum(MemoryBlock* block) {
+    block.checksum = 0xFFFFFFFFFFFFFFFF ^ cast(u64, block.previous) ^ cast(u64, block.previous) ^ block.size;
+}
+
+clear_block(MemoryBlock* block) {
+    block.previous = null;
+    block.next = null;
+    block.size = 0;
+    block.checksum = 0;
+}
+
 struct Arena {
     first_block: MemoryBlock*;
     next: Arena*;
@@ -507,26 +530,29 @@ Arena* create_arena(u64 initial_block_size, u64 size = default_arena_size) {
     pointer := allocate_memory(size_to_allocate);
 
     first_block: MemoryBlock* = pointer + size_of(Arena);
+    first_block.previous = null;
 
     if initial_block_size == 0 {
-        first_block.previous = null;
         first_block.next = null;
         first_block.size = size;
-        first_block.flags = MemoryBlockFlags.Unused;
+        first_block.used = true;
+        // first_block.flags = MemoryBlockFlags.Unused;
     }
     else if initial_block_size >= size - min_block_size {
-        first_block.previous = null;
         first_block.next = null;
         first_block.size = size;
-        first_block.flags = MemoryBlockFlags.Used;
+        first_block.used = true;
+        // first_block.flags = MemoryBlockFlags.Used;
     }
     else {
-        first_block.previous = null;
         first_block.size = initial_block_size;
-        first_block.flags = MemoryBlockFlags.Used;
+        first_block.used = true;
+        // first_block.flags = MemoryBlockFlags.Used;
 
         insert_memory_block(first_block, size - initial_block_size, cast(void*, first_block + 1) + initial_block_size);
     }
+
+    set_checksum(first_block);
 
     arena := cast(Arena*, pointer);
     arena.first_block = first_block;
@@ -551,43 +577,78 @@ insert_memory_block(MemoryBlock* previous, u64 size, MemoryBlock* new_block) {
     assert(previous != null);
 
     new_block.size = size - size_of(MemoryBlock);
-    new_block.flags = MemoryBlockFlags.Unused;
+    new_block.used = false;
+    new_block.locked = false;
     new_block.previous = previous;
+
     next := previous.next;
-    new_block.next = next;
     if next {
-        next.previous = new_block;
+        while true {
+            // TODO Merge the blocks if they are unused?
+            if !next.locked && !compare_exchange(&next.locked, true, false) {
+                next.previous = new_block;
+                set_checksum(next);
+                next.locked = false;
+                break;
+            }
+        }
+
+        new_block.next = next;
     }
+    else {
+        new_block.next = null;
+    }
+
+    set_checksum(new_block);
     previous.next = new_block;
 }
 
 free_memory_block(MemoryBlock* block) {
     assert(block != null);
 
-    block.flags = MemoryBlockFlags.Locked;
-
-    // Attempt to merge the the previous and next blocks with the current block, then unlock the current block
-    if merge_blocks(block.previous, block.previous, block)
-        block = block.previous;
-
-    merge_blocks(block.next, block, block.next);
-    block.flags = MemoryBlockFlags.Unused;
-}
-
-bool merge_blocks(MemoryBlock* check_block, MemoryBlock* previous, MemoryBlock* next) {
-    if check_block != null && check_block.flags == MemoryBlockFlags.Unused {
-        if compare_exchange(&check_block.flags, MemoryBlockFlags.Locked, MemoryBlockFlags.Unused) == MemoryBlockFlags.Unused {
-            previous.next = next.next;
-            if next.next {
-                next.next.previous = next.previous;
-            }
-
-            previous.size += size_of(MemoryBlock) + next.size;
-            return true;
+    while true {
+        if !block.locked && !compare_exchange(&block.locked, true, false) {
+            break;
         }
     }
 
-    return false;
+    merge_blocks(block.next, block, block.next);
+    merge_blocks(block.previous, block.previous, block);
+
+    block.used = false;
+    block.locked = false;
+}
+
+merge_blocks(MemoryBlock* check_block, MemoryBlock* previous, MemoryBlock* next) {
+    if previous == null || next == null return;
+
+    // TODO Verify checksums
+    if check_block != null && !check_block.used && !check_block.locked && !compare_exchange(&check_block.locked, true, false) {
+        next_next := next.next;
+        if next_next {
+            // Only merge if next.next can be locked
+            if !next_next.locked && !compare_exchange(&next_next.locked, true, false) {
+                next_next.previous = previous;
+                set_checksum(next_next);
+                next_next.locked = false;
+
+                previous.next = next_next;
+                previous.size += size_of(MemoryBlock) + next.size;
+                set_checksum(previous);
+
+                clear_block(next);
+            }
+        }
+        else {
+            previous.next = null;
+            previous.size += size_of(MemoryBlock) + next.size;
+            set_checksum(previous);
+
+            clear_block(next);
+        }
+
+        check_block.locked = false;
+    }
 }
 
 // Line allocation
