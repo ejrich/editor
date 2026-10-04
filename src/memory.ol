@@ -535,19 +535,16 @@ Arena* create_arena(u64 initial_block_size, u64 size = default_arena_size) {
     if initial_block_size == 0 {
         first_block.next = null;
         first_block.size = size;
-        first_block.used = true;
-        // first_block.flags = MemoryBlockFlags.Unused;
+        first_block.used = false;
     }
     else if initial_block_size >= size - min_block_size {
         first_block.next = null;
         first_block.size = size;
         first_block.used = true;
-        // first_block.flags = MemoryBlockFlags.Used;
     }
     else {
         first_block.size = initial_block_size;
         first_block.used = true;
-        // first_block.flags = MemoryBlockFlags.Used;
 
         insert_memory_block(first_block, size - initial_block_size, cast(void*, first_block + 1) + initial_block_size);
     }
@@ -584,7 +581,6 @@ insert_memory_block(MemoryBlock* previous, u64 size, MemoryBlock* new_block) {
     next := previous.next;
     if next {
         while true {
-            // TODO Merge the blocks if they are unused?
             if !next.locked && !compare_exchange(&next.locked, true, false) {
                 next.previous = new_block;
                 set_checksum(next);
@@ -622,8 +618,7 @@ free_memory_block(MemoryBlock* block) {
 merge_blocks(MemoryBlock* check_block, MemoryBlock* previous, MemoryBlock* next) {
     if previous == null || next == null return;
 
-    // TODO Verify checksums
-    if check_block != null && !check_block.used && !check_block.locked && !compare_exchange(&check_block.locked, true, false) {
+    if check_block != null && !check_block.used && !check_block.locked && verify_checksum(check_block) && !compare_exchange(&check_block.locked, true, false) {
         next_next := next.next;
         if next_next {
             // Only merge if next.next can be locked
