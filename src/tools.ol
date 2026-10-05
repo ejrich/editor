@@ -332,7 +332,7 @@ string, bool find_files(Workspace* workspace, FindFilesArguments args, FindFiles
 
     output.results = find_files(workspace, args.query, 20);
 
-    update_message = format_string(" - Found % files\n", output.results.length);
+    update_message = format_string(" - Found % files\n", allocate, output.results.length);
     add_to_agent_buffer(workspace, update_message);
     free_allocation(update_message.data);
 
@@ -376,7 +376,7 @@ string, bool search_for_text(Workspace* workspace, SearchArguments args, SearchO
 
     output.results = search_for_text(workspace, args.filter, args.query, 20);
 
-    update_message = format_string(" - Found % results\n", output.results.length);
+    update_message = format_string(" - Found % results\n", allocate, output.results.length);
     add_to_agent_buffer(workspace, update_message);
     free_allocation(update_message.data);
 
@@ -433,22 +433,27 @@ string read_buffer_lines(Buffer* buffer, int start, int end) {
     line_number = start;
     line = start_line;
     text.data = allocate(text.length);
+
+    i: u64;
     while line_number <= end {
         copy_length := clamp(line.length, 0, line_buffer_length);
-        memory_copy(text.data + text.length, line.data.data, copy_length);
-        text.length += copy_length;
+        memory_copy(text.data + i, line.data.data, copy_length);
+        i += copy_length;
 
         child := line.child;
-        while (child) {
-            memory_copy(text.data + text.length, child.data.data, child.length);
-            text.length += child.length;
+        while child {
+            memory_copy(text.data + i, child.data.data, child.length);
+            i += child.length;
+            child = child.next;
         }
 
-        text[text.length++] = '\n';
+        text[i++] = '\n';
 
         line = line.next;
         line_number++;
     }
+
+    assert(i == text.length);
 
     return text;
 }

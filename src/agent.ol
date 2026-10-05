@@ -103,6 +103,7 @@ send_agent_message(int thread, JobData data) {
     response_parsed := false;
     receiving_chunks := false;
     carry := 0;
+    desired_buffer_size := 0;
     event := OpenAIResponseEvent.None;
 
     response_id: string;
@@ -114,6 +115,10 @@ send_agent_message(int thread, JobData data) {
     while workspace.agent_data.status != AgentStatus.Cancelled {
         if carry == workspace.agent_data.response_buffer.length {
             resize_buffer(&workspace.agent_data.response_buffer, carry + 1000);
+        }
+        else if desired_buffer_size > workspace.agent_data.response_buffer.length {
+            resize_buffer(&workspace.agent_data.response_buffer, desired_buffer_size);
+            desired_buffer_size = 0;
         }
 
         received: bool;
@@ -217,6 +222,11 @@ send_agent_message(int thread, JobData data) {
                 if !valid || index + chunk_size >= response.length {
                     carry = response.length - i;
                     memory_copy(workspace.agent_data.response_buffer.data, response.data + i, carry);
+
+                    needed := index - i + chunk_size;
+                    if workspace.agent_data.response_buffer.length < needed {
+                        desired_buffer_size = (needed / 1000 + 1) * 1000;
+                    }
                     break;
                 }
 

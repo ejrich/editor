@@ -248,7 +248,7 @@ bool should_serialize_json_struct_field(void* data, TypeInfo* type) {
             return true;
         case TypeKind.String; {
             value := *cast(string*, data);
-            return value.data != null;
+            return !string_is_empty(value);
         }
         case TypeKind.Array; {
             value := *cast(Array<void*>*, data);
