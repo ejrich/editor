@@ -41,7 +41,7 @@ open_models_list() {
 }
 
 struct AgentData {
-    buffer: Buffer = { read_only = true; title = get_agent_title; }
+    buffer: Buffer = { title = get_agent_title; }
     buffer_window: BufferWindow;
     model: int = -1;
     socket: Socket;
@@ -76,6 +76,12 @@ send_agent_message(int thread, JobData data) {
     message := data.multiple.value1;
     workspace := cast(Workspace*, data.multiple.value2);
     defer free_allocation(message.data);
+
+    workspace.agent_data.buffer.read_only = true;
+    defer {
+        workspace.agent_data.buffer.read_only = false;
+        workspace.agent_data.buffer.write_start_line = workspace.agent_data.buffer.line_count - 1;
+    }
 
     model_index := workspace.agent_data.model;
     if model_index < 0 || model_index >= models.length || !models_loaded return;

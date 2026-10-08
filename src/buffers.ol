@@ -4139,6 +4139,7 @@ toggle_casing(bool upper) {
 // Data structures
 struct Buffer {
     read_only: bool;
+    write_start_line: u32;
     has_changes: bool;
     path_allocated: bool;
     hex_view: bool;
